@@ -1,7 +1,7 @@
 {
   "name": "crab-ac",
   "productName": "crab.ac",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "commonjs",
   "description": "crab.ac desktop app",
@@ -10,7 +10,7 @@
     "email": "hello@crab.ac"
   },
   "homepage": "https://app.crab.ac",
-  "main": "dist/main.js",
+  "main": "dist/main.cjs",
   "scripts": {
     "dev": "node build.mjs && electron dist/main.js",
     "build": "node build.mjs",

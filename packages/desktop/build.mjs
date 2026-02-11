@@ -1,4 +1,5 @@
 import esbuild from 'esbuild';
+import path from 'node:path';
 
 const shared = {
   bundle: true,
@@ -11,11 +12,11 @@ const shared = {
 await esbuild.build({
   ...shared,
   entryPoints: ['src/main.ts'],
-  outfile: 'dist/main.js',
+  outfile: 'dist/main.cjs',
 });
 
 await esbuild.build({
   ...shared,
   entryPoints: ['src/preload.ts'],
-  outfile: 'dist/preload.js',
+  outfile: 'dist/preload.cjs',
 });

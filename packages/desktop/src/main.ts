@@ -8,9 +8,10 @@ import {
   shell,
   nativeImage,
 } from 'electron';
-import { autoUpdater } from 'electron-updater';
 import Store from 'electron-store';
 import path from 'node:path';
+
+app.setName('crab.ac');
 
 const store = new Store<{
   windowBounds: { x: number; y: number; width: number; height: number };
@@ -52,7 +53,7 @@ function createWindow(): void {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.cjs'),
     },
   });
 
@@ -132,27 +133,33 @@ function createTray(): void {
 }
 
 function setupAutoUpdater(): void {
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  try {
+    // Dynamic require to avoid crashing if bundling leaves unresolved deps
+    const { autoUpdater } = require('electron-updater');
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
 
-  autoUpdater.on('update-downloaded', (info) => {
-    const notification = new Notification({
-      title: 'Update Ready',
-      body: `crab.ac v${info.version} will be installed on restart.`,
+    autoUpdater.on('update-downloaded', (info: any) => {
+      const notification = new Notification({
+        title: 'Update Ready',
+        body: `crab.ac v${info.version} will be installed on restart.`,
+      });
+      notification.on('click', () => {
+        autoUpdater.quitAndInstall();
+      });
+      notification.show();
     });
-    notification.on('click', () => {
-      autoUpdater.quitAndInstall();
+
+    autoUpdater.on('error', (err: Error) => {
+      console.error('Auto-updater error:', err.message);
     });
-    notification.show();
-  });
 
-  autoUpdater.on('error', (err) => {
-    console.error('Auto-updater error:', err.message);
-  });
-
-  autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-    console.error('Update check failed:', err.message);
-  });
+    autoUpdater.checkForUpdatesAndNotify().catch((err: Error) => {
+      console.error('Update check failed:', err.message);
+    });
+  } catch (err) {
+    console.error('Auto-updater unavailable:', err);
+  }
 }
 
 // IPC handlers
