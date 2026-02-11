@@ -1,7 +1,9 @@
 {
-  "name": "@gud/desktop",
+  "name": "crab-ac",
+  "productName": "crab.ac",
   "version": "1.0.0",
   "private": true,
+  "type": "commonjs",
   "description": "crab.ac desktop app",
   "author": {
     "name": "crab.ac",
