@@ -5,8 +5,10 @@ directories:
   buildResources: build
 files:
   - dist/**/*
+  - "!node_modules/**/*"
 asar: true
 artifactName: "crab.ac-${version}-${os}-${arch}.${ext}"
+afterPack: ./scripts/afterPack.cjs
 
 win:
   target:
@@ -29,6 +31,7 @@ mac:
   darkModeSupport: true
   category: public.app-category.social-networking
   icon: build/icon.png
+  identity: null
 
 linux:
   target:
