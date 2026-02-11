@@ -1,0 +1,59 @@
+:3030 {
+    # Socket.io — bypass WAF entirely (long-polling + WebSocket upgrade)
+    @socketio path /socket.io/*
+    handle @socketio {
+        reverse_proxy localhost:3001
+    }
+
+    # Everything else goes through WAF
+    route {
+        coraza_waf {
+            load_owasp_crs
+            directives `
+                SecRuleEngine On
+                SecRequestBodyAccess On
+                SecResponseBodyAccess Off
+                SecRequestBodyLimit 10485760
+                SecRequestBodyNoFilesLimit 1048576
+
+                # Skip WAF for health check
+                SecRule REQUEST_URI "@streq /api/health" "id:1,phase:1,pass,nolog,ctl:ruleEngine=Off"
+
+                # Allow WebSocket upgrade headers (belt-and-suspenders)
+                SecRule REQUEST_HEADERS:Upgrade "@streq websocket" "id:2,phase:1,pass,nolog,ctl:ruleEngine=Off"
+
+                # Anomaly scoring thresholds
+                SecAction "id:900110,phase:1,pass,nolog,setvar:tx.inbound_anomaly_score_threshold=10,setvar:tx.outbound_anomaly_score_threshold=5"
+
+                # Allowed HTTP methods
+                SecAction "id:900200,phase:1,pass,nolog,setvar:'tx.allowed_methods=GET HEAD POST OPTIONS PUT PATCH DELETE'"
+
+                # Allowed content types
+                SecAction "id:900220,phase:1,pass,nolog,setvar:'tx.allowed_request_content_type=|application/x-www-form-urlencoded| |multipart/form-data| |multipart/related| |text/xml| |application/xml| |application/soap+xml| |application/json| |application/cloudevents+json| |application/cloudevents-batch+json|'"
+            `
+        }
+
+        # Desktop app releases page
+        handle /releases {
+            rewrite * /releases.html
+            file_server {
+                root /home/ubuntu/gud/updates
+            }
+        }
+
+        # Desktop app updates — static files
+        handle /updates/* {
+            uri strip_prefix /updates
+            file_server {
+                root /home/ubuntu/gud/updates
+            }
+        }
+
+        # API and uploads → Express (through WAF)
+        reverse_proxy /api/* localhost:3001
+        reverse_proxy /uploads/* localhost:3001
+
+        # Everything else → Vite dev server
+        reverse_proxy localhost:5173
+    }
+}

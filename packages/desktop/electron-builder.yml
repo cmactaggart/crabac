@@ -1,0 +1,49 @@
+appId: ac.crab.desktop
+productName: crab.ac
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - "!node_modules/**/*"
+asar: true
+artifactName: "crab.ac-${version}-${os}-${arch}.${ext}"
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+        - arm64
+  icon: build/icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  darkModeSupport: true
+  category: public.app-category.social-networking
+  icon: build/icon.png
+
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  icon: build/icon.png
+  category: Network
+  artifactName: "crab.ac-${version}-${arch}.${ext}"
+  executableName: crab-ac
+
+publish:
+  provider: generic
+  url: https://app.crab.ac/updates

@@ -1,0 +1,24 @@
+node_modules/
+dist/
+.env
+*.log
+.turbo/
+
+# Build artifacts
+packages/api/knexfile.js
+packages/api/knexfile.js.map
+packages/api/knexfile.d.ts
+packages/api/knexfile.d.ts.map
+
+# Desktop app
+packages/desktop/release/
+packages/desktop/dist/
+updates/
+
+# Sensitive files
+key.txt
+*.pem
+*.p12
+
+# Uploads
+packages/api/uploads/
