@@ -5,7 +5,6 @@ directories:
   buildResources: build
 files:
   - dist/**/*
-  - "!node_modules/**/*"
 asar: true
 artifactName: "crab.ac-${version}-${os}-${arch}.${ext}"
 
