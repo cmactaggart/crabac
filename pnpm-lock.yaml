@@ -101,13 +101,6 @@ importers:
         version: 5.9.3
 
   packages/desktop:
-    dependencies:
-      electron-store:
-        specifier: ^10.0.0
-        version: 10.1.0
-      electron-updater:
-        specifier: ^6.3.9
-        version: 6.7.3
     devDependencies:
       electron:
         specifier: ^33.3.1
@@ -115,6 +108,12 @@ importers:
       electron-builder:
         specifier: ^25.1.8
         version: 25.1.8(electron-builder-squirrel-windows@25.1.8)
+      electron-store:
+        specifier: ^10.0.0
+        version: 10.1.0
+      electron-updater:
+        specifier: ^6.3.9
+        version: 6.7.3
       esbuild:
         specifier: ^0.27.3
         version: 0.27.3
