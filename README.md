@@ -153,6 +153,44 @@ pnpm dev
 
 The web client will be available at `http://localhost:5173` and the API at `http://localhost:3001`.
 
+### SMTP Configuration
+
+crab.ac sends email for account verification, magic link login, and password resets. You'll need a working SMTP server. Configure these values in `packages/api/.env`:
+
+```env
+SMTP_HOST=email-smtp.us-east-1.amazonaws.com
+SMTP_PORT=587
+SMTP_USER=your-smtp-username
+SMTP_PASS=your-smtp-password
+SMTP_FROM=Your App <noreply@yourdomain.com>
+```
+
+**Heads up:** Most residential ISPs and many cloud providers (AWS, GCP, Azure) block outbound traffic on port 25 by default. Even port 587 may require you to request unblocking on some platforms. Rather than fighting your ISP, you're almost certainly better off using a commercial SMTP provider:
+
+- **Amazon SES** — cheap, reliable, requires domain verification and a request to move out of sandbox mode
+- **Resend** — developer-friendly, generous free tier
+- **Postmark** — great deliverability, straightforward setup
+- **Mailgun**, **SendGrid** — established options with free tiers
+
+Any provider that gives you SMTP credentials (host, port, username, password) will work. Plug them into the `.env` and you're done.
+
+**SMTP is not optional.** New users must verify their email before they can log in, so if email delivery isn't working, nobody gets past the registration screen. Make sure your SMTP credentials are configured and working before inviting anyone.
+
+### Admin Access
+
+There's no special setup wizard or first-run flow. Admin access is controlled by a comma-separated list of email addresses in your `.env`:
+
+```env
+ADMIN_EMAILS=you@yourdomain.com,another-admin@yourdomain.com
+```
+
+Any registered user whose email matches this list gets an **Admin** button on the home screen that opens the admin panel. From there you can manage users, spaces, and system announcements.
+
+![Screenshot: Admin button on home screen](docs/screenshots/admin-button.png)
+![Screenshot: Admin panel](docs/screenshots/admin-panel.png)
+
+If you've just added your email to `ADMIN_EMAILS` and don't see the button, restart the API server and refresh the page — the admin flag is checked at login time, so you'll need a fresh session for it to take effect.
+
 ### Production Deployment with Caddy + Cloudflare Tunnels
 
 If you're going to run this live on the dirty public internet, we recommend a setup that avoids exposing any public ports on the host machine.  **Note: we don't actually recommend running this live on the dirty public internet** unless you **absolutely** know what you're doing and know all of the dangers associated with putting live servers on the internet, but if you're going to do it and want a quick and dirty way to make it a little more secure, try this:
