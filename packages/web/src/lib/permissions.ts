@@ -1,4 +1,4 @@
-import { Permissions, hasPermission } from '@gud/shared';
+import { Permissions, hasPermission } from '@crabac/shared';
 
 export { Permissions, hasPermission };
 

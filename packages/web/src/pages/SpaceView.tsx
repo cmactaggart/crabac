@@ -11,12 +11,14 @@ import { SpaceSidebar } from '../components/layout/SpaceSidebar.js';
 import { ChannelSidebar } from '../components/layout/ChannelSidebar.js';
 import { MembersPanel } from '../components/layout/MembersPanel.js';
 import { MessageArea } from '../components/messages/MessageArea.js';
+import { ForumChannelView } from '../components/forums/ForumChannelView.js';
+import { CalendarView } from '../components/calendar/CalendarView.js';
 
 export function SpaceView() {
   const { spaceId, channelId } = useParams();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { spaceSidebarOpen, channelSidebarOpen, membersSidebarOpen, mobileView, setMobileView, toggleSpaceSidebar, toggleChannelSidebar } = useLayoutStore();
+  const { spaceSidebarOpen, channelSidebarOpen, membersSidebarOpen, calendarOpen, mobileView, setMobileView, setCalendarOpen, toggleSpaceSidebar, toggleChannelSidebar } = useLayoutStore();
   const { spaces, fetchSpaces, setActiveSpace, members, fetchMembers, updateMemberStatus } = useSpacesStore();
   const { channels, categories, fetchChannels, fetchCategories, fetchUnreads, fetchMuted, setActiveChannel } = useChannelsStore();
 
@@ -39,12 +41,13 @@ export function SpaceView() {
   useEffect(() => {
     if (channelId) {
       setActiveChannel(channelId);
+      setCalendarOpen(false);
       if (isMobile) setMobileView('chat');
-    } else if (!isMobile && channels.length > 0 && spaceId && channels[0].spaceId === spaceId) {
+    } else if (!isMobile && !useLayoutStore.getState().calendarOpen && channels.length > 0 && spaceId && channels[0].spaceId === spaceId) {
       const firstRegular = channels.find((c) => !c.isAdmin) || channels[0];
       navigate(`/space/${spaceId}/channel/${firstRegular.id}`, { replace: true });
     }
-  }, [channelId, channels, spaceId, navigate, setActiveChannel, isMobile, setMobileView]);
+  }, [channelId, channels, spaceId, navigate, setActiveChannel, setCalendarOpen, isMobile, setMobileView]);
 
   // Listen for member presence and membership changes
   useEffect(() => {
@@ -87,19 +90,49 @@ export function SpaceView() {
   if (isMobile) {
     const showChat = channelId && mobileView === 'chat';
 
-    if (showChat && spaceId) {
+    const activeChannel = channels.find((c) => c.id === channelId) || null;
+
+    if (calendarOpen && mobileView === 'chat' && spaceId) {
       return (
         <div style={{ ...styles.layout, paddingBottom: 56 }}>
-          <MessageArea
-            channelId={channelId}
-            channel={channels.find((c) => c.id === channelId) || null}
+          <CalendarView
             spaceId={spaceId}
             showBackButton
             onBack={() => {
+              setCalendarOpen(false);
               setMobileView('sidebar');
-              navigate(`/space/${spaceId}`, { replace: true });
             }}
           />
+        </div>
+      );
+    }
+
+    if (showChat && spaceId) {
+      return (
+        <div style={{ ...styles.layout, paddingBottom: 56 }}>
+          {activeChannel?.type === 'forum' ? (
+            <ForumChannelView
+              channelId={channelId}
+              channel={activeChannel}
+              spaceId={spaceId}
+              showBackButton
+              onBack={() => {
+                setMobileView('sidebar');
+                navigate(`/space/${spaceId}`, { replace: true });
+              }}
+            />
+          ) : (
+            <MessageArea
+              channelId={channelId}
+              channel={activeChannel}
+              spaceId={spaceId}
+              showBackButton
+              onBack={() => {
+                setMobileView('sidebar');
+                navigate(`/space/${spaceId}`, { replace: true });
+              }}
+            />
+          )}
           {membersSidebarOpen && (
             <MembersPanel members={members} spaceId={spaceId} asOverlay />
           )}
@@ -152,12 +185,22 @@ export function SpaceView() {
             )}
           </div>
         )}
-        {channelId && spaceId ? (
-          <MessageArea
-            channelId={channelId}
-            channel={channels.find((c) => c.id === channelId) || null}
-            spaceId={spaceId}
-          />
+        {calendarOpen && spaceId ? (
+          <CalendarView spaceId={spaceId} />
+        ) : channelId && spaceId ? (
+          channels.find((c) => c.id === channelId)?.type === 'forum' ? (
+            <ForumChannelView
+              channelId={channelId}
+              channel={channels.find((c) => c.id === channelId) || null}
+              spaceId={spaceId}
+            />
+          ) : (
+            <MessageArea
+              channelId={channelId}
+              channel={channels.find((c) => c.id === channelId) || null}
+              spaceId={spaceId}
+            />
+          )
         ) : (
           <div style={styles.placeholder}>
             <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>

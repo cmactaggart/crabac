@@ -1,7 +1,7 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { validate } from '../../middleware/validate.js';
 import { authLimiter, strictAuthLimiter } from '../../middleware/rate-limiter.js';
-import { validation } from '@gud/shared';
+import { validation } from '@crabac/shared';
 import { authenticate } from './auth.middleware.js';
 import * as authService from './auth.service.js';
 import * as verificationService from './verification.service.js';

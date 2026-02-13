@@ -1,7 +1,7 @@
 import { db } from '../../database/connection.js';
 import { snowflake } from '../_shared.js';
 import { NotFoundError, ForbiddenError, ConflictError, BadRequestError } from '../../lib/errors.js';
-import { Permissions, hasPermission } from '@gud/shared';
+import { Permissions, hasPermission } from '@crabac/shared';
 import { computePermissions } from '../rbac/rbac.service.js';
 import * as spacesService from '../spaces/spaces.service.js';
 import * as messagesService from '../messages/messages.service.js';

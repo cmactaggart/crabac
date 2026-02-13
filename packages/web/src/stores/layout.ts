@@ -4,10 +4,12 @@ interface LayoutState {
   spaceSidebarOpen: boolean;
   channelSidebarOpen: boolean;
   membersSidebarOpen: boolean;
+  calendarOpen: boolean;
   mobileView: 'sidebar' | 'chat';
   toggleSpaceSidebar: () => void;
   toggleChannelSidebar: () => void;
   toggleMembersSidebar: () => void;
+  setCalendarOpen: (open: boolean) => void;
   setMobileView: (view: 'sidebar' | 'chat') => void;
 }
 
@@ -15,7 +17,9 @@ export const useLayoutStore = create<LayoutState>((set) => ({
   spaceSidebarOpen: localStorage.getItem('spaceSidebarOpen') !== 'false',
   channelSidebarOpen: localStorage.getItem('channelSidebarOpen') !== 'false',
   membersSidebarOpen: localStorage.getItem('membersSidebarOpen') !== 'false',
+  calendarOpen: false,
   mobileView: 'sidebar',
+  setCalendarOpen: (open) => set({ calendarOpen: open }),
   toggleSpaceSidebar: () =>
     set((s) => {
       const next = !s.spaceSidebarOpen;

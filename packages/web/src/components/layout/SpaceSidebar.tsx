@@ -3,7 +3,7 @@ import { Mail, ChevronsLeft } from 'lucide-react';
 import { useLayoutStore } from '../../stores/layout.js';
 import { useDMStore } from '../../stores/dm.js';
 import { CrabIcon } from '../icons/CrabIcon.js';
-import type { Space } from '@gud/shared';
+import type { Space } from '@crabac/shared';
 
 interface Props {
   spaces: Space[];

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, ChevronDown, Hash, LogOut, PanelLeftClose, Settings, Shield, Zap, CheckCheck, BellOff, Bell, Link, Copy, Plus, SlidersHorizontal, FolderPlus, GripVertical, ArrowRightLeft } from 'lucide-react';
-import { Permissions } from '@gud/shared';
+import { UserPlus, ChevronDown, Hash, LogOut, PanelLeftClose, Settings, Shield, Zap, CheckCheck, BellOff, Bell, Link, Copy, Plus, SlidersHorizontal, FolderPlus, GripVertical, ArrowRightLeft, MessageSquareDashed, Trash2, Pencil, Calendar } from 'lucide-react';
+import { Permissions } from '@crabac/shared';
 import { useLayoutStore } from '../../stores/layout.js';
 import { useAuthStore } from '../../stores/auth.js';
 import { useChannelsStore } from '../../stores/channels.js';
@@ -13,8 +13,10 @@ import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu.js';
 import { CreatePortalModal } from '../portals/CreatePortalModal.js';
 import { CreateChannelModal } from '../channels/CreateChannelModal.js';
 import { CreateCategoryModal } from '../channels/CreateCategoryModal.js';
+import { CreateCategoryModal as CalendarCategoryModal } from '../calendar/CreateCategoryModal.js';
+import { CreateEventModal as CalendarEventModal } from '../calendar/CreateEventModal.js';
 import { MySpacePreferences } from '../settings/MySpacePreferences.js';
-import type { Space, Channel, ChannelCategory } from '@gud/shared';
+import type { Space, Channel, ChannelCategory } from '@crabac/shared';
 import {
   DndContext,
   DragOverlay,
@@ -84,6 +86,7 @@ function SortableCategory({
   collapsed,
   onToggle,
   onAddClick,
+  onContextMenu,
   canCreateChannels,
 }: {
   category: ChannelCategory;
@@ -92,6 +95,7 @@ function SortableCategory({
   collapsed: boolean;
   onToggle: () => void;
   onAddClick: (e: React.MouseEvent) => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
   canCreateChannels: boolean;
 }) {
   const {
@@ -119,6 +123,7 @@ function SortableCategory({
         )}
         <button
           onClick={onToggle}
+          onContextMenu={onContextMenu}
           style={sidebarStyles.categoryHeader}
         >
           <span style={{ transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', display: 'inline-flex', transition: 'transform 0.15s' }}>
@@ -145,6 +150,8 @@ function SortableCategory({
 export function ChannelSidebar({ space, channels, categories, activeChannelId, fullWidth }: Props) {
   const navigate = useNavigate();
   const toggleChannelSidebar = useLayoutStore((s) => s.toggleChannelSidebar);
+  const calendarOpen = useLayoutStore((s) => s.calendarOpen);
+  const setCalendarOpen = useLayoutStore((s) => s.setCalendarOpen);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const unreads = useChannelsStore((s) => s.unreads);
@@ -153,14 +160,21 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
   const markRead = useChannelsStore((s) => s.markRead);
   const reorderChannels = useChannelsStore((s) => s.reorderChannels);
   const reorderCategories = useChannelsStore((s) => s.reorderCategories);
+  const deleteChannel = useChannelsStore((s) => s.deleteChannel);
+  const deleteCategory = useChannelsStore((s) => s.deleteCategory);
   const [showSettings, setShowSettings] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [showSpaceSettings, setShowSpaceSettings] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; channelId: string } | null>(null);
+  const [categoryContextMenu, setCategoryContextMenu] = useState<{ x: number; y: number; categoryId: string } | null>(null);
   const [portalChannelId, setPortalChannelId] = useState<string | null>(null);
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showCreateCategory, setShowCreateCategory] = useState(false);
+  const [calendarContextMenu, setCalendarContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [showCalendarCategoryModal, setShowCalendarCategoryModal] = useState(false);
+  const [showCalendarEventModal, setShowCalendarEventModal] = useState(false);
+  const canManageCalendar = useHasSpacePermission(space?.id || '', Permissions.MANAGE_CALENDAR);
   const [addMenu, setAddMenu] = useState<{ x: number; y: number } | null>(null);
   const [showPreferences, setShowPreferences] = useState(false);
   const canManage = useCanManageSpace(space?.id || '');
@@ -196,6 +210,49 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
     e.preventDefault();
     e.stopPropagation();
     setAddMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleCategoryContextMenu = (e: React.MouseEvent, categoryId: string) => {
+    e.preventDefault();
+    setCategoryContextMenu({ x: e.clientX, y: e.clientY, categoryId });
+  };
+
+  const getCategoryContextMenuItems = (cat: ChannelCategory): ContextMenuItem[] => {
+    const items: ContextMenuItem[] = [];
+    if (canCreateChannels) {
+      items.push({
+        label: 'Rename Category',
+        icon: <Pencil size={16} />,
+        onClick: () => {
+          const newName = window.prompt('Rename category:', cat.name);
+          if (newName && newName.trim() && newName.trim() !== cat.name) {
+            useChannelsStore.getState().updateCategory(space.id, cat.id, { name: newName.trim() });
+          }
+        },
+      });
+      items.push({
+        label: 'Delete Category',
+        icon: <Trash2 size={16} />,
+        danger: true,
+        onClick: () => {
+          const catChannels = channels.filter((c) => c.categoryId === cat.id);
+          const msg = catChannels.length > 0
+            ? `Delete "${cat.name}"? Its ${catChannels.length} channel(s) will be moved to uncategorized.`
+            : `Delete "${cat.name}"?`;
+          if (window.confirm(msg)) {
+            // Optimistically move channels to uncategorized
+            if (catChannels.length > 0) {
+              const newChannels = channels.map((c) =>
+                c.categoryId === cat.id ? { ...c, categoryId: null } : c,
+              );
+              useChannelsStore.setState({ channels: newChannels });
+            }
+            deleteCategory(space.id, cat.id);
+          }
+        },
+      });
+    }
+    return items;
   };
 
   const addMenuItems: ContextMenuItem[] = [
@@ -300,6 +357,29 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
       }
     }
 
+    // Delete channel (requires MANAGE_CHANNELS, can't delete admin or portal channels)
+    if (canCreateChannels && !ch.isAdmin && !ch.isPortal) {
+      items.push({ label: '', separator: true, icon: undefined, onClick: () => {} });
+      items.push({
+        label: 'Delete Channel',
+        icon: <Trash2 size={16} />,
+        danger: true,
+        onClick: () => {
+          if (window.confirm(`Delete #${ch.name}? This cannot be undone.`)) {
+            deleteChannel(space.id, ch.id);
+            if (activeChannelId === ch.id) {
+              const remaining = channels.filter((c) => c.id !== ch.id);
+              if (remaining.length > 0) {
+                navigate(`/space/${space.id}/channel/${remaining[0].id}`);
+              } else {
+                navigate(`/space/${space.id}`);
+              }
+            }
+          }
+        },
+      });
+    }
+
     return items;
   };
 
@@ -402,7 +482,7 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
     const hasUnread = unread && unread.unreadCount > 0 && !isMuted;
     const isActive = ch.id === activeChannelId;
 
-    const ChannelIcon = ch.isAdmin ? Shield : ch.isPortal ? Zap : Hash;
+    const ChannelIcon = ch.isAdmin ? Shield : ch.isPortal ? Zap : ch.type === 'forum' ? MessageSquareDashed : Hash;
     const iconColor = ch.isAdmin ? 'var(--warning, #f0b232)' : ch.isPortal ? 'var(--accent)' : 'var(--text-muted)';
 
     return (
@@ -472,6 +552,28 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
       </div>
 
       <div style={sidebarStyles.channelList}>
+        {space.calendarEnabled && (
+          <button
+            onClick={() => {
+              setCalendarOpen(true);
+              navigate(`/space/${space.id}`, { replace: true });
+            }}
+            onContextMenu={(e) => {
+              if (!canManageCalendar) return;
+              e.preventDefault();
+              setCalendarContextMenu({ x: e.clientX, y: e.clientY });
+            }}
+            style={{
+              ...sidebarStyles.channelItem,
+              background: calendarOpen ? 'var(--hover)' : 'transparent',
+              color: calendarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
+              marginBottom: 4,
+            }}
+          >
+            <Calendar size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+            <span style={{ flex: 1 }}>Calendar</span>
+          </button>
+        )}
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -492,6 +594,7 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
                   collapsed={collapsed}
                   onToggle={() => toggleCategory(cat.id)}
                   onAddClick={handleAddMenu}
+                  onContextMenu={(e) => handleCategoryContextMenu(e, cat.id)}
                   canCreateChannels={canCreateChannels}
                 >
                   {catChannels.map((ch) => (
@@ -589,6 +692,22 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
         />
       )}
 
+      {/* Context menu for categories */}
+      {categoryContextMenu && (() => {
+        const cat = categories.find((c) => c.id === categoryContextMenu.categoryId);
+        if (!cat) return null;
+        const items = getCategoryContextMenuItems(cat);
+        if (items.length === 0) return null;
+        return (
+          <ContextMenu
+            x={categoryContextMenu.x}
+            y={categoryContextMenu.y}
+            items={items}
+            onClose={() => setCategoryContextMenu(null)}
+          />
+        );
+      })()}
+
       {/* User bar */}
       <div style={sidebarStyles.userBar}>
         <button onClick={() => setShowSettings(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
@@ -634,6 +753,31 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
         <MySpacePreferences
           spaceId={space.id}
           onClose={() => setShowPreferences(false)}
+        />
+      )}
+
+      {/* Calendar context menu */}
+      {calendarContextMenu && (
+        <ContextMenu
+          x={calendarContextMenu.x}
+          y={calendarContextMenu.y}
+          items={[
+            { label: 'Add Event', icon: <Calendar size={16} />, onClick: () => { setCalendarOpen(true); navigate(`/space/${space.id}`, { replace: true }); setShowCalendarEventModal(true); } },
+            { label: 'Add Category', icon: <FolderPlus size={16} />, onClick: () => setShowCalendarCategoryModal(true) },
+          ]}
+          onClose={() => setCalendarContextMenu(null)}
+        />
+      )}
+      {showCalendarEventModal && space && (
+        <CalendarEventModal
+          spaceId={space.id}
+          onClose={() => setShowCalendarEventModal(false)}
+        />
+      )}
+      {showCalendarCategoryModal && space && (
+        <CalendarCategoryModal
+          spaceId={space.id}
+          onClose={() => setShowCalendarCategoryModal(false)}
         />
       )}
     </div>

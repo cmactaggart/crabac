@@ -1,3 +1,17 @@
+export interface GpxTrackMetadata {
+  trackName: string | null;
+  distanceKm: number;
+  elevationGainM: number | null;
+  elevationLossM: number | null;
+  durationSec: number;
+  bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number } | null;
+  geojson: any;
+}
+
+export interface AttachmentMetadata {
+  gpx?: GpxTrackMetadata;
+}
+
 export interface Attachment {
   id: string;
   filename: string;
@@ -5,6 +19,7 @@ export interface Attachment {
   mimeType: string;
   size: number;
   url: string;
+  metadata?: AttachmentMetadata | null;
 }
 
 export interface Reaction {
@@ -22,6 +37,7 @@ export interface Message {
   content: string;
   editedAt: string | null;
   isPinned: boolean;
+  threadId: string | null;
   replyToId: string | null;
   replyCount: number;
   messageType: MessageType;

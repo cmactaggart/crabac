@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../lib/api.js';
-import type { Conversation, DirectMessage } from '@gud/shared';
+import type { Conversation, DirectMessage } from '@crabac/shared';
 
 interface DMState {
   conversations: Conversation[];

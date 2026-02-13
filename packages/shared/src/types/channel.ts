@@ -1,4 +1,4 @@
-export type ChannelType = 'text' | 'announcement' | 'read_only';
+export type ChannelType = 'text' | 'announcement' | 'read_only' | 'forum';
 
 export interface Channel {
   id: string;
@@ -6,6 +6,7 @@ export interface Channel {
   name: string;
   topic: string | null;
   type: ChannelType;
+  isPublic: boolean;
   isPrivate: boolean;
   isAdmin: boolean;
   position: number;

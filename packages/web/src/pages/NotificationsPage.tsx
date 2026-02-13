@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCheck, AtSign, Reply, Zap } from 'lucide-react';
 import { useNotificationsStore } from '../stores/notifications.js';
-import type { Notification, MentionNotificationData, ReplyNotificationData } from '@gud/shared';
+import type { Notification, MentionNotificationData, ReplyNotificationData } from '@crabac/shared';
 
 export function NotificationsPage() {
   const { notifications, loading, hasMore, fetchNotifications, markAsRead, markAllAsRead } = useNotificationsStore();

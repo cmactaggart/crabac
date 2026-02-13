@@ -36,7 +36,7 @@ export async function listMessages(channelId: string, options: { before?: string
 export async function createMessage(
   channelId: string,
   authorId: string,
-  data: { content: string; replyToId?: string; messageType?: string; metadata?: Record<string, any> },
+  data: { content: string; replyToId?: string; threadId?: string; messageType?: string; metadata?: Record<string, any> },
   options?: { skipEvent?: boolean },
 ) {
   const id = snowflake.generate();
@@ -47,6 +47,7 @@ export async function createMessage(
     author_id: authorId,
     content: data.content,
     reply_to_id: data.replyToId ?? null,
+    thread_id: data.threadId ?? null,
     message_type: data.messageType ?? 'user',
     metadata: data.metadata ? JSON.stringify(data.metadata) : null,
   });
@@ -468,6 +469,7 @@ function formatMessage(row: any, reactions: any[], replyCount: number, attachmen
     channelId: row.channel_id,
     authorId: row.author_id,
     content: row.content,
+    threadId: row.thread_id ?? null,
     editedAt: row.edited_at,
     isPinned: row.is_pinned,
     replyToId: row.reply_to_id,
@@ -490,6 +492,7 @@ function formatMessage(row: any, reactions: any[], replyCount: number, attachmen
 export async function createAttachment(
   messageId: string,
   file: { filename: string; originalName: string; mimeType: string; size: number; url: string },
+  metadata?: Record<string, any> | null,
 ) {
   const id = snowflake.generate();
   await db('attachments').insert({
@@ -500,6 +503,7 @@ export async function createAttachment(
     mime_type: file.mimeType,
     size: file.size,
     url: file.url,
+    metadata: metadata ? JSON.stringify(metadata) : null,
   });
   return {
     id,
@@ -509,6 +513,7 @@ export async function createAttachment(
     mimeType: file.mimeType,
     size: file.size,
     url: file.url,
+    metadata: metadata ?? null,
   };
 }
 
@@ -520,6 +525,10 @@ async function getAttachmentsForMessages(messageIds: string[]): Promise<Map<stri
   const result = new Map<string, any[]>();
   for (const row of rows) {
     const list = result.get(row.message_id) || [];
+    let meta = row.metadata;
+    if (typeof meta === 'string') {
+      try { meta = JSON.parse(meta); } catch { meta = null; }
+    }
     list.push({
       id: row.id,
       messageId: row.message_id,
@@ -528,6 +537,7 @@ async function getAttachmentsForMessages(messageIds: string[]): Promise<Map<stri
       mimeType: row.mime_type,
       size: row.size,
       url: row.url,
+      metadata: meta ?? null,
     });
     result.set(row.message_id, list);
   }

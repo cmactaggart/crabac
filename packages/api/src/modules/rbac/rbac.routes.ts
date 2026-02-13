@@ -1,7 +1,7 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { authenticate } from '../auth/auth.middleware.js';
 import { validate } from '../../middleware/validate.js';
-import { validation, Permissions } from '@gud/shared';
+import { validation, Permissions } from '@crabac/shared';
 import { requirePermission } from './rbac.middleware.js';
 import * as rbacService from './rbac.service.js';
 

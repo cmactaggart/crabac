@@ -14,7 +14,7 @@ import { PinnedMessages } from './PinnedMessages.js';
 import { ThreadPanel } from './ThreadPanel.js';
 import { SearchPanel } from './SearchPanel.js';
 import { UserProfilePopover } from '../common/UserProfilePopover.js';
-import type { Channel, Message } from '@gud/shared';
+import type { Channel, Message } from '@crabac/shared';
 
 interface Props {
   channelId: string;
@@ -168,6 +168,7 @@ export function MessageArea({ channelId, channel, spaceId, showBackButton, onBac
         {/* Input */}
         <MessageInput
           channelId={channelId}
+          spaceId={spaceId}
           onSend={handleSend}
           replyingTo={replyingTo}
           onCancelReply={() => setReplyingTo(null)}

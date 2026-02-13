@@ -3,12 +3,13 @@ import multer from 'multer';
 import path from 'path';
 import { authenticate } from '../auth/auth.middleware.js';
 import { validate } from '../../middleware/validate.js';
-import { validation, Permissions, hasPermission } from '@gud/shared';
+import { validation, Permissions, hasPermission } from '@crabac/shared';
 import { computeChannelPermissions } from '../rbac/rbac.service.js';
 import { getChannelSpaceId } from '../channels/channels.service.js';
 import * as spacesService from '../spaces/spaces.service.js';
 import { db } from '../../database/connection.js';
 import * as messagesService from './messages.service.js';
+import { parseGpxFile } from './gpx.service.js';
 import { ForbiddenError, BadRequestError } from '../../lib/errors.js';
 import { config } from '../../config.js';
 
@@ -22,9 +23,19 @@ const attachmentStorage = multer.diskStorage({
   },
 });
 
+const BLOCKED_EXTENSIONS = new Set(['.html', '.htm', '.svg', '.xml', '.xhtml', '.js', '.mjs', '.cjs', '.php', '.asp', '.aspx', '.jsp', '.sh', '.bat', '.cmd', '.ps1', '.exe', '.dll', '.msi']);
+
 const attachmentUpload = multer({
   storage: attachmentStorage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB per file
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (BLOCKED_EXTENSIONS.has(ext)) {
+      cb(new Error('File type not allowed'));
+    } else {
+      cb(null, true);
+    }
+  },
 });
 
 export const messagesRoutes = Router();
@@ -292,13 +303,25 @@ messagesRoutes.post(
 
       const files = (req.files as Express.Multer.File[]) || [];
       for (const file of files) {
-        await messagesService.createAttachment(message.id, {
-          filename: file.filename,
-          originalName: file.originalname,
-          mimeType: file.mimetype,
-          size: file.size,
-          url: `/uploads/${file.filename}`,
-        });
+        let metadata: Record<string, any> | null = null;
+
+        // Parse GPX files to extract track metadata + GeoJSON
+        if (file.originalname.toLowerCase().endsWith('.gpx')) {
+          const gpx = await parseGpxFile(file.path);
+          if (gpx) metadata = { gpx };
+        }
+
+        await messagesService.createAttachment(
+          message.id,
+          {
+            filename: file.filename,
+            originalName: file.originalname,
+            mimeType: file.mimetype,
+            size: file.size,
+            url: `/uploads/${file.filename}`,
+          },
+          metadata,
+        );
       }
 
       // Now emit with the full message (including attachments) so all clients see it

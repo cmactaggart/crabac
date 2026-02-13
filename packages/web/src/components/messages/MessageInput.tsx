@@ -1,31 +1,60 @@
-import { useState, useRef, useCallback, type FormEvent, type KeyboardEvent } from 'react';
-import { Paperclip, X } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect, type FormEvent, type KeyboardEvent } from 'react';
+import { Plus, Paperclip, Calendar, X } from 'lucide-react';
+import { Permissions } from '@crabac/shared';
 import { getSocket } from '../../lib/socket.js';
 import { api } from '../../lib/api.js';
 import { useMessagesStore } from '../../stores/messages.js';
+import { useSpacesStore } from '../../stores/spaces.js';
+import { useHasSpacePermission } from '../settings/SpaceSettingsModal.js';
 import { MentionAutocomplete } from './MentionAutocomplete.js';
 import { ChannelAutocomplete } from './ChannelAutocomplete.js';
 import { SlashCommandPalette } from './SlashCommandPalette.js';
+import { CreateEventModal } from '../calendar/CreateEventModal.js';
 import { parseSlashCommand } from '../../lib/slashCommands.js';
-import type { Message } from '@gud/shared';
+import type { Message } from '@crabac/shared';
 
 interface Props {
   channelId: string;
+  spaceId: string;
   onSend: (content: string, replyToId?: string) => Promise<void>;
   replyingTo: Message | null;
   onCancelReply: () => void;
 }
 
-export function MessageInput({ channelId, onSend, replyingTo, onCancelReply }: Props) {
+export function MessageInput({ channelId, spaceId, onSend, replyingTo, onCancelReply }: Props) {
   const [content, setContent] = useState('');
   const [sending, setSending] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
   const [channelQuery, setChannelQuery] = useState<string | null>(null);
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const [showCreateEvent, setShowCreateEvent] = useState(false);
   const lastTypingEmit = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const plusMenuRef = useRef<HTMLDivElement>(null);
+  const space = useSpacesStore((s) => s.spaces.find((sp) => sp.id === spaceId));
+  const canManageCalendar = useHasSpacePermission(spaceId, Permissions.MANAGE_CALENDAR);
+
+  // Focus the textarea when replying
+  useEffect(() => {
+    if (replyingTo && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [replyingTo]);
+
+  // Close plus menu on outside click
+  useEffect(() => {
+    if (!showPlusMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (plusMenuRef.current && !plusMenuRef.current.contains(e.target as Node)) {
+        setShowPlusMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showPlusMenu]);
 
   const emitTyping = () => {
     const now = Date.now();
@@ -259,14 +288,39 @@ export function MessageInput({ channelId, onSend, replyingTo, onCancelReply }: P
           />
         )}
 
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          style={styles.attachBtn}
-          title="Attach files"
-        >
-          <Paperclip size={20} />
-        </button>
+        <div style={{ position: 'relative' }} ref={plusMenuRef}>
+          <button
+            type="button"
+            onClick={() => setShowPlusMenu((v) => !v)}
+            style={{
+              ...styles.attachBtn,
+              color: showPlusMenu ? 'var(--text-primary)' : undefined,
+            }}
+            title="Add"
+          >
+            <Plus size={20} />
+          </button>
+          {showPlusMenu && (
+            <div style={styles.plusMenu}>
+              <button
+                type="button"
+                onClick={() => { fileRef.current?.click(); setShowPlusMenu(false); }}
+                style={styles.plusMenuItem}
+              >
+                <Paperclip size={16} /> Attach File
+              </button>
+              {space?.calendarEnabled && canManageCalendar && (
+                <button
+                  type="button"
+                  onClick={() => { setShowCreateEvent(true); setShowPlusMenu(false); }}
+                  style={styles.plusMenuItem}
+                >
+                  <Calendar size={16} /> Add Event
+                </button>
+              )}
+            </div>
+          )}
+        </div>
         <input
           ref={fileRef}
           type="file"
@@ -297,6 +351,28 @@ export function MessageInput({ channelId, onSend, replyingTo, onCancelReply }: P
           {sending ? '...' : 'Send'}
         </button>
       </div>
+
+      {showCreateEvent && (
+        <CreateEventModal
+          spaceId={spaceId}
+          onClose={() => setShowCreateEvent(false)}
+          onCreated={async (event) => {
+            const embed = JSON.stringify({
+              id: event.id,
+              spaceId,
+              name: event.name,
+              eventDate: event.eventDate,
+              eventTime: event.eventTime,
+              description: event.description,
+              categoryName: event.category?.name || null,
+              categoryColor: event.category?.color || null,
+            });
+            try {
+              await onSend(`[calendar-event:${embed}]`);
+            } catch { /* ignore */ }
+          }}
+        />
+      )}
     </form>
   );
 }
@@ -364,11 +440,40 @@ const styles: Record<string, React.CSSProperties> = {
   attachBtn: {
     background: 'none',
     border: 'none',
+    color: 'var(--text-muted)',
     fontSize: '1.2rem',
     cursor: 'pointer',
     padding: '2px',
     flexShrink: 0,
     lineHeight: 1,
+    borderRadius: 'var(--radius)',
+  },
+  plusMenu: {
+    position: 'absolute',
+    bottom: '100%',
+    left: 0,
+    marginBottom: 6,
+    background: 'var(--bg-secondary)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius)',
+    boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+    padding: '4px',
+    minWidth: 160,
+    zIndex: 50,
+  },
+  plusMenuItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+    padding: '8px 10px',
+    background: 'none',
+    border: 'none',
+    borderRadius: 'var(--radius)',
+    color: 'var(--text-secondary)',
+    fontSize: '0.85rem',
+    cursor: 'pointer',
+    textAlign: 'left' as const,
   },
   textarea: {
     flex: 1,

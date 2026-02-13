@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Space } from '@gud/shared';
+import type { Space } from '@crabac/shared';
 import { useAuthStore } from '../../stores/auth.js';
 import { useSpacesStore } from '../../stores/spaces.js';
 import { Camera } from 'lucide-react';

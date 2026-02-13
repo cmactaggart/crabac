@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { useMessagesStore } from '../../stores/messages.js';
 import { useNavigate } from 'react-router-dom';
-import type { SearchResult } from '@gud/shared';
+import type { SearchResult } from '@crabac/shared';
 
 interface Props {
   spaceId: string;

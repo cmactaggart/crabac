@@ -6,9 +6,9 @@ const config: Knex.Config = {
   connection: {
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '3306', 10),
-    user: process.env.DB_USER || 'gud',
-    password: process.env.DB_PASSWORD || 'gudpass',
-    database: process.env.DB_NAME || 'gud',
+    user: process.env.DB_USER || 'crabac',
+    password: process.env.DB_PASSWORD || 'crabacpass',
+    database: process.env.DB_NAME || 'crabac',
     supportBigNumbers: true,
     bigNumberStrings: true,
   },

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../lib/api.js';
-import type { Notification } from '@gud/shared';
+import type { Notification } from '@crabac/shared';
 
 interface NotificationsState {
   notifications: Notification[];

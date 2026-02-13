@@ -4,10 +4,10 @@ services:
     ports:
       - "3306:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: gudroot
-      MYSQL_DATABASE: gud
-      MYSQL_USER: gud
-      MYSQL_PASSWORD: gudpass
+      MYSQL_ROOT_PASSWORD: crabacroot
+      MYSQL_DATABASE: crabac
+      MYSQL_USER: crabac
+      MYSQL_PASSWORD: crabacpass
     volumes:
       - mysql_data:/var/lib/mysql
     command: --default-authentication-plugin=mysql_native_password

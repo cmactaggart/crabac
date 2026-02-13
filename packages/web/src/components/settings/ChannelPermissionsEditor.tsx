@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Permissions } from '@gud/shared';
-import type { Role, ChannelPermissionOverride, PermissionKey } from '@gud/shared';
+import { Permissions } from '@crabac/shared';
+import type { Role, ChannelPermissionOverride, PermissionKey } from '@crabac/shared';
 import { api } from '../../lib/api.js';
 
 interface Props {

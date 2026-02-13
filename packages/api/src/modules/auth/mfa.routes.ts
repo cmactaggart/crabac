@@ -1,7 +1,7 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import bcrypt from 'bcrypt';
 import { validate } from '../../middleware/validate.js';
-import { validation } from '@gud/shared';
+import { validation } from '@crabac/shared';
 import { authenticate } from './auth.middleware.js';
 import { db } from '../../database/connection.js';
 import { UnauthorizedError } from '../../lib/errors.js';

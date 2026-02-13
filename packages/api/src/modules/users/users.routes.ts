@@ -3,10 +3,11 @@ import multer from 'multer';
 import path from 'path';
 import { authenticate } from '../auth/auth.middleware.js';
 import { validate } from '../../middleware/validate.js';
-import { validation } from '@gud/shared';
+import { validation } from '@crabac/shared';
 import { config } from '../../config.js';
 import * as usersService from './users.service.js';
 import * as mutesService from './mutes.service.js';
+import * as preferencesService from './preferences.service.js';
 
 export const usersRoutes = Router();
 
@@ -69,6 +70,30 @@ usersRoutes.post(
       const avatarUrl = `/uploads/${req.file.filename}`;
       const user = await usersService.updateUser(req.user!.userId, { avatarUrl });
       res.json(user);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ─── Preferences ───
+
+usersRoutes.get('/preferences', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const prefs = await preferencesService.getPreferences(req.user!.userId);
+    res.json(prefs);
+  } catch (err) {
+    next(err);
+  }
+});
+
+usersRoutes.put(
+  '/preferences',
+  validate(validation.updateUserPreferencesSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const prefs = await preferencesService.updatePreferences(req.user!.userId, req.body);
+      res.json(prefs);
     } catch (err) {
       next(err);
     }

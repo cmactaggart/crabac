@@ -3,16 +3,17 @@ import multer from 'multer';
 import path from 'path';
 import { authenticate } from '../auth/auth.middleware.js';
 import { validate } from '../../middleware/validate.js';
-import { validation } from '@gud/shared';
+import { validation } from '@crabac/shared';
 import { config } from '../../config.js';
 import { requirePermission, requireMember } from '../rbac/rbac.middleware.js';
-import { Permissions } from '@gud/shared';
+import { Permissions } from '@crabac/shared';
 import { computePermissions } from '../rbac/rbac.service.js';
-import { hasPermission } from '@gud/shared';
+import { hasPermission } from '@crabac/shared';
 import { db } from '../../database/connection.js';
 import * as spacesService from './spaces.service.js';
 import * as messagesService from '../messages/messages.service.js';
 import * as spaceSettingsService from './space-settings.service.js';
+import * as spaceAdminSettingsService from './space-admin-settings.service.js';
 
 export const spacesRoutes = Router();
 
@@ -271,6 +272,38 @@ spacesRoutes.put(
       const settings = await spaceSettingsService.updateSettings(
         req.params.spaceId,
         req.user!.userId,
+        req.body,
+      );
+      res.json(settings);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Get space admin settings (public boards, etc.)
+spacesRoutes.get(
+  '/:spaceId/admin-settings',
+  requirePermission(Permissions.MANAGE_SPACE),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const settings = await spaceAdminSettingsService.getSpaceAdminSettings(req.params.spaceId);
+      res.json(settings);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Update space admin settings
+spacesRoutes.put(
+  '/:spaceId/admin-settings',
+  requirePermission(Permissions.MANAGE_SPACE),
+  validate(validation.updateSpaceAdminSettingsSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const settings = await spaceAdminSettingsService.updateSpaceAdminSettings(
+        req.params.spaceId,
         req.body,
       );
       res.json(settings);

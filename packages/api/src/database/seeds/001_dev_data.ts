@@ -1,7 +1,7 @@
 import type { Knex } from 'knex';
 import bcrypt from 'bcrypt';
 import { SnowflakeGenerator } from '../../lib/snowflake.js';
-import { DEFAULT_MEMBER_PERMISSIONS, ALL_PERMISSIONS } from '@gud/shared';
+import { DEFAULT_MEMBER_PERMISSIONS, ALL_PERMISSIONS } from '@crabac/shared';
 
 const sf = new SnowflakeGenerator(1);
 const id = () => sf.generate();
@@ -37,9 +37,9 @@ export async function seed(knex: Knex): Promise<void> {
   const spaceId = id();
   await knex('spaces').insert({
     id: spaceId,
-    name: 'gud HQ',
-    slug: 'gud-hq',
-    description: 'The official gud development space',
+    name: 'crab.ac HQ',
+    slug: 'crabac-hq',
+    description: 'The official crab.ac development space',
     owner_id: alice,
   });
 
@@ -89,7 +89,7 @@ export async function seed(knex: Knex): Promise<void> {
   const msg3 = id();
 
   await knex('messages').insert([
-    { id: msg1, channel_id: generalId, author_id: alice, content: 'Welcome to gud HQ! 🎉' },
+    { id: msg1, channel_id: generalId, author_id: alice, content: 'Welcome to crab.ac HQ! 🎉' },
     { id: msg2, channel_id: generalId, author_id: bob, content: 'Hey everyone! Excited to be here.' },
     { id: msg3, channel_id: generalId, author_id: charlie, content: 'Thanks for the invite, Alice!', reply_to_id: msg1 },
   ]);
@@ -98,7 +98,7 @@ export async function seed(knex: Knex): Promise<void> {
   await knex('invites').insert({
     id: id(),
     space_id: spaceId,
-    code: 'gudHQ2025',
+    code: 'crabac2025',
     created_by: alice,
     max_uses: null,
     expires_at: null,
@@ -106,6 +106,6 @@ export async function seed(knex: Knex): Promise<void> {
 
   console.log('Seed data created successfully');
   console.log(`  Users: alice, bob, charlie (password: password123)`);
-  console.log(`  Space: gud HQ (slug: gud-hq)`);
-  console.log(`  Invite code: gudHQ2025`);
+  console.log(`  Space: crab.ac HQ (slug: crabac-hq)`);
+  console.log(`  Invite code: crabac2025`);
 }

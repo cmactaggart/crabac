@@ -1,7 +1,7 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { authenticate } from '../auth/auth.middleware.js';
 import { validate } from '../../middleware/validate.js';
-import { validation } from '@gud/shared';
+import { validation } from '@crabac/shared';
 import * as dmService from './dm.service.js';
 import { ForbiddenError } from '../../lib/errors.js';
 

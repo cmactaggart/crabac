@@ -1,7 +1,7 @@
 import { db } from '../../database/connection.js';
 import { snowflake } from '../_shared.js';
 import { eventBus } from '../../lib/event-bus.js';
-import type { NotificationType } from '@gud/shared';
+import type { NotificationType } from '@crabac/shared';
 
 export async function createNotification(
   userId: string,

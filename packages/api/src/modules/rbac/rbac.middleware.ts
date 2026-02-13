@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { ForbiddenError, UnauthorizedError } from '../../lib/errors.js';
-import { hasPermission } from '@gud/shared';
+import { hasPermission } from '@crabac/shared';
 import { computePermissions } from './rbac.service.js';
 import * as spacesService from '../spaces/spaces.service.js';
 

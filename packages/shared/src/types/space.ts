@@ -7,6 +7,7 @@ export interface Space {
   ownerId: string;
   createdAt: string;
   updatedAt: string;
+  calendarEnabled?: boolean;
 }
 
 export interface CreateSpaceRequest {
@@ -38,4 +39,11 @@ export interface SpaceMember {
 
 export interface JoinSpaceRequest {
   code: string;
+}
+
+export interface SpaceAdminSettings {
+  spaceId: string;
+  allowPublicBoards: boolean;
+  allowAnonymousBrowsing: boolean;
+  calendarEnabled: boolean;
 }

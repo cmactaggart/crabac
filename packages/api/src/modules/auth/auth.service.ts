@@ -182,6 +182,7 @@ function formatUser(row: any) {
     status: row.status,
     emailVerified: !!row.email_verified,
     totpEnabled: !!row.totp_enabled,
+    accountType: row.account_type || 'full',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

@@ -1,12 +1,12 @@
 import { db } from '../../database/connection.js';
 import { snowflake } from '../_shared.js';
 import { NotFoundError, ForbiddenError } from '../../lib/errors.js';
-import { Permissions, hasPermission, ALL_PERMISSIONS } from '@gud/shared';
+import { Permissions, hasPermission, ALL_PERMISSIONS } from '@crabac/shared';
 import { computePermissions, computeChannelPermissions } from '../rbac/rbac.service.js';
 
 export async function createChannel(
   spaceId: string,
-  data: { name: string; topic?: string; type?: string; isPrivate?: boolean; categoryId?: string },
+  data: { name: string; topic?: string; type?: string; isPrivate?: boolean; isPublic?: boolean; categoryId?: string },
 ) {
   const id = snowflake.generate();
   // Get next position
@@ -22,6 +22,7 @@ export async function createChannel(
     name: data.name,
     topic: data.topic ?? null,
     type: data.type ?? 'text',
+    is_public: data.isPublic ?? false,
     is_private: data.isPrivate ?? false,
     position,
     category_id: data.categoryId ?? null,
@@ -99,7 +100,7 @@ export async function getChannel(channelId: string) {
 export async function updateChannel(
   spaceId: string,
   channelId: string,
-  data: { name?: string; topic?: string | null; type?: string; position?: number },
+  data: { name?: string; topic?: string | null; type?: string; isPublic?: boolean; position?: number },
 ) {
   const channel = await db('channels').where({ id: channelId, space_id: spaceId }).first();
   if (!channel) throw new NotFoundError('Channel');
@@ -113,6 +114,7 @@ export async function updateChannel(
   if (data.name !== undefined) updates.name = data.name;
   if (data.topic !== undefined) updates.topic = data.topic;
   if (data.type !== undefined) updates.type = data.type;
+  if (data.isPublic !== undefined) updates.is_public = data.isPublic;
   if (data.position !== undefined) updates.position = data.position;
 
   if (Object.keys(updates).length > 0) {
@@ -228,6 +230,7 @@ function formatChannel(row: any) {
     name: row.name,
     topic: row.topic,
     type: row.type,
+    isPublic: row.is_public ?? false,
     isPrivate: row.is_private,
     isAdmin: row.is_admin ?? false,
     position: row.position,

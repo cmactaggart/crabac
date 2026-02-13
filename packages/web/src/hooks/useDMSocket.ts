@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { getSocket } from '../lib/socket.js';
 import { useDMStore } from '../stores/dm.js';
-import type { DirectMessage } from '@gud/shared';
+import type { DirectMessage } from '@crabac/shared';
 
 export function useDMSocket(conversationId: string | null) {
   const addMessage = useDMStore((s) => s.addMessage);

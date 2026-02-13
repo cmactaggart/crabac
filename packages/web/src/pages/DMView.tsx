@@ -15,7 +15,7 @@ import { Markdown } from '../components/common/Markdown.js';
 import { MessageLinkEmbed, extractMessageLinks } from '../components/messages/MessageLinkEmbed.js';
 import { ContextMenu, useLongPress, type ContextMenuItem } from '../components/common/ContextMenu.js';
 import { api } from '../lib/api.js';
-import type { DirectMessage, Conversation, FriendshipStatus } from '@gud/shared';
+import type { DirectMessage, Conversation, FriendshipStatus } from '@crabac/shared';
 
 export function DMView() {
   const { conversationId } = useParams();

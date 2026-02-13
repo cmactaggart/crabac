@@ -1,13 +1,14 @@
 {
-  "name": "gud",
+  "name": "crabac",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
-    "db:migrate": "pnpm --filter @gud/api run db:migrate",
-    "db:rollback": "pnpm --filter @gud/api run db:rollback",
-    "db:seed": "pnpm --filter @gud/api run db:seed"
+    "db:migrate": "pnpm --filter @crabac/api run db:migrate",
+    "db:rollback": "pnpm --filter @crabac/api run db:rollback",
+    "db:seed": "pnpm --filter @crabac/api run db:seed"
   },
   "devDependencies": {
     "turbo": "^2.3.0",

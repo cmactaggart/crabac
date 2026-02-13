@@ -9,6 +9,7 @@ export interface User {
   status: UserStatus;
   emailVerified: boolean;
   totpEnabled: boolean;
+  accountType: 'full' | 'board';
   isAdmin?: boolean;
   createdAt: string;
   updatedAt: string;
@@ -74,4 +75,10 @@ export interface FriendshipStatus {
   id: string;
   status: 'pending' | 'accepted';
   direction: 'sent' | 'received';
+}
+
+export type DistanceUnits = 'metric' | 'imperial';
+
+export interface UserPreferences {
+  distanceUnits: DistanceUnits;
 }

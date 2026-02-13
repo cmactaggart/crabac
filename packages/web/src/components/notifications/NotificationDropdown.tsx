@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCheck, AtSign, Reply, Zap } from 'lucide-react';
 import { useNotificationsStore } from '../../stores/notifications.js';
-import type { Notification, MentionNotificationData, ReplyNotificationData } from '@gud/shared';
+import type { Notification, MentionNotificationData, ReplyNotificationData } from '@crabac/shared';
 
 interface Props {
   onClose: () => void;

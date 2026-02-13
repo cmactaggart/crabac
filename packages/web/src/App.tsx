@@ -5,6 +5,7 @@ import { useDMStore } from './stores/dm.js';
 import { usePresence } from './hooks/usePresence.js';
 import { useDMUnreadSocket } from './hooks/useDMUnreadSocket.js';
 import { useIsMobile } from './hooks/useIsMobile.js';
+import { useTabNotifications } from './hooks/useTabNotifications.js';
 import { Login } from './pages/Login.js';
 import { Register } from './pages/Register.js';
 import { VerifyEmail } from './pages/VerifyEmail.js';
@@ -18,11 +19,18 @@ import { AdminPanel } from './pages/AdminPanel.js';
 import { NotificationsPage } from './pages/NotificationsPage.js';
 import { AccountPage } from './pages/AccountPage.js';
 import { BottomTabBar } from './components/layout/BottomTabBar.js';
+import { BoardLayout } from './pages/boards/BoardLayout.js';
+import { BoardHome } from './pages/boards/BoardHome.js';
+import { BoardThreadList } from './pages/boards/BoardThreadList.js';
+import { BoardThreadDetail } from './pages/boards/BoardThreadDetail.js';
+import { BoardRegister } from './pages/boards/BoardRegister.js';
+import { BoardLogin } from './pages/boards/BoardLogin.js';
 
 export function App() {
   const { user, loading, restore } = useAuthStore();
   usePresence(!!user);
   useDMUnreadSocket(!!user);
+  useTabNotifications();
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -63,6 +71,14 @@ export function App() {
         <Route path="/notifications" element={user ? <NotificationsPage /> : <Navigate to="/login" />} />
         <Route path="/account" element={user ? <AccountPage /> : <Navigate to="/login" />} />
         <Route path="/" element={user ? <Home /> : <Navigate to="/login" />} />
+        {/* Public board routes (no auth guard) */}
+        <Route path="/boards/:spaceSlug" element={<BoardLayout />}>
+          <Route index element={<BoardHome />} />
+          <Route path="register" element={<BoardRegister />} />
+          <Route path="login" element={<BoardLogin />} />
+          <Route path=":channelName" element={<BoardThreadList />} />
+          <Route path=":channelName/:threadId" element={<BoardThreadDetail />} />
+        </Route>
       </Routes>
       {isMobile && user && <BottomTabBar />}
     </>

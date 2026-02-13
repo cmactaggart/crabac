@@ -4,7 +4,7 @@ import { api } from '../../lib/api.js';
 import { Avatar } from './Avatar.js';
 import { useMutesStore } from '../../stores/mutes.js';
 import { useFriendsStore } from '../../stores/friends.js';
-import type { FriendshipStatus } from '@gud/shared';
+import type { FriendshipStatus } from '@crabac/shared';
 
 interface UserProfile {
   id: string;

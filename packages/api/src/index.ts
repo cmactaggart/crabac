@@ -28,6 +28,12 @@ import { registerDMGateway } from './modules/dm/dm.gateway.js';
 import { registerNotificationGateway } from './modules/notifications/notifications.gateway.js';
 import { friendsRoutes } from './modules/friends/friends.routes.js';
 import { registerFriendsGateway } from './modules/friends/friends.gateway.js';
+import { forumsRoutes } from './modules/forums/forums.routes.js';
+import { calendarRoutes } from './modules/calendar/calendar.routes.js';
+import { registerForumGateway } from './modules/forums/forums.gateway.js';
+import { boardsRoutes } from './modules/boards/boards.routes.js';
+import { boardAuthRoutes } from './modules/boards/board-auth.routes.js';
+import { publicBoardLimiter, publicBoardPostLimiter } from './middleware/rate-limiter.js';
 import { redis } from './lib/redis.js';
 
 const app = express();
@@ -40,8 +46,22 @@ app.use(cors());
 app.use(express.json());
 app.use('/api', apiLimiter);
 
-// Serve uploaded files
-app.use('/uploads', express.static(config.uploadsDir));
+// Serve uploaded files with security headers
+const SAFE_INLINE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'");
+  res.setHeader('X-Frame-Options', 'DENY');
+  // Force download for anything that isn't a safe raster image (SVGs can contain JS)
+  const ext = req.path.split('.').pop()?.toLowerCase();
+  const mime = {
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp',
+  }[ext || ''];
+  if (!mime || !SAFE_INLINE_TYPES.has(mime)) {
+    res.setHeader('Content-Disposition', 'attachment');
+  }
+  next();
+}, express.static(config.uploadsDir));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -60,6 +80,10 @@ app.use('/api/spaces', portalsRoutes);
 app.use('/api/portals', portalsRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/friends', friendsRoutes);
+app.use('/api/spaces', forumsRoutes);
+app.use('/api/spaces', calendarRoutes);
+app.use('/api/boards', publicBoardLimiter, boardsRoutes);
+app.use('/api/boards/auth', boardAuthRoutes);
 
 // Unified message lookup (for embeds)
 app.get('/api/messages/:messageId', authenticate, async (req, res, next) => {
@@ -100,6 +124,7 @@ registerMessageGateway();
 registerDMGateway();
 registerNotificationGateway();
 registerFriendsGateway();
+registerForumGateway();
 
 // Connect Redis and start server
 redis.connect().then(() => {

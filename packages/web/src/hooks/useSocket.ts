@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { getSocket } from '../lib/socket.js';
 import { useMessagesStore } from '../stores/messages.js';
-import type { Message, Reaction } from '@gud/shared';
+import type { Message, Reaction } from '@crabac/shared';
 
 export function useChannelSocket(channelId: string | null) {
   const addMessage = useMessagesStore((s) => s.addMessage);

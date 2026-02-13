@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { X, Hash } from 'lucide-react';
 import { useChannelsStore } from '../../stores/channels.js';
 import { useNavigate } from 'react-router-dom';
-import type { ChannelCategory } from '@gud/shared';
+import type { ChannelCategory, ChannelType } from '@crabac/shared';
 
 interface Props {
   spaceId: string;
@@ -13,6 +13,7 @@ interface Props {
 export function CreateChannelModal({ spaceId, categories, onClose }: Props) {
   const [name, setName] = useState('');
   const [topic, setTopic] = useState('');
+  const [channelType, setChannelType] = useState<ChannelType>('text');
   const [categoryId, setCategoryId] = useState('');
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
@@ -36,6 +37,7 @@ export function CreateChannelModal({ spaceId, categories, onClose }: Props) {
         name.trim(),
         topic.trim() || undefined,
         categoryId || undefined,
+        channelType,
       );
       onClose();
       navigate(`/space/${spaceId}/channel/${channel.id}`);
@@ -72,6 +74,20 @@ export function CreateChannelModal({ spaceId, categories, onClose }: Props) {
               />
             </div>
             <span style={styles.hint}>Lowercase letters, numbers, and hyphens only</span>
+          </div>
+
+          <div style={styles.field}>
+            <label style={styles.label}>Type</label>
+            <select
+              value={channelType}
+              onChange={(e) => setChannelType(e.target.value as ChannelType)}
+              style={styles.input}
+            >
+              <option value="text">Text</option>
+              <option value="announcement">Announcement</option>
+              <option value="read_only">Read Only</option>
+              <option value="forum">Forum</option>
+            </select>
           </div>
 
           <div style={styles.field}>

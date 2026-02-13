@@ -3,7 +3,8 @@ import { api, setTokens, clearTokens, getSavedRefreshToken } from '../lib/api.js
 import { connectSocket, disconnectSocket } from '../lib/socket.js';
 import { useNotificationsStore } from './notifications.js';
 import { useMutesStore } from './mutes.js';
-import type { User, MfaChallengeResponse } from '@gud/shared';
+import { usePreferencesStore } from './preferences.js';
+import type { User, MfaChallengeResponse } from '@crabac/shared';
 
 interface AuthState {
   user: User | null;
@@ -36,9 +37,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       setTokens(data.accessToken, data.refreshToken);
       connectSocket();
       set({ user: data.user, error: null });
-      // Initialize notification count and mutes
+      // Initialize notification count, mutes, and preferences
       useNotificationsStore.getState().fetchUnreadCount();
       useMutesStore.getState().fetchMutes();
+      usePreferencesStore.getState().fetchPreferences();
       return undefined;
     } catch (err: any) {
       set({ error: err.message });
@@ -96,9 +98,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       const user = await api('/users/me');
       connectSocket();
       set({ user, loading: false });
-      // Initialize notification count and mutes
+      // Initialize notification count, mutes, and preferences
       useNotificationsStore.getState().fetchUnreadCount();
       useMutesStore.getState().fetchMutes();
+      usePreferencesStore.getState().fetchPreferences();
     } catch {
       clearTokens();
       set({ loading: false });

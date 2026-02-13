@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Trash2, Plus, Copy, Check, X } from 'lucide-react';
-import type { Invite } from '@gud/shared';
+import type { Invite } from '@crabac/shared';
 import { api } from '../../lib/api.js';
 import { useQRCode } from '../../lib/qrcode.js';
 

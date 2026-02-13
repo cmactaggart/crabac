@@ -1,7 +1,7 @@
 import { db } from '../../database/connection.js';
 import { snowflake } from '../_shared.js';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../../lib/errors.js';
-import { ALL_PERMISSIONS, Permissions, combinePermissions } from '@gud/shared';
+import { ALL_PERMISSIONS, Permissions, combinePermissions } from '@crabac/shared';
 
 /**
  * Compute effective permissions for a user in a space.

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { X } from 'lucide-react';
-import { Permissions, hasPermission, combinePermissions } from '@gud/shared';
-import type { Role } from '@gud/shared';
+import { Permissions, hasPermission, combinePermissions } from '@crabac/shared';
+import type { Role } from '@crabac/shared';
 import { api } from '../../lib/api.js';
 import { useAuthStore } from '../../stores/auth.js';
 import { useSpacesStore } from '../../stores/spaces.js';
@@ -11,6 +11,8 @@ import { ChannelsTab } from './ChannelsTab.js';
 import { RolesTab } from './RolesTab.js';
 import { MembersTab } from './MembersTab.js';
 import { InvitesTab } from './InvitesTab.js';
+import { BoardSettingsTab } from './BoardSettingsTab.js';
+import { CalendarSettingsTab } from './CalendarSettingsTab.js';
 
 interface Props {
   spaceId: string;
@@ -29,6 +31,8 @@ const TABS: TabDef[] = [
   { key: 'roles', label: 'Roles', permission: Permissions.MANAGE_ROLES },
   { key: 'members', label: 'Members', permission: Permissions.MANAGE_MEMBERS },
   { key: 'invites', label: 'Invites', permission: Permissions.MANAGE_INVITES },
+  { key: 'boards', label: 'Public Boards', permission: Permissions.MANAGE_SPACE },
+  { key: 'calendar', label: 'Calendar', permission: Permissions.MANAGE_SPACE },
 ];
 
 export function SpaceSettingsModal({ spaceId, onClose }: Props) {
@@ -88,6 +92,10 @@ export function SpaceSettingsModal({ spaceId, onClose }: Props) {
         return <MembersTab spaceId={spaceId} members={members} />;
       case 'invites':
         return <InvitesTab spaceId={spaceId} />;
+      case 'boards':
+        return <BoardSettingsTab spaceId={spaceId} />;
+      case 'calendar':
+        return <CalendarSettingsTab spaceId={spaceId} />;
       default:
         return null;
     }

@@ -3,6 +3,7 @@
   "productName": "crab.ac",
   "version": "1.1.0",
   "private": true,
+  "license": "MIT",
   "type": "commonjs",
   "description": "crab.ac desktop app",
   "author": {

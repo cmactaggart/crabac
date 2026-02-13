@@ -9,7 +9,9 @@ import { Markdown } from '../common/Markdown.js';
 import { MessageLinkEmbed, extractMessageLinks } from './MessageLinkEmbed.js';
 import { EmojiPicker } from './EmojiPicker.js';
 import { ContextMenu, useLongPress, type ContextMenuItem } from '../common/ContextMenu.js';
-import type { Message } from '@gud/shared';
+import type { Message, GpxTrackMetadata } from '@crabac/shared';
+import { GpxPreviewCard } from './GpxPreviewCard.js';
+import { CalendarEventCard, extractCalendarEvent } from '../calendar/CalendarEventCard.js';
 
 interface Props {
   messages: Message[];
@@ -30,7 +32,9 @@ export function MessageList({ messages, loading, hasMore, currentUserId, channel
 
   useEffect(() => {
     if (messages.length > prevLengthRef.current) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      // Use instant scroll on initial load (prev was 0), smooth for live messages
+      const behavior = prevLengthRef.current === 0 ? 'instant' : 'smooth';
+      bottomRef.current?.scrollIntoView({ behavior });
     }
     prevLengthRef.current = messages.length;
   }, [messages.length]);
@@ -313,14 +317,25 @@ function MessageItem({
                     <div style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.85rem' }}>
                       <Markdown content={message.content} />
                     </div>
-                  ) : (
-                    <>
-                      <Markdown content={message.content} />
-                      {linkedMessageIds.map((mid) => (
-                        <MessageLinkEmbed key={mid} messageId={mid} />
-                      ))}
-                    </>
-                  )}
+                  ) : (() => {
+                    const calEvent = extractCalendarEvent(message.content);
+                    if (calEvent) {
+                      return (
+                        <>
+                          {calEvent.remainingContent && <Markdown content={calEvent.remainingContent} />}
+                          <CalendarEventCard embed={calEvent.embed} spaceId={spaceId} />
+                        </>
+                      );
+                    }
+                    return (
+                      <>
+                        <Markdown content={message.content} />
+                        {linkedMessageIds.map((mid) => (
+                          <MessageLinkEmbed key={mid} messageId={mid} />
+                        ))}
+                      </>
+                    );
+                  })()}
                 </>
               )}
             </div>
@@ -330,6 +345,10 @@ function MessageItem({
           {message.attachments && message.attachments.length > 0 && (
             <div style={styles.attachments}>
               {message.attachments.map((att) => {
+                const gpxMeta = (att as any).metadata?.gpx as GpxTrackMetadata | undefined;
+                if (gpxMeta) {
+                  return <GpxPreviewCard key={att.id} attachment={att} gpx={gpxMeta} />;
+                }
                 const isImage = att.mimeType.startsWith('image/');
                 return isImage ? (
                   <a key={att.id} href={att.url} target="_blank" rel="noopener noreferrer">

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../lib/api.js';
-import type { Space, SpaceMember } from '@gud/shared';
+import type { Space, SpaceMember } from '@crabac/shared';
 
 interface SpacesState {
   spaces: Space[];

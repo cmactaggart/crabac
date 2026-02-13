@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../lib/api.js';
-import type { EligibleSpace } from '@gud/shared';
+import type { EligibleSpace } from '@crabac/shared';
 
 interface PortalsState {
   eligibleSpaces: EligibleSpace[];

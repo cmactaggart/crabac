@@ -10,7 +10,7 @@ import type {
   ReplyNotificationData,
   DMRequestNotificationData,
   FriendRequestNotificationData,
-} from '@gud/shared';
+} from '@crabac/shared';
 
 export function NotificationBell() {
   const { unreadCount, addNotification, fetchUnreadCount } = useNotificationsStore();

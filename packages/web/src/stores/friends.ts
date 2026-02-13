@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../lib/api.js';
-import type { FriendListItem, FriendshipStatus } from '@gud/shared';
+import type { FriendListItem, FriendshipStatus } from '@crabac/shared';
 
 interface FriendsState {
   friends: FriendListItem[];

@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useMessagesStore } from '../../stores/messages.js';
 import { Markdown } from '../common/Markdown.js';
-import type { Message } from '@gud/shared';
+import type { Message } from '@crabac/shared';
 
 interface Props {
   channelId: string;

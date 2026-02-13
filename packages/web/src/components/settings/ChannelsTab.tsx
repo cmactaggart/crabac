@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Trash2, Plus, ChevronDown, ChevronRight, Shield } from 'lucide-react';
-import type { Channel, ChannelCategory, ChannelType } from '@gud/shared';
+import { Trash2, Plus, ChevronDown, ChevronRight, Shield, Globe } from 'lucide-react';
+import type { Channel, ChannelCategory, ChannelType } from '@crabac/shared';
 import { useChannelsStore } from '../../stores/channels.js';
 import { ChannelPermissionsEditor } from './ChannelPermissionsEditor.js';
 
@@ -28,6 +28,7 @@ export function ChannelsTab({ spaceId, channels, categories }: Props) {
   const [editName, setEditName] = useState('');
   const [editTopic, setEditTopic] = useState('');
   const [editType, setEditType] = useState<ChannelType>('text');
+  const [editPublic, setEditPublic] = useState(false);
   const [editCatName, setEditCatName] = useState('');
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -70,7 +71,7 @@ export function ChannelsTab({ spaceId, channels, categories }: Props) {
   const handleSaveChannel = async (ch: Channel) => {
     setError('');
     try {
-      await updateChannel(spaceId, ch.id, { name: editName.trim(), topic: editTopic.trim(), type: editType });
+      await updateChannel(spaceId, ch.id, { name: editName.trim(), topic: editTopic.trim(), type: editType, isPublic: editPublic });
       setEditingChannel(null);
     } catch (err: any) {
       setError(err.message || 'Failed to update channel');
@@ -112,6 +113,7 @@ export function ChannelsTab({ spaceId, channels, categories }: Props) {
     setEditName(ch.name);
     setEditTopic(ch.topic || '');
     setEditType(ch.type);
+    setEditPublic(ch.isPublic ?? false);
   };
 
   const renderChannelRow = (ch: Channel) => {
@@ -129,7 +131,14 @@ export function ChannelsTab({ spaceId, channels, categories }: Props) {
               <option value="text">Text</option>
               <option value="announcement">Announcement</option>
               <option value="read_only">Read Only</option>
+              <option value="forum">Forum</option>
             </select>
+            {editType === 'forum' && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.8rem', color: editPublic ? 'var(--accent)' : 'var(--text-secondary)', whiteSpace: 'nowrap', cursor: 'pointer' }}>
+                <input type="checkbox" checked={editPublic} onChange={(e) => setEditPublic(e.target.checked)} />
+                Public Board
+              </label>
+            )}
             <div style={{ display: 'flex', gap: 4 }}>
               <button onClick={() => handleSaveChannel(ch)} style={styles.smallSave} disabled={!editName.trim()}>Save</button>
               <button onClick={() => setEditingChannel(null)} style={styles.smallCancel}>Cancel</button>
@@ -155,6 +164,20 @@ export function ChannelsTab({ spaceId, channels, categories }: Props) {
         <span style={{ flex: 1, cursor: 'pointer' }} onClick={() => startEditChannel(ch)}>{ch.name}</span>
         {ch.isAdmin && <span style={styles.typeLabel}>admin</span>}
         <span style={styles.typeLabel}>{ch.type}</span>
+        {ch.type === 'forum' && (
+          <button
+            onClick={() => updateChannel(spaceId, ch.id, { isPublic: !ch.isPublic })}
+            style={{
+              ...styles.publicToggle,
+              color: ch.isPublic ? 'var(--accent)' : 'var(--text-muted)',
+              background: ch.isPublic ? 'rgba(88, 101, 242, 0.15)' : 'var(--bg-tertiary)',
+            }}
+            title={ch.isPublic ? 'Public board — click to make private' : 'Private — click to make public board'}
+          >
+            <Globe size={12} />
+            {ch.isPublic ? 'Public' : 'Private'}
+          </button>
+        )}
         {!ch.isAdmin && (
           confirmDelete === `ch-${ch.id}` ? (
             <div style={{ display: 'flex', gap: 4 }}>
@@ -354,6 +377,18 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'var(--bg-tertiary)',
     padding: '2px 6px',
     borderRadius: 'var(--radius)',
+  },
+  publicToggle: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    fontSize: '0.7rem',
+    fontWeight: 600,
+    padding: '2px 8px',
+    borderRadius: 'var(--radius)',
+    border: 'none',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
   },
   trashBtn: {
     background: 'none',

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api } from '../lib/api.js';
-import type { TotpSetupResponse } from '@gud/shared';
+import type { TotpSetupResponse } from '@crabac/shared';
 
 export function MfaSetup({ onComplete }: { onComplete?: () => void }) {
   const [step, setStep] = useState<'idle' | 'setup' | 'confirm' | 'backup' | 'done'>('idle');

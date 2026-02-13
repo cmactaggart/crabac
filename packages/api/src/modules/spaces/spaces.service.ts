@@ -1,7 +1,7 @@
 import { db } from '../../database/connection.js';
 import { snowflake } from '../_shared.js';
 import { NotFoundError, ConflictError, ForbiddenError, BadRequestError } from '../../lib/errors.js';
-import { DEFAULT_MEMBER_PERMISSIONS, ALL_PERMISSIONS } from '@gud/shared';
+import { DEFAULT_MEMBER_PERMISSIONS, ALL_PERMISSIONS } from '@crabac/shared';
 import { eventBus } from '../../lib/event-bus.js';
 
 export async function createSpace(userId: string, data: { name: string; slug: string; description?: string }) {
@@ -93,14 +93,19 @@ export async function createSpace(userId: string, data: { name: string; slug: st
 export async function listUserSpaces(userId: string) {
   const spaces = await db('spaces')
     .join('space_members', 'spaces.id', 'space_members.space_id')
+    .leftJoin('space_settings', 'spaces.id', 'space_settings.space_id')
     .where('space_members.user_id', userId)
-    .select('spaces.*');
+    .select('spaces.*', 'space_settings.calendar_enabled');
 
   return spaces.map(formatSpace);
 }
 
 export async function getSpace(spaceId: string) {
-  const space = await db('spaces').where('id', spaceId).first();
+  const space = await db('spaces')
+    .leftJoin('space_settings', 'spaces.id', 'space_settings.space_id')
+    .where('spaces.id', spaceId)
+    .select('spaces.*', 'space_settings.calendar_enabled')
+    .first();
   if (!space) throw new NotFoundError('Space');
   return formatSpace(space);
 }
@@ -259,5 +264,6 @@ function formatSpace(row: any) {
     ownerId: row.owner_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    calendarEnabled: !!row.calendar_enabled,
   };
 }

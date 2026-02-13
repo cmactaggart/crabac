@@ -51,7 +51,13 @@ export function Home() {
       <div style={{ ...styles.card, maxWidth: isMobile ? '100%' : '540px' }}>
         {/* Header */}
         <div style={styles.header}>
-          <h1 style={styles.title}>crab.ac</h1>
+          <div>
+            <h1 style={styles.title}>crab.ac</h1>
+            <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+              <a href="https://github.com/cmactaggart/crabac" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)' }}>GitHub</a>
+              <a href="mailto:bingo@crab.ac" style={{ color: 'var(--text-muted)' }}>bingo@crab.ac</a>
+            </div>
+          </div>
           <div style={styles.userInfo}>
             {user?.isAdmin && (
               <button onClick={() => navigate('/admin')} style={styles.adminBtn}>Admin</button>
@@ -341,7 +347,6 @@ function MfaModal({ user, onClose }: { user: any; onClose: () => void }) {
 
 function CreateSpaceModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState('');
-  const [slug, setSlug] = useState('');
   const [error, setError] = useState('');
   const createSpace = useSpacesStore((s) => s.createSpace);
   const navigate = useNavigate();
@@ -349,7 +354,8 @@ function CreateSpaceModal({ onClose }: { onClose: () => void }) {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const space = await createSpace(name, slug || name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''));
+      const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      const space = await createSpace(name, slug);
       navigate(`/space/${space.id}`);
     } catch (err: any) {
       setError(err.message);
@@ -363,17 +369,7 @@ function CreateSpaceModal({ onClose }: { onClose: () => void }) {
         {error && <div style={styles.error}>{error}</div>}
         <label style={styles.label}>
           Name
-          <input value={name} onChange={(e) => { setName(e.target.value); if (!slug) setSlug(''); }} required style={styles.input} />
-        </label>
-        <label style={styles.label}>
-          Slug
-          <input
-            value={slug || name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
-            onChange={(e) => setSlug(e.target.value)}
-            required
-            pattern="^[a-z0-9-]+$"
-            style={styles.input}
-          />
+          <input value={name} onChange={(e) => setName(e.target.value)} required style={styles.input} />
         </label>
         <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
           <button type="button" onClick={onClose} style={styles.secondaryBtn}>Cancel</button>

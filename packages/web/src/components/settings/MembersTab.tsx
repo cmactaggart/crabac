@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Trash2 } from 'lucide-react';
-import type { SpaceMember, Role } from '@gud/shared';
+import type { SpaceMember, Role } from '@crabac/shared';
 import { api } from '../../lib/api.js';
 import { useAuthStore } from '../../stores/auth.js';
 import { useSpacesStore } from '../../stores/spaces.js';

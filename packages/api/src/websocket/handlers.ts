@@ -5,7 +5,7 @@ import * as messagesService from '../modules/messages/messages.service.js';
 import * as dmService from '../modules/dm/dm.service.js';
 import { getChannelSpaceId } from '../modules/channels/channels.service.js';
 import { computeChannelPermissions } from '../modules/rbac/rbac.service.js';
-import { hasPermission, Permissions } from '@gud/shared';
+import { hasPermission, Permissions } from '@crabac/shared';
 import { db } from '../database/connection.js';
 
 const PRESENCE_TTL = 60; // seconds
@@ -95,6 +95,15 @@ export async function registerHandlers(io: Server, socket: Socket) {
     } catch {
       // ignore
     }
+  });
+
+  // --- Forum thread subscription ---
+  socket.on('thread:join', ({ threadId }: { threadId: string }) => {
+    socket.join(`thread:${threadId}`);
+  });
+
+  socket.on('thread:leave', ({ threadId }: { threadId: string }) => {
+    socket.leave(`thread:${threadId}`);
   });
 
   // --- DM room join (for new conversations created after socket connect) ---

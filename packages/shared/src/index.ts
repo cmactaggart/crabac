@@ -7,5 +7,7 @@ export * from './types/events.js';
 export * from './types/notification.js';
 export * from './types/conversation.js';
 export * from './types/portal.js';
+export * from './types/forum.js';
+export * from './types/calendar.js';
 export * from './permissions.js';
 export * as validation from './validation/index.js';

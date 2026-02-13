@@ -1,8 +1,9 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { authenticate } from '../auth/auth.middleware.js';
 import { validate } from '../../middleware/validate.js';
-import { validation } from '@gud/shared';
-import { requireMember } from '../rbac/rbac.middleware.js';
+import { validation } from '@crabac/shared';
+import { requireMember, requirePermission } from '../rbac/rbac.middleware.js';
+import { Permissions } from '@crabac/shared';
 import * as portalsService from './portals.service.js';
 import { getChannelSpaceId } from '../channels/channels.service.js';
 
@@ -10,10 +11,10 @@ export const portalsRoutes = Router();
 
 portalsRoutes.use(authenticate);
 
-// Create portal directly (requires CREATE_PORTAL in target space)
+// Create portal directly (requires MANAGE_CHANNELS in source space + CREATE_PORTAL in target space)
 portalsRoutes.post(
   '/:spaceId/portals',
-  requireMember,
+  requirePermission(Permissions.MANAGE_CHANNELS),
   validate(validation.createPortalSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -30,10 +31,10 @@ portalsRoutes.post(
   },
 );
 
-// Submit portal invite (requires SUBMIT_PORTAL_INVITE in target space)
+// Submit portal invite (requires MANAGE_CHANNELS in source space + SUBMIT_PORTAL_INVITE in target space)
 portalsRoutes.post(
   '/:spaceId/portal-invites',
-  requireMember,
+  requirePermission(Permissions.MANAGE_CHANNELS),
   validate(validation.submitPortalInviteSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {

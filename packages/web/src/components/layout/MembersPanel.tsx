@@ -6,7 +6,7 @@ import { useAuthStore } from '../../stores/auth.js';
 import { useDMStore } from '../../stores/dm.js';
 import { Avatar } from '../common/Avatar.js';
 import { UserProfilePopover } from '../common/UserProfilePopover.js';
-import type { SpaceMember } from '@gud/shared';
+import type { SpaceMember } from '@crabac/shared';
 
 interface Props {
   members: SpaceMember[];

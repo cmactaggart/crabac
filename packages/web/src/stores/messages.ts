@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../lib/api.js';
-import type { Message, Reaction, ThreadResponse, SearchResult } from '@gud/shared';
+import type { Message, Reaction, ThreadResponse, SearchResult } from '@crabac/shared';
 
 interface MessagesState {
   messages: Message[];
@@ -97,6 +97,7 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
     messages: [], hasMore: true, pinnedMessages: [], showPins: false,
     threadParent: null, threadReplies: [], showThread: false,
     searchResults: [], searchQuery: '', showSearch: false, replyingTo: null,
+    typingUsers: new Map(),
   }),
 
   sendMessage: async (channelId, content, replyToId) => {

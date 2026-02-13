@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Trash2, Plus, ChevronDown, ChevronRight } from 'lucide-react';
-import { Permissions } from '@gud/shared';
-import type { Role, PermissionKey } from '@gud/shared';
+import { Permissions } from '@crabac/shared';
+import type { Role, PermissionKey } from '@crabac/shared';
 import { api } from '../../lib/api.js';
 
 interface Props {
@@ -26,6 +26,9 @@ const PERMISSION_LABELS: Record<PermissionKey, string> = {
   SUBMIT_PORTAL_INVITE: 'Submit Portal Invite',
   ACCEPT_PORTAL_INVITE: 'Accept Portal Invite',
   VIEW_ROLES: 'View Roles',
+  MANAGE_THREADS: 'Manage Threads',
+  CREATE_THREADS: 'Create Threads',
+  MANAGE_CALENDAR: 'Manage Calendar',
 };
 
 export function RolesTab({ spaceId }: Props) {

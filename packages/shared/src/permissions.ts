@@ -16,6 +16,9 @@ export const Permissions = {
   SUBMIT_PORTAL_INVITE: 1n << 14n,
   ACCEPT_PORTAL_INVITE: 1n << 15n,
   VIEW_ROLES:           1n << 16n,
+  MANAGE_THREADS:       1n << 17n,
+  CREATE_THREADS:       1n << 18n,
+  MANAGE_CALENDAR:      1n << 19n,
 } as const;
 
 export type PermissionKey = keyof typeof Permissions;
@@ -25,7 +28,8 @@ export const DEFAULT_MEMBER_PERMISSIONS =
   Permissions.SEND_MESSAGES |
   Permissions.ADD_REACTIONS |
   Permissions.ATTACH_FILES |
-  Permissions.CREATE_INVITES;
+  Permissions.CREATE_INVITES |
+  Permissions.CREATE_THREADS;
 
 export const ALL_PERMISSIONS = Object.values(Permissions).reduce((a, b) => a | b, 0n);
 
