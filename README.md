@@ -155,7 +155,7 @@ The web client will be available at `http://localhost:5173` and the API at `http
 
 ### Production Deployment with Caddy + Cloudflare Tunnels
 
-If you're going to run this live on the dirty public internet, we recommend a setup that avoids exposing any public ports on the host machine.  Note, we don't actually recommend running this live on the dirty public internet unless you absolutely know what you're doing and know all of the dangers associated with putting live servers on the internet, but if you're going to do it and want a quick and dirty way to make it a little more secure, try this:
+If you're going to run this live on the dirty public internet, we recommend a setup that avoids exposing any public ports on the host machine.  Note: we don't actually recommend running this live on the dirty public internet unless you absolutely know what you're doing and know all of the dangers associated with putting live servers on the internet, but if you're going to do it and want a quick and dirty way to make it a little more secure, try this:
 
 1. **Caddy with Coraza WAF** runs on a local-only port (e.g., `:3030`) and reverse-proxies to the API and frontend. The included `infra/Caddyfile` configures OWASP Core Rule Set for request filtering, routes Socket.io traffic around the WAF (since WebSocket upgrades trip false positives), and serves static files for desktop app updates.
 
