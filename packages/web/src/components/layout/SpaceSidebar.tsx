@@ -3,6 +3,8 @@ import { Mail, ChevronsLeft } from 'lucide-react';
 import { useLayoutStore } from '../../stores/layout.js';
 import { useDMStore } from '../../stores/dm.js';
 import { CrabIcon } from '../icons/CrabIcon.js';
+import { getContrastColor } from '../spaces/SpaceBrandedCard.js';
+import { LetterIcon } from '../icons/LetterIcon.js';
 import type { Space } from '@crabac/shared';
 
 interface Props {
@@ -43,26 +45,50 @@ export function SpaceSidebar({ spaces, activeSpaceId }: Props) {
 
       <div style={styles.divider} />
 
-      {spaces.map((space) => (
-        <button
-          key={space.id}
-          onClick={() => navigate(`/space/${space.id}`)}
-          style={{
-            ...styles.icon,
-            background: space.iconUrl ? 'transparent' : (space.id === activeSpaceId ? 'var(--accent)' : 'var(--bg-tertiary)'),
-            borderRadius: space.id === activeSpaceId ? '16px' : '50%',
-            overflow: 'hidden',
-            padding: 0,
-          }}
-          title={space.name}
-        >
-          {space.iconUrl ? (
-            <img src={space.iconUrl} alt={space.name} style={{ width: 48, height: 48, objectFit: 'cover' }} />
-          ) : (
-            space.name.charAt(0).toUpperCase()
-          )}
-        </button>
-      ))}
+      {spaces.map((space) => {
+        const isActive = space.id === activeSpaceId;
+        const hasGradient = space.baseColor && space.accentColor;
+        let bg: string;
+        if (space.iconUrl) {
+          bg = 'transparent';
+        } else if (hasGradient) {
+          bg = `linear-gradient(135deg, ${space.baseColor} 30%, ${space.accentColor} 100%)`;
+        } else if (isActive) {
+          bg = 'var(--accent)';
+        } else {
+          bg = 'var(--bg-tertiary)';
+        }
+
+        const letterColor = space.textColor || (space.accentColor ? getContrastColor(space.accentColor) : '#fff');
+
+        return (
+          <button
+            key={space.id}
+            onClick={() => navigate(`/space/${space.id}`)}
+            style={{
+              ...styles.icon,
+              background: space.iconUrl ? 'transparent' : 'none',
+              borderRadius: isActive ? '16px' : '50%',
+              overflow: 'hidden',
+              padding: 0,
+              border: isActive && hasGradient ? `2px solid ${space.accentColor}` : 'none',
+            }}
+            title={space.name}
+          >
+            {space.iconUrl ? (
+              <img src={space.iconUrl} alt={space.name} style={{ width: 48, height: 48, objectFit: 'cover' }} />
+            ) : (
+              <LetterIcon
+                letter={space.name.charAt(0)}
+                size={48}
+                bg={hasGradient ? undefined : (isActive ? 'var(--accent)' : 'var(--bg-tertiary)')}
+                color={letterColor}
+                gradient={hasGradient ? { base: space.baseColor!, accent: space.accentColor! } : undefined}
+              />
+            )}
+          </button>
+        );
+      })}
 
       <div style={{ marginTop: 'auto', paddingTop: 8 }}>
         <button onClick={toggleSpaceSidebar} style={styles.collapseBtn} title="Collapse sidebar">

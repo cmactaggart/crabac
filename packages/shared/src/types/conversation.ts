@@ -14,6 +14,8 @@ export interface ConversationParticipant {
   username: string;
   displayName: string;
   avatarUrl: string | null;
+  baseColor?: string | null;
+  accentColor?: string | null;
   status: string;
 }
 
@@ -28,5 +30,7 @@ export interface DirectMessage {
     username: string;
     displayName: string;
     avatarUrl: string | null;
+    baseColor?: string | null;
+    accentColor?: string | null;
   };
 }

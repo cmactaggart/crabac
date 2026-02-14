@@ -17,6 +17,8 @@ export function ThreadCard({ thread, onClick }: Props) {
           src={thread.author?.avatarUrl || null}
           name={thread.author?.displayName || '?'}
           size={36}
+          baseColor={thread.author?.baseColor}
+          accentColor={thread.author?.accentColor}
         />
       </div>
       <div style={styles.content}>

@@ -43,6 +43,8 @@ export function ThreadPost({ post, channelId, isFirstPost, canModerate }: Props)
           src={post.author?.avatarUrl || null}
           name={post.author?.displayName || '?'}
           size={40}
+          baseColor={post.author?.baseColor}
+          accentColor={post.author?.accentColor}
         />
         <div style={styles.authorInfo}>
           <span style={styles.authorName}>{post.author?.displayName}</span>

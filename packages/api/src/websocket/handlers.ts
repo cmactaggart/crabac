@@ -28,16 +28,22 @@ export async function registerHandlers(io: Server, socket: Socket) {
   socket.on('channel:join', async ({ channelId }: { channelId: string }) => {
     try {
       const spaceId = await getChannelSpaceId(channelId);
-      let isMember = await spacesService.isMember(spaceId, userId);
+      let hasAccess = await spacesService.isMember(spaceId, userId);
 
       // Check portal access if not a direct member
-      if (!isMember) {
+      if (!hasAccess) {
         const portal = await db('portals').where('channel_id', channelId).first();
         if (portal) {
-          isMember = await spacesService.isMember(String(portal.target_space_id), userId);
+          hasAccess = await spacesService.isMember(String(portal.target_space_id), userId);
         }
       }
-      if (!isMember) return;
+
+      // Check if guest in public space
+      if (!hasAccess) {
+        const isGuest = await redis.sismember(`space:${spaceId}:guests`, userId);
+        if (isGuest) hasAccess = true;
+      }
+      if (!hasAccess) return;
 
       // Check channel-level VIEW_CHANNELS
       const perms = await computeChannelPermissions(spaceId, channelId, userId);
@@ -144,6 +150,79 @@ export async function registerHandlers(io: Server, socket: Socket) {
     }
   });
 
+  // --- Guest visit tracking ---
+  socket.on('space:visit', async ({ spaceId }: { spaceId: string }) => {
+    try {
+      // Verify space is public and user is not a member
+      const isMember = await spacesService.isMember(spaceId, userId);
+      if (isMember) return;
+
+      const settings = await db('space_settings').where('space_id', spaceId).first();
+      if (!settings?.is_public) return;
+
+      // Add to guest set
+      await redis.sadd(`space:${spaceId}:guests`, userId);
+      socket.join(`space:${spaceId}`);
+
+      // Broadcast guest joined
+      const user = await db('users')
+        .where('id', userId)
+        .select('id', 'username', 'display_name', 'avatar_url', 'base_color', 'accent_color', 'status')
+        .first();
+      if (user) {
+        io.to(`space:${spaceId}`).emit('space:guest_joined', {
+          spaceId,
+          user: {
+            id: user.id,
+            username: user.username,
+            displayName: user.display_name,
+            avatarUrl: user.avatar_url,
+            baseColor: user.base_color || null,
+            accentColor: user.accent_color || null,
+            status: user.status,
+          },
+        });
+      }
+    } catch {
+      // ignore
+    }
+  });
+
+  socket.on('space:leave_visit', async ({ spaceId }: { spaceId: string }) => {
+    try {
+      await redis.srem(`space:${spaceId}:guests`, userId);
+      socket.leave(`space:${spaceId}`);
+      io.to(`space:${spaceId}`).emit('space:guest_left', { spaceId, userId });
+    } catch {
+      // ignore
+    }
+  });
+
+  socket.on('space:kick_guest', async ({ spaceId, targetUserId }: { spaceId: string; targetUserId: string }) => {
+    try {
+      // Check kicker has MANAGE_MEMBERS permission
+      const { computePermissions: getPerms } = await import('../modules/rbac/rbac.service.js');
+      const { hasPermission: hasPerm, Permissions: P } = await import('@crabac/shared');
+      const perms = await getPerms(spaceId, userId);
+      if (!hasPerm(perms, P.MANAGE_MEMBERS)) return;
+
+      await redis.srem(`space:${spaceId}:guests`, targetUserId);
+
+      // Find target's socket and remove from room
+      const allSockets = await io.fetchSockets();
+      for (const s of allSockets) {
+        if (s.data.userId === targetUserId) {
+          s.leave(`space:${spaceId}`);
+          s.emit('space:guest_kicked', { spaceId });
+        }
+      }
+
+      io.to(`space:${spaceId}`).emit('space:guest_left', { spaceId, userId: targetUserId });
+    } catch {
+      // ignore
+    }
+  });
+
   // --- Heartbeat for presence ---
   socket.on('presence:heartbeat', () => {
     setPresence(io, userId, 'online');
@@ -168,6 +247,20 @@ export async function registerHandlers(io: Server, socket: Socket) {
 
     if (!hasOtherSockets) {
       setPresence(io, userId, 'offline');
+
+      // Clean up guest sessions
+      try {
+        const guestKeys = await redis.keys('space:*:guests');
+        for (const key of guestKeys) {
+          const removed = await redis.srem(key, userId);
+          if (removed) {
+            const spaceId = key.split(':')[1];
+            io.to(`space:${spaceId}`).emit('space:guest_left', { spaceId, userId });
+          }
+        }
+      } catch {
+        // ignore
+      }
     }
   });
 }

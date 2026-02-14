@@ -5,7 +5,7 @@ import { authenticate } from '../auth/auth.middleware.js';
 import { validate } from '../../middleware/validate.js';
 import { validation } from '@crabac/shared';
 import { config } from '../../config.js';
-import { requirePermission, requireMember } from '../rbac/rbac.middleware.js';
+import { requirePermission, requireMember, requireMemberOrPublicAccess } from '../rbac/rbac.middleware.js';
 import { Permissions } from '@crabac/shared';
 import { computePermissions } from '../rbac/rbac.service.js';
 import { hasPermission } from '@crabac/shared';
@@ -93,10 +93,10 @@ spacesRoutes.post(
   },
 );
 
-// Get space details (must be member)
+// Get space details (member or public access)
 spacesRoutes.get(
   '/:spaceId',
-  requireMember,
+  requireMemberOrPublicAccess,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const space = await spacesService.getSpace(req.params.spaceId);
@@ -157,10 +157,10 @@ spacesRoutes.delete(
   },
 );
 
-// List members
+// List members (member or public access)
 spacesRoutes.get(
   '/:spaceId/members',
-  requireMember,
+  requireMemberOrPublicAccess,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const members = await spacesService.getMembers(req.params.spaceId);
@@ -307,6 +307,48 @@ spacesRoutes.put(
         req.body,
       );
       res.json(settings);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Join a public space (auth required, no membership required)
+spacesRoutes.post(
+  '/:spaceId/join-public',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const space = await spacesService.joinPublicSpace(req.user!.userId, req.params.spaceId);
+      res.json(space);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Get space tags (member or public access)
+spacesRoutes.get(
+  '/:spaceId/tags',
+  requireMemberOrPublicAccess,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const tags = await spacesService.getSpaceTags(req.params.spaceId);
+      res.json(tags);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Update space tags
+spacesRoutes.put(
+  '/:spaceId/tags',
+  requirePermission(Permissions.MANAGE_SPACE),
+  validate(validation.updateSpaceTagsSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const tags = await spacesService.updateSpaceTags(req.params.spaceId, req.body.tags);
+      res.json(tags);
     } catch (err) {
       next(err);
     }

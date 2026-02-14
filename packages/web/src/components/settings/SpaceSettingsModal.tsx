@@ -13,6 +13,7 @@ import { MembersTab } from './MembersTab.js';
 import { InvitesTab } from './InvitesTab.js';
 import { BoardSettingsTab } from './BoardSettingsTab.js';
 import { CalendarSettingsTab } from './CalendarSettingsTab.js';
+import { VisibilityTab } from './VisibilityTab.js';
 
 interface Props {
   spaceId: string;
@@ -27,6 +28,7 @@ interface TabDef {
 
 const TABS: TabDef[] = [
   { key: 'overview', label: 'Overview', permission: Permissions.MANAGE_SPACE },
+  { key: 'visibility', label: 'Visibility', permission: Permissions.MANAGE_SPACE },
   { key: 'channels', label: 'Channels', permission: Permissions.MANAGE_CHANNELS },
   { key: 'roles', label: 'Roles', permission: Permissions.MANAGE_ROLES },
   { key: 'members', label: 'Members', permission: Permissions.MANAGE_MEMBERS },
@@ -45,7 +47,6 @@ export function SpaceSettingsModal({ spaceId, onClose }: Props) {
 
   const [roles, setRoles] = useState<Role[]>([]);
   const [activeTab, setActiveTab] = useState('');
-
   useEffect(() => {
     api<Role[]>(`/spaces/${spaceId}/roles`).then(setRoles).catch(() => {});
   }, [spaceId]);
@@ -84,6 +85,8 @@ export function SpaceSettingsModal({ spaceId, onClose }: Props) {
     switch (activeTab) {
       case 'overview':
         return <OverviewTab space={space} onClose={onClose} />;
+      case 'visibility':
+        return <VisibilityTab spaceId={spaceId} />;
       case 'channels':
         return <ChannelsTab spaceId={spaceId} channels={channels} categories={categories} />;
       case 'roles':

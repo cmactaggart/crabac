@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, ChevronDown, Hash, LogOut, PanelLeftClose, Settings, Shield, Zap, CheckCheck, BellOff, Bell, Link, Copy, Plus, SlidersHorizontal, FolderPlus, GripVertical, ArrowRightLeft, MessageSquareDashed, Trash2, Pencil, Calendar } from 'lucide-react';
+import { UserPlus, ChevronDown, Hash, LogOut, PanelLeftClose, Settings, Shield, Zap, CheckCheck, BellOff, Bell, Link, Copy, Plus, SlidersHorizontal, FolderPlus, GripVertical, ArrowRightLeft, MessageSquareDashed, Trash2, Pencil, Calendar, DoorOpen } from 'lucide-react';
 import { Permissions } from '@crabac/shared';
+import { useSpacesStore } from '../../stores/spaces.js';
 import { useLayoutStore } from '../../stores/layout.js';
 import { useAuthStore } from '../../stores/auth.js';
 import { useChannelsStore } from '../../stores/channels.js';
@@ -179,6 +180,14 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
   const [showPreferences, setShowPreferences] = useState(false);
   const canManage = useCanManageSpace(space?.id || '');
   const canCreateChannels = useHasSpacePermission(space?.id || '', Permissions.MANAGE_CHANNELS);
+  const spaces = useSpacesStore((s) => s.spaces);
+  const joinPublicSpace = useSpacesStore((s) => s.joinPublicSpace);
+  const fetchMembers = useSpacesStore((s) => s.fetchMembers);
+  const [joining, setJoining] = useState(false);
+
+  // Detect if user is a guest (viewing public space but not a member)
+  const isMemberOfSpace = space ? spaces.some((s) => s.id === space.id) : false;
+  const isGuest = space?.isPublic && !isMemberOfSpace;
 
   // DnD state
   const [dragActiveId, setDragActiveId] = useState<string | null>(null);
@@ -532,16 +541,39 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
       <div style={sidebarStyles.header}>
         <h2 style={sidebarStyles.spaceName}>{space.name}</h2>
         <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-          <button onClick={() => setShowPreferences(true)} style={sidebarStyles.inviteBtn} title="Notification Preferences">
-            <SlidersHorizontal size={18} />
-          </button>
-          <button onClick={() => setShowInvite(true)} style={sidebarStyles.inviteBtn} title="Invite People">
-            <UserPlus size={18} />
-          </button>
-          {canManage && (
-            <button onClick={() => setShowSpaceSettings(true)} style={sidebarStyles.inviteBtn} title="Space Settings">
-              <Settings size={18} />
+          {isGuest ? (
+            <button
+              onClick={async () => {
+                setJoining(true);
+                try {
+                  await joinPublicSpace(space.id);
+                  fetchMembers(space.id);
+                } catch {
+                  // ignore
+                }
+                setJoining(false);
+              }}
+              disabled={joining}
+              style={sidebarStyles.joinBtn}
+              title="Join this space"
+            >
+              <DoorOpen size={16} />
+              <span>{joining ? 'Joining...' : 'Join'}</span>
             </button>
+          ) : (
+            <>
+              <button onClick={() => setShowPreferences(true)} style={sidebarStyles.inviteBtn} title="Notification Preferences">
+                <SlidersHorizontal size={18} />
+              </button>
+              <button onClick={() => setShowInvite(true)} style={sidebarStyles.inviteBtn} title="Invite People">
+                <UserPlus size={18} />
+              </button>
+              {canManage && (
+                <button onClick={() => setShowSpaceSettings(true)} style={sidebarStyles.inviteBtn} title="Space Settings">
+                  <Settings size={18} />
+                </button>
+              )}
+            </>
           )}
           {!fullWidth && (
             <button onClick={toggleChannelSidebar} style={sidebarStyles.inviteBtn} title="Collapse sidebar">
@@ -711,7 +743,7 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
       {/* User bar */}
       <div style={sidebarStyles.userBar}>
         <button onClick={() => setShowSettings(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-          <Avatar src={user?.avatarUrl || null} name={user?.displayName || '?'} size={28} />
+          <Avatar src={user?.avatarUrl || null} name={user?.displayName || '?'} size={28} baseColor={user?.baseColor} accentColor={user?.accentColor} />
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: '0.875rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>
@@ -810,6 +842,19 @@ const sidebarStyles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     padding: '0 4px',
     lineHeight: 1,
+    borderRadius: 'var(--radius)',
+  },
+  joinBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    background: 'var(--accent)',
+    border: 'none',
+    color: 'white',
+    fontSize: '0.8rem',
+    fontWeight: 600,
+    cursor: 'pointer',
+    padding: '4px 10px',
     borderRadius: 'var(--radius)',
   },
   spaceName: {

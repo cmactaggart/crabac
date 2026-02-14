@@ -11,6 +11,8 @@ interface UserProfile {
   username: string;
   displayName: string;
   avatarUrl: string | null;
+  baseColor?: string | null;
+  accentColor?: string | null;
   status: string;
   createdAt: string;
 }
@@ -160,7 +162,7 @@ export function UserProfilePopover({ userId, anchorRect, onClose, onMessage, cur
       <div style={styles.banner} />
 
       <div style={styles.avatarRow}>
-        <Avatar src={profile.avatarUrl} name={profile.displayName} size={64} />
+        <Avatar src={profile.avatarUrl} name={profile.displayName} size={64} baseColor={profile.baseColor} accentColor={profile.accentColor} />
       </div>
 
       <div style={styles.body}>

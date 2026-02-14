@@ -49,6 +49,9 @@ export interface Message {
     username: string;
     displayName: string;
     avatarUrl: string | null;
+    baseColor?: string | null;
+    accentColor?: string | null;
+    isBot?: boolean;
   };
 }
 

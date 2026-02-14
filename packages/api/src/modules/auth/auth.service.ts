@@ -13,6 +13,29 @@ import type { JwtPayload } from './auth.middleware.js';
 
 const SALT_ROUNDS = 12;
 
+const COLOR_PALETTE = [
+  { base: '#667eea', accent: '#764ba2' },
+  { base: '#f093fb', accent: '#f5576c' },
+  { base: '#4facfe', accent: '#00f2fe' },
+  { base: '#43e97b', accent: '#38f9d7' },
+  { base: '#fa709a', accent: '#fee140' },
+  { base: '#a18cd1', accent: '#fbc2eb' },
+  { base: '#fccb90', accent: '#d57eeb' },
+  { base: '#e0c3fc', accent: '#8ec5fc' },
+  { base: '#f5576c', accent: '#ff9a76' },
+  { base: '#6991c7', accent: '#a3bded' },
+  { base: '#13547a', accent: '#80d0c7' },
+  { base: '#ff0844', accent: '#ffb199' },
+  { base: '#c471f5', accent: '#fa71cd' },
+  { base: '#48c6ef', accent: '#6f86d6' },
+  { base: '#a1c4fd', accent: '#c2e9fb' },
+  { base: '#d4fc79', accent: '#96e6a1' },
+  { base: '#84fab0', accent: '#8fd3f4' },
+  { base: '#f6d365', accent: '#fda085' },
+  { base: '#ffecd2', accent: '#fcb69f' },
+  { base: '#a6c0fe', accent: '#f68084' },
+];
+
 export async function register(email: string, username: string, displayName: string, password: string) {
   const existing = await db('users')
     .where('email', email)
@@ -26,6 +49,7 @@ export async function register(email: string, username: string, displayName: str
 
   const id = snowflake.generate();
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+  const colorCombo = COLOR_PALETTE[Math.floor(Math.random() * COLOR_PALETTE.length)];
 
   await db('users').insert({
     id,
@@ -33,6 +57,8 @@ export async function register(email: string, username: string, displayName: str
     username,
     display_name: displayName,
     password_hash: passwordHash,
+    base_color: colorCombo.base,
+    accent_color: colorCombo.accent,
   });
 
   const user = await db('users').where('id', id).first();
@@ -179,6 +205,8 @@ function formatUser(row: any) {
     username: row.username,
     displayName: row.display_name,
     avatarUrl: row.avatar_url,
+    baseColor: row.base_color || null,
+    accentColor: row.accent_color || null,
     status: row.status,
     emailVerified: !!row.email_verified,
     totpEnabled: !!row.totp_enabled,

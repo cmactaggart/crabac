@@ -22,3 +22,6 @@ key.txt
 
 # Uploads
 packages/api/uploads/
+
+# Plugins (loaded dynamically, not part of core)
+plugins/

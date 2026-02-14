@@ -2,11 +2,9 @@ import { eventBus } from '../../lib/event-bus.js';
 import { io } from '../../websocket/socket-server.js';
 
 export function registerMessageGateway() {
-  eventBus.on('message.created', async ({ message, channelId, spaceId }) => {
+  eventBus.on('message.created', ({ message, channelId }) => {
     if (!io) return;
     const room = `channel:${channelId}`;
-    const sockets = await io.in(room).fetchSockets();
-    console.log(`Broadcasting message:new to ${room} (${sockets.length} sockets)`);
     io.to(room).emit('message:new', message);
   });
 

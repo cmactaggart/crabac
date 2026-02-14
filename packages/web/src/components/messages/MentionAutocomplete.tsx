@@ -16,8 +16,8 @@ export function MentionAutocomplete({ query, onSelect, onClose }: Props) {
   const lowerQuery = query.toLowerCase();
 
   const specialEntries = [
-    { username: 'everyone', displayName: '@everyone', avatarUrl: null, isSpecial: true },
-    { username: 'here', displayName: '@here', avatarUrl: null, isSpecial: true },
+    { username: 'everyone', displayName: '@everyone', avatarUrl: null, baseColor: null as string | null, accentColor: null as string | null, isSpecial: true },
+    { username: 'here', displayName: '@here', avatarUrl: null, baseColor: null as string | null, accentColor: null as string | null, isSpecial: true },
   ].filter((e) => e.username.startsWith(lowerQuery));
 
   const memberEntries = members
@@ -31,6 +31,8 @@ export function MentionAutocomplete({ query, onSelect, onClose }: Props) {
       username: m.user?.username || '',
       displayName: m.user?.displayName || '',
       avatarUrl: m.user?.avatarUrl || null,
+      baseColor: m.user?.baseColor || null,
+      accentColor: m.user?.accentColor || null,
       isSpecial: false,
     }));
 
@@ -85,7 +87,7 @@ export function MentionAutocomplete({ query, onSelect, onClose }: Props) {
           {entry.isSpecial ? (
             <div style={styles.specialIcon}>@</div>
           ) : (
-            <Avatar src={entry.avatarUrl} name={entry.displayName} size={24} />
+            <Avatar src={entry.avatarUrl} name={entry.displayName} size={24} baseColor={entry.baseColor} accentColor={entry.accentColor} />
           )}
           <span style={styles.username}>@{entry.username}</span>
           {!entry.isSpecial && entry.displayName !== entry.username && (

@@ -59,6 +59,12 @@ input, textarea {
   * {
     -webkit-overflow-scrolling: touch;
   }
+  html, body {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+  }
 }
 
 ::-webkit-scrollbar {

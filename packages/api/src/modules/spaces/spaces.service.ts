@@ -95,7 +95,7 @@ export async function listUserSpaces(userId: string) {
     .join('space_members', 'spaces.id', 'space_members.space_id')
     .leftJoin('space_settings', 'spaces.id', 'space_settings.space_id')
     .where('space_members.user_id', userId)
-    .select('spaces.*', 'space_settings.calendar_enabled');
+    .select('spaces.*', 'space_settings.calendar_enabled', 'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color');
 
   return spaces.map(formatSpace);
 }
@@ -104,7 +104,17 @@ export async function getSpace(spaceId: string) {
   const space = await db('spaces')
     .leftJoin('space_settings', 'spaces.id', 'space_settings.space_id')
     .where('spaces.id', spaceId)
-    .select('spaces.*', 'space_settings.calendar_enabled')
+    .select('spaces.*', 'space_settings.calendar_enabled', 'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color')
+    .first();
+  if (!space) throw new NotFoundError('Space');
+  return formatSpace(space);
+}
+
+export async function getSpaceBySlug(slug: string) {
+  const space = await db('spaces')
+    .leftJoin('space_settings', 'spaces.id', 'space_settings.space_id')
+    .where('spaces.slug', slug)
+    .select('spaces.*', 'space_settings.calendar_enabled', 'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color')
     .first();
   if (!space) throw new NotFoundError('Space');
   return formatSpace(space);
@@ -142,7 +152,10 @@ export async function getMembers(spaceId: string) {
       'users.username',
       'users.display_name',
       'users.avatar_url',
+      'users.base_color',
+      'users.accent_color',
       'users.status',
+      'users.is_bot',
     );
 
   // Fetch roles for each member
@@ -160,7 +173,7 @@ export async function getMembers(spaceId: string) {
     rolesByUser.set(mr.user_id, list);
   }
 
-  return members.map((m: any) => ({
+  const result: any[] = members.map((m: any) => ({
     spaceId: m.space_id,
     userId: m.user_id,
     nickname: m.nickname,
@@ -170,10 +183,47 @@ export async function getMembers(spaceId: string) {
       username: m.username,
       displayName: m.display_name,
       avatarUrl: m.avatar_url,
+      baseColor: m.base_color || null,
+      accentColor: m.accent_color || null,
       status: m.status,
+      isBot: !!m.is_bot,
     },
     roles: rolesByUser.get(m.user_id) || [],
   }));
+
+  // Fetch guests from Redis for public spaces
+  try {
+    const { redis } = await import('../../lib/redis.js');
+    const guestIds = await redis.smembers(`space:${spaceId}:guests`);
+    if (guestIds.length > 0) {
+      const guests = await db('users')
+        .whereIn('id', guestIds)
+        .select('id', 'username', 'display_name', 'avatar_url', 'base_color', 'accent_color', 'status');
+      for (const g of guests) {
+        result.push({
+          spaceId,
+          userId: g.id,
+          nickname: null,
+          joinedAt: null,
+          isGuest: true,
+          user: {
+            id: g.id,
+            username: g.username,
+            displayName: g.display_name,
+            avatarUrl: g.avatar_url,
+            baseColor: g.base_color || null,
+            accentColor: g.accent_color || null,
+            status: g.status,
+          },
+          roles: [],
+        });
+      }
+    }
+  } catch {
+    // Redis may not be connected
+  }
+
+  return result;
 }
 
 export async function kickMember(spaceId: string, targetUserId: string) {
@@ -254,6 +304,153 @@ export async function isMember(spaceId: string, userId: string): Promise<boolean
   return !!row;
 }
 
+/** Join a public space */
+export async function joinPublicSpace(userId: string, spaceId: string) {
+  const space = await db('spaces').where('id', spaceId).first();
+  if (!space) throw new NotFoundError('Space');
+
+  const settings = await db('space_settings').where('space_id', spaceId).first();
+  if (!settings?.is_public) throw new ForbiddenError('This space is not public');
+
+  if (settings.require_verified_email) {
+    const user = await db('users').where('id', userId).select('email_verified').first();
+    if (!user?.email_verified) {
+      throw new ForbiddenError('Email verification required to join this space');
+    }
+  }
+
+  const existing = await db('space_members').where({ space_id: spaceId, user_id: userId }).first();
+  if (existing) throw new ConflictError('Already a member of this space');
+
+  await db.transaction(async (trx) => {
+    await trx('space_members').insert({ space_id: spaceId, user_id: userId });
+
+    const defaultRole = await trx('roles')
+      .where({ space_id: spaceId, is_default: true })
+      .first();
+
+    if (defaultRole) {
+      await trx('member_roles').insert({
+        space_id: spaceId,
+        user_id: userId,
+        role_id: defaultRole.id,
+      });
+    }
+  });
+
+  // Remove from guest set if present
+  try {
+    const { redis } = await import('../../lib/redis.js');
+    await redis.srem(`space:${spaceId}:guests`, userId);
+  } catch {
+    // ignore
+  }
+
+  eventBus.emit('space.member_joined', { spaceId, userId });
+
+  return getSpace(spaceId);
+}
+
+/** Get tags for a space */
+export async function getSpaceTags(spaceId: string) {
+  const tags = await db('space_tags').where('space_id', spaceId).select('tag', 'tag_slug');
+  return tags.map((t: any) => ({ tag: t.tag, tagSlug: t.tag_slug }));
+}
+
+/** Update tags for a space (replace all) */
+export async function updateSpaceTags(spaceId: string, tags: string[]) {
+  await db('space_tags').where('space_id', spaceId).delete();
+
+  if (tags.length > 0) {
+    const rows = tags.map((tag) => ({
+      space_id: spaceId,
+      tag: tag.trim(),
+      tag_slug: tag.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+    }));
+    // Deduplicate by slug
+    const unique = new Map<string, typeof rows[0]>();
+    for (const row of rows) {
+      unique.set(row.tag_slug, row);
+    }
+    await db('space_tags').insert(Array.from(unique.values()));
+  }
+
+  return getSpaceTags(spaceId);
+}
+
+/** List public spaces for directory */
+export async function listPublicSpaces(opts: { search?: string; tag?: string; limit: number; offset: number }) {
+  let query = db('spaces')
+    .join('space_settings', 'spaces.id', 'space_settings.space_id')
+    .where('space_settings.is_public', true)
+    .select(
+      'spaces.id',
+      'spaces.name',
+      'spaces.slug',
+      'spaces.description',
+      'spaces.icon_url',
+      'space_settings.is_featured',
+      'space_settings.base_color',
+      'space_settings.accent_color',
+      'space_settings.text_color',
+      db.raw('(SELECT COUNT(*) FROM space_members WHERE space_members.space_id = spaces.id) as member_count'),
+    );
+
+  if (opts.search) {
+    query = query.where(function () {
+      this.where('spaces.name', 'like', `%${opts.search}%`)
+        .orWhere('spaces.description', 'like', `%${opts.search}%`);
+    });
+  }
+
+  if (opts.tag) {
+    query = query.whereExists(function () {
+      this.select('*')
+        .from('space_tags')
+        .whereRaw('space_tags.space_id = spaces.id')
+        .where('space_tags.tag_slug', opts.tag);
+    });
+  }
+
+  const spaces = await query
+    .orderBy('space_settings.is_featured', 'desc')
+    .orderBy('member_count', 'desc')
+    .limit(opts.limit)
+    .offset(opts.offset);
+
+  // Fetch tags for all returned spaces
+  const spaceIds = spaces.map((s: any) => s.id);
+  const tags = spaceIds.length > 0
+    ? await db('space_tags').whereIn('space_id', spaceIds).select('space_id', 'tag')
+    : [];
+
+  const tagsBySpace = new Map<string, string[]>();
+  for (const t of tags) {
+    const list = tagsBySpace.get(t.space_id) || [];
+    list.push(t.tag);
+    tagsBySpace.set(t.space_id, list);
+  }
+
+  return spaces.map((s: any) => ({
+    id: s.id,
+    name: s.name,
+    slug: s.slug,
+    description: s.description,
+    iconUrl: s.icon_url,
+    memberCount: Number(s.member_count),
+    tags: tagsBySpace.get(s.id) || [],
+    isFeatured: !!s.is_featured,
+    baseColor: s.base_color || null,
+    accentColor: s.accent_color || null,
+    textColor: s.text_color || null,
+  }));
+}
+
+/** List featured public spaces */
+export async function listFeaturedSpaces() {
+  return listPublicSpaces({ limit: 10, offset: 0 });
+}
+
 function formatSpace(row: any) {
   return {
     id: row.id,
@@ -265,5 +462,9 @@ function formatSpace(row: any) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     calendarEnabled: !!row.calendar_enabled,
+    isPublic: !!row.is_public,
+    baseColor: row.base_color || null,
+    accentColor: row.accent_color || null,
+    textColor: row.text_color || null,
   };
 }

@@ -21,6 +21,8 @@ export const refreshSchema = z.object({
 export const updateUserSchema = z.object({
   displayName: z.string().min(1).max(64).optional(),
   avatarUrl: z.string().url().max(512).nullable().optional(),
+  baseColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+  accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
 });
 
 // Spaces
@@ -232,6 +234,24 @@ export const updateSpaceAdminSettingsSchema = z.object({
   allowPublicBoards: z.boolean().optional(),
   allowAnonymousBrowsing: z.boolean().optional(),
   calendarEnabled: z.boolean().optional(),
+  isPublic: z.boolean().optional(),
+  requireVerifiedEmail: z.boolean().optional(),
+  baseColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+  accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+  textColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+});
+
+// Space Tags
+export const updateSpaceTagsSchema = z.object({
+  tags: z.array(z.string().min(1).max(50)).max(10),
+});
+
+// Public Spaces Directory
+export const publicSpacesQuerySchema = z.object({
+  search: z.string().max(100).optional(),
+  tag: z.string().max(50).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  offset: z.coerce.number().int().min(0).default(0),
 });
 
 // Calendar

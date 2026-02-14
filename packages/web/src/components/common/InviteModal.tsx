@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { X } from 'lucide-react';
 import { api } from '../../lib/api.js';
 import { useQRCode } from '../../lib/qrcode.js';
+import { useSpacesStore } from '../../stores/spaces.js';
 
 interface Props {
   spaceId: string;
@@ -9,12 +10,29 @@ interface Props {
 }
 
 export function InviteModal({ spaceId, onClose }: Props) {
+  const spaces = useSpacesStore((s) => s.spaces);
+  const space = useMemo(() => spaces.find((s) => s.id === spaceId), [spaces, spaceId]);
+  const isPublic = space?.isPublic;
+
+  // For public spaces: slug-based link, no invite code needed
+  const publicLink = isPublic && space?.slug
+    ? `${window.location.origin}/space/slug/${space.slug}`
+    : '';
+
   const [link, setLink] = useState('');
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [expiresInHours, setExpiresInHours] = useState(168); // 7 days
-  const [maxUses, setMaxUses] = useState(0); // 0 = unlimited
+  const [expiresInHours, setExpiresInHours] = useState(168);
+  const [maxUses, setMaxUses] = useState(0);
+
+  // Auto-set public link
+  useEffect(() => {
+    if (isPublic && publicLink) {
+      setLink(publicLink);
+    }
+  }, [isPublic, publicLink]);
+
   const qrDataUrl = useQRCode(link || null);
 
   const handleCreate = async () => {
@@ -47,11 +65,26 @@ export function InviteModal({ spaceId, onClose }: Props) {
   return (
     <div style={styles.overlay} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} style={styles.modal}>
-        <h2 style={styles.title}>Invite People</h2>
+        <h2 style={styles.title}>{isPublic ? 'Share Space Link' : 'Invite People'}</h2>
 
         {error && <div style={styles.error}>{error}</div>}
 
-        {link ? (
+        {isPublic ? (
+          <>
+            {qrDataUrl ? (
+              <img src={qrDataUrl} alt="Space QR Code" style={styles.qrImage} />
+            ) : (
+              <div style={{ padding: 40, color: 'var(--text-muted)', textAlign: 'center' }}>Generating QR...</div>
+            )}
+            <p style={styles.qrHint}>Anyone can join this public space</p>
+            <div style={styles.linkRow}>
+              <input value={link} readOnly style={styles.linkInput} onFocus={(e) => e.target.select()} />
+              <button onClick={handleCopy} style={styles.copyBtn}>
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+          </>
+        ) : link ? (
           <>
             {qrDataUrl ? (
               <img src={qrDataUrl} alt="Invite QR Code" style={styles.qrImage} />

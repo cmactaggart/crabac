@@ -6,7 +6,21 @@
 
 An open-source communication platform in the style of Discord and Slack.
 
+[GitHub](https://github.com/cmactaggart/crabac) | [Bluesky](https://bsky.app/profile/crabac.bsky.social) | [bingo@crab.ac](mailto:bingo@crab.ac)
+
 ![Screenshot: Space view with channels and chat](docs/screenshots/space-view.png)
+
+## Most Recent Updates
+
+- Per-user branding colors with gradient SVG default avatars
+- Public space directory with featured spaces and tag-based filtering
+- Space branding colors (custom gradients on space cards)
+- Slash commands (`/shrug`, `/tableflip`, `/lenny`, `/me`, etc.)
+- Plugin system with RAGflow chatbot integration
+- Cross-platform desktop app (Windows, macOS, Linux) with auto-updater
+- Community calendar with color-coded event categories and chat embeds
+- Mobile-responsive layout with fixed message input
+- Forum channels with threaded discussions and public boards
 
 ## Why crab.ac?
 
@@ -30,6 +44,17 @@ Portals can be created directly (if you have permission in both spaces) or propo
 
 ![Screenshot: Portal setup between two spaces](docs/screenshots/portal-setup.png)
 
+### Public Spaces & Featured Directory
+
+Spaces can be made public, allowing anyone to discover and join them from the home screen's "Discover Spaces" directory. Public spaces support:
+
+- **Tag-based filtering** — spaces can add up to 10 tags for discoverability
+- **Featured spaces** — highlighted at the top of the directory by platform admins
+- **Custom branding** — base color, accent color, and text color that render as gradient cards
+- **Guest access** — optional email verification requirement for public joiners
+
+![Screenshot: Public space directory](docs/screenshots/public-space-directory.png)
+
 ### Public Boards
 
 Spaces can opt in to public-facing web boards — a read-only (or optionally read-write) forum view of selected channels, accessible to anyone on the internet without logging into the full app.
@@ -48,6 +73,13 @@ This exists because the people who built this needed it. If your community invol
 
 ![Screenshot: GPX track card in chat](docs/screenshots/gpx-card-1.png)
 ![Screenshot: GPX expanded](docs/screenshots/gpx-card.png)
+
+### User Branding & Gradient Avatars
+
+Every user gets a personal color palette (base + accent) that renders as a gradient background on their default avatar. Colors are randomly assigned at registration and can be customized in User Settings with a live preview and randomize button.
+
+![Screenshot: User branding colors](docs/screenshots/user-branding.png)
+
 ---
 
 ## Feature Overview
@@ -58,29 +90,36 @@ This exists because the people who built this needed it. If your community invol
 - **Direct messages** and **group DMs** with message request flow for non-friends
 - **Forum channels** with threaded discussions, pinning, and locking
 - **Announcement channels** for one-way broadcast
+- **Slash commands** — `/shrug`, `/tableflip`, `/unflip`, `/me`, `/lenny` with autocomplete palette
+- **Message search** with `from:user` and `in:channel` operators
+- **Reactions** with emoji picker
 
 ### Organization
 - **Spaces** with channels, categories, and drag-and-drop reordering
 - **Role-based access control** with granular bitfield permissions (20+ permission flags)
 - **Channel categories** with collapsible groups
 - **Invite system** with configurable expiry and usage limits
+- **Space branding** — custom gradient colors and text color for space cards
 
 ### Social
 - **Friend system** with requests, mutual friends display, and profile popovers
 - **User muting** (hide messages) and **channel muting**
 - **Per-space notification preferences** — suppress mentions, suppress @everyone/@here, or mute entirely
 - **Unified notification center** with bell icon badge, browser tab indicators (favicon + title count)
+- **User branding colors** — personalized gradient avatars with SVG letter icons
 
 ### Community Tools
 - **Community calendar** with month grid, event categories (color-coded), and rich embed cards that can be posted directly into channels
+- **Public space directory** with featured spaces, tags, and custom branding
 - **Public boards** for external-facing forum content
 - **Portals** for cross-space channel linking
 - **System announcements** with persistent dismissal tracking
+- **Plugin system** with chatbot integration (RAGflow-powered bots with BOT badge)
 
 ### Media & Files
 - **File uploads** with image previews and lightbox
 - **GPX track rendering** with interactive MapLibre maps
-- **Space and user avatars**
+- **Space and user avatars** with gradient fallbacks
 - **Markdown rendering** (GFM) with code blocks, tables, and link previews
 
 ### Security
@@ -97,9 +136,13 @@ This exists because the people who built this needed it. If your community invol
 | Platform | Status |
 |----------|--------|
 | **Web (desktop)** | Stable — full-featured client |
-| **Web (mobile)** | Early stages — responsive layout with bottom tab bar, mobile-optimized pages |
-| **Desktop (Electron)** | In testing — Windows, macOS, Linux builds with auto-updater, tray icon, minimize-to-tray |
+| **Web (mobile)** | Responsive layout with bottom tab bar, fixed message input, mobile-optimized pages |
+| **Desktop (Electron)** | Cross-platform builds (Windows, macOS, Linux) with auto-updater, tray icon, minimize-to-tray |
 | **Native mobile** | In testing |
+
+![Screenshot: Mobile layout](docs/screenshots/mobile-layout.png)
+
+![Screenshot: Desktop app](docs/screenshots/desktop-app.png)
 
 ---
 
@@ -235,4 +278,4 @@ sudo cloudflared service install
 
 ## License
 
-[MIT](LICENSE) - Copyright (c) 2025 The crab.ac Contributors
+[MIT](LICENSE) - Copyright (c) 2025-2026 The crab.ac Contributors

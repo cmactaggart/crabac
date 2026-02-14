@@ -176,7 +176,7 @@ async function formatFriendListItem(row: any, currentUserId: string) {
   const otherUserId = String(row.user_id) === currentUserId ? String(row.friend_id) : String(row.user_id);
   const user = await db('users')
     .where('id', otherUserId)
-    .select('id', 'username', 'display_name', 'avatar_url', 'status', 'created_at', 'updated_at')
+    .select('id', 'username', 'display_name', 'avatar_url', 'base_color', 'accent_color', 'status', 'created_at', 'updated_at')
     .first();
 
   return {
@@ -186,6 +186,8 @@ async function formatFriendListItem(row: any, currentUserId: string) {
       username: user.username,
       displayName: user.display_name,
       avatarUrl: user.avatar_url,
+      baseColor: user.base_color || null,
+      accentColor: user.accent_color || null,
       status: user.status,
       createdAt: user.created_at,
       updatedAt: user.updated_at,

@@ -12,6 +12,8 @@ export interface ForumThread {
     username: string;
     displayName: string;
     avatarUrl: string | null;
+    baseColor?: string | null;
+    accentColor?: string | null;
   };
 }
 

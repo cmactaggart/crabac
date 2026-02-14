@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronsRight, PanelLeft } from 'lucide-react';
 import { useSpacesStore } from '../stores/spaces.js';
@@ -86,6 +86,81 @@ export function SpaceView() {
 
   const activeSpace = spaces.find((s) => s.id === spaceId);
 
+  // Track if this is a public space the user isn't a member of
+  const [publicSpace, setPublicSpace] = useState<any>(null);
+  const isMemberOfSpace = spaces.some((s) => s.id === spaceId);
+
+  // Fetch space info even if not a member (for public spaces)
+  useEffect(() => {
+    if (spaceId && !isMemberOfSpace) {
+      import('../lib/api.js').then(({ api }) => {
+        api(`/spaces/${spaceId}`).then((s: any) => setPublicSpace(s)).catch(() => {});
+      });
+    } else {
+      setPublicSpace(null);
+    }
+  }, [spaceId, isMemberOfSpace]);
+
+  // Emit space:visit / space:leave_visit for guests in public spaces
+  useEffect(() => {
+    if (!spaceId || isMemberOfSpace) return;
+    const socket = getSocket();
+    if (!socket) return;
+
+    socket.emit('space:visit', { spaceId });
+
+    return () => {
+      socket.emit('space:leave_visit', { spaceId });
+    };
+  }, [spaceId, isMemberOfSpace]);
+
+  // Listen for guest kicked
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket || !spaceId) return;
+
+    const onKicked = ({ spaceId: kickedSpaceId }: { spaceId: string }) => {
+      if (kickedSpaceId === spaceId) {
+        navigate('/');
+      }
+    };
+
+    const onGuestsCleared = ({ spaceId: clearedSpaceId }: { spaceId: string }) => {
+      if (clearedSpaceId === spaceId && !isMemberOfSpace) {
+        navigate('/');
+      }
+    };
+
+    socket.on('space:guest_kicked', onKicked);
+    socket.on('space:guests_cleared', onGuestsCleared);
+
+    return () => {
+      socket.off('space:guest_kicked', onKicked);
+      socket.off('space:guests_cleared', onGuestsCleared);
+    };
+  }, [spaceId, isMemberOfSpace, navigate]);
+
+  // Listen for guest join/leave events to refresh members
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket || !spaceId) return;
+
+    const onGuestChange = () => {
+      fetchMembers(spaceId);
+    };
+
+    socket.on('space:guest_joined', onGuestChange);
+    socket.on('space:guest_left', onGuestChange);
+
+    return () => {
+      socket.off('space:guest_joined', onGuestChange);
+      socket.off('space:guest_left', onGuestChange);
+    };
+  }, [spaceId, fetchMembers]);
+
+  // Use public space data as fallback when not a member
+  const displaySpace = activeSpace || publicSpace;
+
   // ─── Mobile Layout ───
   if (isMobile) {
     const showChat = channelId && mobileView === 'chat';
@@ -94,7 +169,7 @@ export function SpaceView() {
 
     if (calendarOpen && mobileView === 'chat' && spaceId) {
       return (
-        <div style={{ ...styles.layout, paddingBottom: 56 }}>
+        <div style={mobileLayout}>
           <CalendarView
             spaceId={spaceId}
             showBackButton
@@ -109,7 +184,7 @@ export function SpaceView() {
 
     if (showChat && spaceId) {
       return (
-        <div style={{ ...styles.layout, paddingBottom: 56 }}>
+        <div style={mobileLayout}>
           {activeChannel?.type === 'forum' ? (
             <ForumChannelView
               channelId={channelId}
@@ -141,12 +216,12 @@ export function SpaceView() {
     }
 
     return (
-      <div style={{ ...styles.layout, paddingBottom: 56 }}>
+      <div style={mobileLayout}>
         <div style={{ width: 72, flexShrink: 0, height: '100%' }}>
           <SpaceSidebar spaces={spaces} activeSpaceId={spaceId || null} />
         </div>
         <ChannelSidebar
-          space={activeSpace || null}
+          space={displaySpace || null}
           channels={channels}
           categories={categories}
           activeChannelId={channelId || null}
@@ -164,7 +239,7 @@ export function SpaceView() {
       </div>
       <div style={{ ...styles.sidebarWrap, width: channelSidebarOpen ? 240 : 0 }}>
         <ChannelSidebar
-          space={activeSpace || null}
+          space={displaySpace || null}
           channels={channels}
           categories={categories}
           activeChannelId={channelId || null}
@@ -215,6 +290,16 @@ export function SpaceView() {
     </div>
   );
 }
+
+const mobileLayout: React.CSSProperties = {
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 56,
+  display: 'flex',
+  overflow: 'hidden',
+};
 
 const styles: Record<string, React.CSSProperties> = {
   layout: {

@@ -253,6 +253,8 @@ export async function listMessages(conversationId: string, options: { before?: s
       'users.username as author_username',
       'users.display_name as author_display_name',
       'users.avatar_url as author_avatar_url',
+      'users.base_color as author_base_color',
+      'users.accent_color as author_accent_color',
     )
     .orderBy('direct_messages.id', 'desc')
     .limit(options.limit);
@@ -379,7 +381,7 @@ async function buildConversationResponse(conv: any) {
   const participants = await db('conversation_members')
     .join('users', 'conversation_members.user_id', 'users.id')
     .where('conversation_members.conversation_id', conversationId)
-    .select('users.id', 'users.username', 'users.display_name', 'users.avatar_url', 'users.status');
+    .select('users.id', 'users.username', 'users.display_name', 'users.avatar_url', 'users.base_color', 'users.accent_color', 'users.status');
 
   // Get last message
   const lastMsg = await db('direct_messages')
@@ -391,6 +393,8 @@ async function buildConversationResponse(conv: any) {
       'users.username as author_username',
       'users.display_name as author_display_name',
       'users.avatar_url as author_avatar_url',
+      'users.base_color as author_base_color',
+      'users.accent_color as author_accent_color',
     )
     .first();
 
@@ -404,6 +408,8 @@ async function buildConversationResponse(conv: any) {
       username: p.username,
       displayName: p.display_name,
       avatarUrl: p.avatar_url,
+      baseColor: p.base_color || null,
+      accentColor: p.accent_color || null,
       status: p.status,
     })),
     lastMessage: lastMsg ? formatDM(lastMsg) : null,
@@ -421,6 +427,8 @@ async function getDM(messageId: string) {
       'users.username as author_username',
       'users.display_name as author_display_name',
       'users.avatar_url as author_avatar_url',
+      'users.base_color as author_base_color',
+      'users.accent_color as author_accent_color',
     )
     .first();
 
@@ -440,6 +448,8 @@ function formatDM(row: any) {
       username: row.author_username,
       displayName: row.author_display_name,
       avatarUrl: row.author_avatar_url,
+      baseColor: row.author_base_color || null,
+      accentColor: row.author_accent_color || null,
     },
   };
 }

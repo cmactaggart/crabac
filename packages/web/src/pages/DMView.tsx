@@ -127,14 +127,14 @@ export function DMView() {
 
     if (showChat) {
       return (
-        <div style={{ ...styles.layout, paddingBottom: 56 }}>
+        <div style={mobileLayout}>
           {chatContent}
         </div>
       );
     }
 
     return (
-      <div style={{ ...styles.layout, paddingBottom: 56 }}>
+      <div style={mobileLayout}>
         <div style={{ width: 72, flexShrink: 0, height: '100%' }}>
           <SpaceSidebar spaces={spaces} activeSpaceId={null} />
         </div>
@@ -452,7 +452,7 @@ function DMSidebar({
                   background: isActive ? 'var(--hover)' : 'transparent',
                 }}
               >
-                <Avatar src={other.avatarUrl} name={other.displayName} size={32} dimmed={other.status === 'offline'} />
+                <Avatar src={other.avatarUrl} name={other.displayName} size={32} dimmed={other.status === 'offline'} baseColor={other.baseColor} accentColor={other.accentColor} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
                     fontSize: '0.9rem',
@@ -491,7 +491,7 @@ function DMSidebar({
 
       {/* User bar */}
       <div style={styles.userBar}>
-        <Avatar src={user?.avatarUrl || null} name={user?.displayName || '?'} size={28} />
+        <Avatar src={user?.avatarUrl || null} name={user?.displayName || '?'} size={28} baseColor={user?.baseColor} accentColor={user?.accentColor} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {user?.displayName}
@@ -519,7 +519,7 @@ function MessageRequestItem({ conversation, currentUserId }: { conversation: Con
 
   return (
     <div style={styles.requestItem}>
-      <Avatar src={other.avatarUrl} name={other.displayName} size={28} />
+      <Avatar src={other.avatarUrl} name={other.displayName} size={28} baseColor={other.baseColor} accentColor={other.accentColor} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {other.displayName}
@@ -581,7 +581,7 @@ function FriendsTab({ currentUserId }: { currentUserId: string }) {
           <div style={styles.sidebarSectionLabel}>Pending Requests — {pendingRequests.length}</div>
           {pendingRequests.map((req) => (
             <div key={req.id} style={styles.requestItem}>
-              <Avatar src={req.user?.avatarUrl || null} name={req.user?.displayName || '?'} size={28} />
+              <Avatar src={req.user?.avatarUrl || null} name={req.user?.displayName || '?'} size={28} baseColor={req.user?.baseColor} accentColor={req.user?.accentColor} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {req.user?.displayName}
@@ -607,7 +607,7 @@ function FriendsTab({ currentUserId }: { currentUserId: string }) {
 
       {friends.map((friend) => (
         <div key={friend.id} style={styles.friendItem}>
-          <Avatar src={friend.user?.avatarUrl || null} name={friend.user?.displayName || '?'} size={32} />
+          <Avatar src={friend.user?.avatarUrl || null} name={friend.user?.displayName || '?'} size={32} baseColor={friend.user?.baseColor} accentColor={friend.user?.accentColor} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {friend.user?.displayName}
@@ -700,7 +700,7 @@ function CreateGroupDMModal({ onClose }: { onClose: () => void }) {
                   background: isSelected ? 'var(--hover)' : 'transparent',
                 }}
               >
-                <Avatar src={f.user?.avatarUrl || null} name={f.user?.displayName || '?'} size={28} />
+                <Avatar src={f.user?.avatarUrl || null} name={f.user?.displayName || '?'} size={28} baseColor={f.user?.baseColor} accentColor={f.user?.accentColor} />
                 <span style={{ flex: 1, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
                   {f.user?.displayName}
                 </span>
@@ -904,7 +904,7 @@ function DMMessageItem({
 
       {!compact && !spacedSameAuthor && (
         <div style={styles.messageHeader}>
-          <Avatar src={message.author?.avatarUrl || null} name={message.author?.displayName || '?'} size={32} />
+          <Avatar src={message.author?.avatarUrl || null} name={message.author?.displayName || '?'} size={32} baseColor={message.author?.baseColor} accentColor={message.author?.accentColor} />
           <span style={styles.username}>{message.author?.displayName || 'Unknown'}</span>
           <span style={styles.timestamp}>{ts}</span>
           {message.editedAt && <span style={styles.edited}>(edited)</span>}
@@ -1004,6 +1004,16 @@ function formatTimestamp(snowflakeId: string): string {
 }
 
 // ─── Styles ───
+
+const mobileLayout: React.CSSProperties = {
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 56,
+  display: 'flex',
+  overflow: 'hidden',
+};
 
 const styles: Record<string, React.CSSProperties> = {
   layout: {

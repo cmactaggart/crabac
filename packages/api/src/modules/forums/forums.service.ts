@@ -53,6 +53,8 @@ export async function listThreads(
       'users.username as author_username',
       'users.display_name as author_display_name',
       'users.avatar_url as author_avatar_url',
+      'users.base_color as author_base_color',
+      'users.accent_color as author_accent_color',
       db.raw('(SELECT COUNT(*) FROM messages m WHERE m.thread_id = ft.id) - 1 as reply_count'),
       db.raw('(SELECT MAX(m2.id) FROM messages m2 WHERE m2.thread_id = ft.id) as last_message_id'),
       db.raw('(SELECT m3.content FROM messages m3 WHERE m3.thread_id = ft.id ORDER BY m3.id ASC LIMIT 1) as first_post_content'),
@@ -89,6 +91,8 @@ export async function getThread(threadId: string) {
       'users.username as author_username',
       'users.display_name as author_display_name',
       'users.avatar_url as author_avatar_url',
+      'users.base_color as author_base_color',
+      'users.accent_color as author_accent_color',
     )
     .first();
 
@@ -108,6 +112,8 @@ export async function listThreadPosts(
       'users.username as author_username',
       'users.display_name as author_display_name',
       'users.avatar_url as author_avatar_url',
+      'users.base_color as author_base_color',
+      'users.accent_color as author_accent_color',
     )
     .orderBy('messages.id', 'asc')
     .limit(options.limit);
@@ -160,6 +166,8 @@ export async function createThreadPost(
       'users.username as author_username',
       'users.display_name as author_display_name',
       'users.avatar_url as author_avatar_url',
+      'users.base_color as author_base_color',
+      'users.accent_color as author_accent_color',
     )
     .first();
 
@@ -228,6 +236,8 @@ function formatThread(row: any) {
       username: row.author_username,
       displayName: row.author_display_name,
       avatarUrl: row.author_avatar_url,
+      baseColor: row.author_base_color || null,
+      accentColor: row.author_accent_color || null,
     },
   };
 }
@@ -265,6 +275,8 @@ function formatPost(row: any, reactions: any[]) {
       username: row.author_username,
       displayName: row.author_display_name,
       avatarUrl: row.author_avatar_url,
+      baseColor: row.author_base_color || null,
+      accentColor: row.author_accent_color || null,
     },
   };
 }

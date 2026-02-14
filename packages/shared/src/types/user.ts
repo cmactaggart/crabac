@@ -10,7 +10,10 @@ export interface User {
   emailVerified: boolean;
   totpEnabled: boolean;
   accountType: 'full' | 'board';
+  baseColor?: string | null;
+  accentColor?: string | null;
   isAdmin?: boolean;
+  isBot?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -28,6 +31,8 @@ export interface CreateUserRequest {
 export interface UpdateUserRequest {
   displayName?: string;
   avatarUrl?: string | null;
+  baseColor?: string | null;
+  accentColor?: string | null;
 }
 
 export interface LoginRequest {

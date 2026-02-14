@@ -2,7 +2,7 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import { authenticate } from '../auth/auth.middleware.js';
 import { validate } from '../../middleware/validate.js';
 import { validation, Permissions } from '@crabac/shared';
-import { requirePermission, requireMember } from '../rbac/rbac.middleware.js';
+import { requirePermission, requireMember, requireMemberOrPublicAccess } from '../rbac/rbac.middleware.js';
 import * as channelsService from './channels.service.js';
 import * as readsService from './reads.service.js';
 
@@ -25,10 +25,10 @@ channelsRoutes.post(
   },
 );
 
-// List channels (filtered by user permissions)
+// List channels (filtered by user permissions, public access allowed)
 channelsRoutes.get(
   '/:spaceId/channels',
-  requireMember,
+  requireMemberOrPublicAccess,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const channels = await channelsService.listChannelsForUser(req.params.spaceId, req.user!.userId);

@@ -89,7 +89,7 @@ export function MembersTab({ spaceId, members }: Props) {
         return (
           <div key={member.userId} style={styles.memberCard}>
             <div style={styles.memberRow}>
-              <Avatar src={member.user?.avatarUrl || null} name={member.user?.displayName || '?'} size={32} />
+              <Avatar src={member.user?.avatarUrl || null} name={member.user?.displayName || '?'} size={32} baseColor={member.user?.baseColor} accentColor={member.user?.accentColor} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: '0.9rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {member.user?.displayName}

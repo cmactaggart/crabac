@@ -52,6 +52,41 @@ adminRoutes.delete('/announcements/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Featured toggle
+adminRoutes.post('/spaces/:spaceId/feature', async (req, res, next) => {
+  try {
+    const result = await adminService.toggleFeatured(req.params.spaceId);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// Predefined tags CRUD
+adminRoutes.get('/tags', async (_req, res, next) => {
+  try {
+    const tags = await adminService.listPredefinedTags();
+    res.json(tags);
+  } catch (err) { next(err); }
+});
+
+adminRoutes.post('/tags', async (req, res, next) => {
+  try {
+    const { name } = req.body;
+    if (!name || typeof name !== 'string') {
+      res.status(400).json({ error: { message: 'name is required' } });
+      return;
+    }
+    const tag = await adminService.createPredefinedTag(name.trim());
+    res.status(201).json(tag);
+  } catch (err) { next(err); }
+});
+
+adminRoutes.delete('/tags/:id', async (req, res, next) => {
+  try {
+    await adminService.deletePredefinedTag(req.params.id);
+    res.status(204).end();
+  } catch (err) { next(err); }
+});
+
 // --- Public (auth-only) routes for announcements ---
 announcementRoutes.get('/active', authenticate, async (_req, res, next) => {
   try {

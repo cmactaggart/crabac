@@ -269,10 +269,11 @@ function MessageItem({
 
       {(!isMuted || showMutedContent) && !compact && !spacedSameAuthor && (
         <div style={styles.messageHeader}>
-          <Avatar src={message.author?.avatarUrl || null} name={message.author?.displayName || '?'} size={32} />
+          <Avatar src={message.author?.avatarUrl || null} name={message.author?.displayName || '?'} size={32} baseColor={message.author?.baseColor} accentColor={message.author?.accentColor} />
           <button onClick={handleUsernameClick} style={styles.username}>
             {message.author?.displayName || 'Unknown'}
           </button>
+          {message.author?.isBot && <span style={styles.botBadge}>BOT</span>}
           <span style={styles.timestamp}>{ts}</span>
           {message.editedAt && <span style={styles.edited}>(edited)</span>}
         </div>
@@ -534,6 +535,17 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     padding: 0,
     fontSize: 'inherit',
+  },
+  botBadge: {
+    background: 'var(--accent)',
+    color: 'white',
+    fontSize: '0.6rem',
+    fontWeight: 700,
+    padding: '1px 4px',
+    borderRadius: 3,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.02em',
+    verticalAlign: 'middle',
   },
   timestamp: {
     color: 'var(--text-muted)',

@@ -43,8 +43,10 @@ export function MembersPanel({ members, spaceId, asOverlay }: Props) {
     }
   }, [createConversation, navigate]);
 
-  const online = members.filter((m) => m.user?.status && m.user.status !== 'offline');
-  const offline = members.filter((m) => !m.user?.status || m.user.status === 'offline');
+  const guests = members.filter((m) => m.isGuest);
+  const regularMembers = members.filter((m) => !m.isGuest);
+  const online = regularMembers.filter((m) => m.user?.status && m.user.status !== 'offline');
+  const offline = regularMembers.filter((m) => !m.user?.status || m.user.status === 'offline');
 
   const renderMember = (m: SpaceMember) => {
     const status = m.user?.status || 'offline';
@@ -62,6 +64,8 @@ export function MembersPanel({ members, spaceId, asOverlay }: Props) {
             name={m.user?.displayName || '?'}
             size={28}
             dimmed={isOffline}
+            baseColor={m.user?.baseColor}
+            accentColor={m.user?.accentColor}
           />
           <span
             style={{
@@ -98,6 +102,40 @@ export function MembersPanel({ members, spaceId, asOverlay }: Props) {
           <>
             <div style={styles.sectionLabel}>Online — {online.length}</div>
             {online.map(renderMember)}
+          </>
+        )}
+        {guests.length > 0 && (
+          <>
+            <div style={styles.sectionLabel}>Guests — {guests.length}</div>
+            {guests.map((m) => (
+              <button
+                key={m.userId}
+                onClick={(e) => handleMemberClick(m.userId, e)}
+                style={styles.memberRow}
+              >
+                <div style={styles.avatarWrap}>
+                  <Avatar
+                    src={m.user?.avatarUrl || null}
+                    name={m.user?.displayName || '?'}
+                    size={28}
+                    baseColor={m.user?.baseColor}
+                    accentColor={m.user?.accentColor}
+                  />
+                  <span
+                    style={{
+                      ...styles.statusDot,
+                      background: STATUS_DOT_COLORS[m.user?.status || 'online'] || STATUS_DOT_COLORS.online,
+                    }}
+                  />
+                </div>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {m.user?.displayName}
+                </span>
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.1)', padding: '1px 5px', borderRadius: 4, marginLeft: 'auto', flexShrink: 0 }}>
+                  Guest
+                </span>
+              </button>
+            ))}
           </>
         )}
         {offline.length > 0 && (

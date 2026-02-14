@@ -30,13 +30,15 @@ export const config = {
   uploadsDir: process.env.UPLOADS_DIR || path.resolve(process.cwd(), 'uploads'),
 
   smtp: {
-    host: process.env.SMTP_HOST || 'email-smtp.us-east-1.amazonaws.com',
+    host: process.env.SMTP_HOST || '',
     port: parseInt(process.env.SMTP_PORT || '587', 10),
     user: process.env.SMTP_USER || '',
     pass: process.env.SMTP_PASS || '',
-    from: process.env.SMTP_FROM || 'crab.ac <magic-crab@crab.ac>',
+    from: process.env.SMTP_FROM || '',
   },
   appUrl: process.env.APP_URL || 'http://localhost:5173',
   totpEncryptionKey: process.env.TOTP_ENCRYPTION_KEY || 'change-me-32-byte-key-for-totp!',
   adminEmails: (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean),
+
+  plugins: (process.env.PLUGINS || '').split(',').map(p => p.trim()).filter(Boolean),
 } as const;

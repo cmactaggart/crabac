@@ -33,8 +33,12 @@ import { calendarRoutes } from './modules/calendar/calendar.routes.js';
 import { registerForumGateway } from './modules/forums/forums.gateway.js';
 import { boardsRoutes } from './modules/boards/boards.routes.js';
 import { boardAuthRoutes } from './modules/boards/board-auth.routes.js';
+import { publicSpacesRoutes } from './modules/spaces/public-spaces.routes.js';
 import { publicBoardLimiter, publicBoardPostLimiter } from './middleware/rate-limiter.js';
 import { redis } from './lib/redis.js';
+import { loadPlugins, getLoadedPlugins } from './plugins/loader.js';
+import { db } from './database/connection.js';
+import { eventBus } from './lib/event-bus.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -66,6 +70,7 @@ app.use('/uploads', (req, res, next) => {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/spaces', publicSpacesRoutes);
 app.use('/api/spaces', spacesRoutes);
 app.use('/api/spaces', channelsRoutes);
 app.use('/api/spaces', categoriesRoutes);
@@ -111,6 +116,11 @@ app.get('/api/messages/:messageId', authenticate, async (req, res, next) => {
   }
 });
 
+// Plugins endpoint
+app.get('/api/plugins', (_req, res) => {
+  res.json({ plugins: getLoadedPlugins() });
+});
+
 // Health check
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -126,17 +136,21 @@ registerNotificationGateway();
 registerFriendsGateway();
 registerForumGateway();
 
-// Connect Redis and start server
-redis.connect().then(() => {
+// Load plugins, connect Redis, and start server
+async function start() {
+  await loadPlugins(app, eventBus, db);
+
+  try {
+    await redis.connect();
+  } catch (err) {
+    console.error('Failed to connect to Redis:', err);
+  }
+
   httpServer.listen(config.port, () => {
     console.log(`API server running on port ${config.port}`);
   });
-}).catch((err) => {
-  console.error('Failed to connect to Redis:', err);
-  // Start without Redis - real-time features degraded
-  httpServer.listen(config.port, () => {
-    console.log(`API server running on port ${config.port} (Redis unavailable)`);
-  });
-});
+}
+
+start();
 
 export default app;

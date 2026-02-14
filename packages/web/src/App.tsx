@@ -19,6 +19,7 @@ import { AdminPanel } from './pages/AdminPanel.js';
 import { NotificationsPage } from './pages/NotificationsPage.js';
 import { AccountPage } from './pages/AccountPage.js';
 import { BottomTabBar } from './components/layout/BottomTabBar.js';
+import { PublicSpaceLanding } from './pages/PublicSpaceLanding.js';
 import { BoardLayout } from './pages/boards/BoardLayout.js';
 import { BoardHome } from './pages/boards/BoardHome.js';
 import { BoardThreadList } from './pages/boards/BoardThreadList.js';
@@ -70,6 +71,7 @@ export function App() {
         <Route path="/admin" element={user?.isAdmin ? <AdminPanel /> : <Navigate to="/" />} />
         <Route path="/notifications" element={user ? <NotificationsPage /> : <Navigate to="/login" />} />
         <Route path="/account" element={user ? <AccountPage /> : <Navigate to="/login" />} />
+        <Route path="/space/slug/:slug" element={<PublicSpaceLanding />} />
         <Route path="/" element={user ? <Home /> : <Navigate to="/login" />} />
         {/* Public board routes (no auth guard) */}
         <Route path="/boards/:spaceSlug" element={<BoardLayout />}>

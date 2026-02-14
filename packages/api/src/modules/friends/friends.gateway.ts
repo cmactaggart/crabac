@@ -9,6 +9,8 @@ function getPublicUser(row: any) {
     username: row.username,
     displayName: row.display_name,
     avatarUrl: row.avatar_url,
+    baseColor: row.base_color || null,
+    accentColor: row.accent_color || null,
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

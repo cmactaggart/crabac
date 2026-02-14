@@ -3,14 +3,22 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { api } from '../lib/api.js';
 
-type Tab = 'spaces' | 'users' | 'announcements';
+type Tab = 'spaces' | 'users' | 'announcements' | 'tags';
 
 interface AdminSpace {
   id: string;
   name: string;
   slug: string;
   memberCount: number;
+  isPublic: boolean;
+  isFeatured: boolean;
   createdAt: string;
+}
+
+interface PredefinedTag {
+  id: string;
+  name: string;
+  slug: string;
 }
 
 interface AdminUser {
@@ -46,7 +54,7 @@ export function AdminPanel() {
         </div>
 
         <div style={styles.tabs}>
-          {(['announcements', 'spaces', 'users'] as Tab[]).map((t) => (
+          {(['announcements', 'spaces', 'users', 'tags'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -60,6 +68,7 @@ export function AdminPanel() {
         {tab === 'spaces' && <SpacesTab />}
         {tab === 'users' && <UsersTab />}
         {tab === 'announcements' && <AnnouncementsTab />}
+        {tab === 'tags' && <TagsTab />}
       </div>
     </div>
   );
@@ -69,9 +78,20 @@ function SpacesTab() {
   const [spaces, setSpaces] = useState<AdminSpace[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchSpaces = () => {
     api<AdminSpace[]>('/admin/spaces').then(setSpaces).finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { fetchSpaces(); }, []);
+
+  const toggleFeatured = async (spaceId: string) => {
+    try {
+      await api(`/admin/spaces/${spaceId}/feature`, { method: 'POST' });
+      fetchSpaces();
+    } catch {
+      // ignore
+    }
+  };
 
   if (loading) return <p style={styles.muted}>Loading...</p>;
 
@@ -84,6 +104,8 @@ function SpacesTab() {
             <th style={styles.th}>Name</th>
             <th style={styles.th}>Slug</th>
             <th style={styles.th}>Members</th>
+            <th style={styles.th}>Public</th>
+            <th style={styles.th}>Featured</th>
             <th style={styles.th}>Created</th>
           </tr>
         </thead>
@@ -93,6 +115,30 @@ function SpacesTab() {
               <td style={styles.td}>{s.name}</td>
               <td style={styles.td}>{s.slug}</td>
               <td style={styles.td}>{s.memberCount}</td>
+              <td style={styles.td}>
+                <span style={{
+                  fontSize: '0.7rem',
+                  padding: '0.15rem 0.4rem',
+                  borderRadius: '4px',
+                  background: s.isPublic ? 'rgba(87, 242, 135, 0.2)' : 'rgba(255,255,255,0.05)',
+                  color: s.isPublic ? '#57f287' : 'var(--text-muted)',
+                }}>
+                  {s.isPublic ? 'Yes' : 'No'}
+                </span>
+              </td>
+              <td style={styles.td}>
+                {s.isPublic && (
+                  <button
+                    onClick={() => toggleFeatured(s.id)}
+                    style={{
+                      ...styles.smallBtn,
+                      color: s.isFeatured ? '#faa61a' : 'var(--text-secondary)',
+                    }}
+                  >
+                    {s.isFeatured ? 'Unfeature' : 'Feature'}
+                  </button>
+                )}
+              </td>
               <td style={styles.td}>{new Date(s.createdAt).toLocaleDateString()}</td>
             </tr>
           ))}
@@ -286,6 +332,93 @@ function AnnouncementsTab() {
             )}
           </div>
         ))
+      )}
+    </div>
+  );
+}
+
+function TagsTab() {
+  const [tags, setTags] = useState<PredefinedTag[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newName, setNewName] = useState('');
+  const [error, setError] = useState('');
+
+  const fetchTags = () => {
+    api<PredefinedTag[]>('/admin/tags').then(setTags).finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchTags(); }, []);
+
+  const handleCreate = async (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+    try {
+      await api('/admin/tags', {
+        method: 'POST',
+        body: JSON.stringify({ name: newName.trim() }),
+      });
+      setNewName('');
+      fetchTags();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this tag?')) return;
+    await api(`/admin/tags/${id}`, { method: 'DELETE' });
+    fetchTags();
+  };
+
+  if (loading) return <p style={styles.muted}>Loading...</p>;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <form onSubmit={handleCreate} style={styles.createForm}>
+        <h3 style={{ margin: 0, fontSize: '0.9rem' }}>New Predefined Tag</h3>
+        {error && <div style={styles.error}>{error}</div>}
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Tag name"
+            required
+            maxLength={50}
+            style={{ ...styles.input, flex: 1 }}
+          />
+          <button type="submit" style={styles.primaryBtn}>Create</button>
+        </div>
+      </form>
+
+      <p style={styles.muted}>{tags.length} predefined tag{tags.length !== 1 ? 's' : ''}</p>
+      {tags.length === 0 ? (
+        <p style={styles.muted}>No predefined tags yet.</p>
+      ) : (
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th style={styles.th}>Name</th>
+              <th style={styles.th}>Slug</th>
+              <th style={styles.th}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tags.map((t) => (
+              <tr key={t.id}>
+                <td style={styles.td}>{t.name}</td>
+                <td style={styles.td}>{t.slug}</td>
+                <td style={styles.td}>
+                  <button
+                    onClick={() => handleDelete(t.id)}
+                    style={{ ...styles.smallBtn, color: 'var(--danger)' }}
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </div>
   );

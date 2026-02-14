@@ -33,6 +33,8 @@ export const DEFAULT_MEMBER_PERMISSIONS =
 
 export const ALL_PERMISSIONS = Object.values(Permissions).reduce((a, b) => a | b, 0n);
 
+export const GUEST_PERMISSIONS = Permissions.VIEW_CHANNELS;
+
 export function hasPermission(userPerms: bigint, perm: bigint): boolean {
   if ((userPerms & Permissions.ADMINISTRATOR) !== 0n) return true;
   return (userPerms & perm) === perm;

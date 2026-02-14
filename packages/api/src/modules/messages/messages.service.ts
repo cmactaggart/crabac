@@ -16,6 +16,9 @@ export async function listMessages(channelId: string, options: { before?: string
       'users.username as author_username',
       'users.display_name as author_display_name',
       'users.avatar_url as author_avatar_url',
+      'users.is_bot as author_is_bot',
+      'users.base_color as author_base_color',
+      'users.accent_color as author_accent_color',
     )
     .orderBy('messages.id', 'desc')
     .limit(options.limit);
@@ -172,6 +175,9 @@ export async function getPinnedMessages(channelId: string) {
       'users.username as author_username',
       'users.display_name as author_display_name',
       'users.avatar_url as author_avatar_url',
+      'users.is_bot as author_is_bot',
+      'users.base_color as author_base_color',
+      'users.accent_color as author_accent_color',
     )
     .orderBy('messages.id', 'desc');
 
@@ -197,6 +203,9 @@ export async function getThreadMessages(channelId: string, parentId: string, opt
       'users.username as author_username',
       'users.display_name as author_display_name',
       'users.avatar_url as author_avatar_url',
+      'users.is_bot as author_is_bot',
+      'users.base_color as author_base_color',
+      'users.accent_color as author_accent_color',
     )
     .orderBy('messages.id', 'asc')
     .limit(options.limit);
@@ -245,6 +254,8 @@ export async function searchMessages(spaceId: string, rawQuery: string, options:
       'users.username as author_username',
       'users.display_name as author_display_name',
       'users.avatar_url as author_avatar_url',
+      'users.base_color as author_base_color',
+      'users.accent_color as author_accent_color',
       'channels.name as channel_name',
     )
     .orderBy('messages.id', 'desc')
@@ -316,6 +327,8 @@ export async function getMessageById(messageId: string) {
       'users.username as author_username',
       'users.display_name as author_display_name',
       'users.avatar_url as author_avatar_url',
+      'users.base_color as author_base_color',
+      'users.accent_color as author_accent_color',
       'channels.name as channel_name',
       'channels.space_id',
     )
@@ -381,6 +394,9 @@ async function getMessage(messageId: string) {
       'users.username as author_username',
       'users.display_name as author_display_name',
       'users.avatar_url as author_avatar_url',
+      'users.is_bot as author_is_bot',
+      'users.base_color as author_base_color',
+      'users.accent_color as author_accent_color',
     )
     .first();
 
@@ -483,6 +499,9 @@ function formatMessage(row: any, reactions: any[], replyCount: number, attachmen
       username: row.author_username,
       displayName: row.author_display_name,
       avatarUrl: row.author_avatar_url,
+      baseColor: row.author_base_color || null,
+      accentColor: row.author_accent_color || null,
+      isBot: !!row.author_is_bot,
     },
   };
 }

@@ -1,11 +1,13 @@
 import { db } from '../../database/connection.js';
 import { snowflake } from '../_shared.js';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../../lib/errors.js';
-import { ALL_PERMISSIONS, Permissions, combinePermissions } from '@crabac/shared';
+import { ALL_PERMISSIONS, Permissions, combinePermissions, GUEST_PERMISSIONS } from '@crabac/shared';
+import * as spacesService from '../spaces/spaces.service.js';
 
 /**
  * Compute effective permissions for a user in a space.
  * Owner always gets ALL_PERMISSIONS regardless of role assignments.
+ * Non-members in public spaces get guest permissions.
  */
 export async function computePermissions(spaceId: string, userId: string): Promise<bigint> {
   // Check if user is the space owner
@@ -13,15 +15,34 @@ export async function computePermissions(spaceId: string, userId: string): Promi
   if (!space) throw new NotFoundError('Space');
   if (space.owner_id === userId) return ALL_PERMISSIONS;
 
-  // Combine all role permissions via OR
-  const roles = await db('member_roles')
-    .join('roles', 'member_roles.role_id', 'roles.id')
-    .where({ 'member_roles.space_id': spaceId, 'member_roles.user_id': userId })
-    .select('roles.permissions');
+  // Check if user is a member
+  const isMember = await spacesService.isMember(spaceId, userId);
 
-  if (roles.length === 0) return 0n;
+  if (isMember) {
+    // Combine all role permissions via OR
+    const roles = await db('member_roles')
+      .join('roles', 'member_roles.role_id', 'roles.id')
+      .where({ 'member_roles.space_id': spaceId, 'member_roles.user_id': userId })
+      .select('roles.permissions');
 
-  return combinePermissions(...roles.map((r: any) => BigInt(r.permissions)));
+    if (roles.length === 0) return 0n;
+    return combinePermissions(...roles.map((r: any) => BigInt(r.permissions)));
+  }
+
+  // Not a member — check if space is public for guest permissions
+  const settings = await db('space_settings').where('space_id', spaceId).first();
+  if (settings?.is_public) {
+    // Look up guest role
+    const guestRole = await db('roles')
+      .where({ space_id: spaceId, is_guest: true })
+      .first();
+    if (guestRole) {
+      return BigInt(guestRole.permissions);
+    }
+    return GUEST_PERMISSIONS;
+  }
+
+  return 0n;
 }
 
 /**
@@ -252,6 +273,7 @@ function formatRole(row: any) {
     permissions: row.permissions,
     isSystem: row.is_system,
     isDefault: row.is_default,
+    isGuest: !!row.is_guest,
     createdAt: row.created_at,
   };
 }

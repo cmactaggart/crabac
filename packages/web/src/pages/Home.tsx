@@ -6,6 +6,8 @@ import { useSpacesStore } from '../stores/spaces.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 import { MfaSetup, MfaDisable } from './MfaSetup.js';
 import { Markdown } from '../components/common/Markdown.js';
+import { PublicSpaceDirectory } from '../components/spaces/PublicSpaceDirectory.js';
+import { SpaceBrandedCard } from '../components/spaces/SpaceBrandedCard.js';
 import { api } from '../lib/api.js';
 
 interface Announcement {
@@ -26,6 +28,7 @@ export function Home() {
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
   const [showMfa, setShowMfa] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [unseenAnnouncements, setUnseenAnnouncements] = useState<Announcement[]>([]);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
@@ -35,9 +38,7 @@ export function Home() {
   }, [fetchSpaces]);
 
   useEffect(() => {
-    // Fetch all active announcements for the inline list
     api<Announcement[]>('/announcements/active').then(setAnnouncements).catch(() => {});
-    // Fetch unseen announcements for the modal
     api<Announcement[]>('/announcements/unseen').then((data) => {
       setUnseenAnnouncements(data);
       if (data.length > 0) {
@@ -47,14 +48,24 @@ export function Home() {
   }, []);
 
   return (
-    <div style={{ ...styles.container, padding: isMobile ? '1rem' : '3rem 2rem', paddingBottom: isMobile ? 72 : undefined }}>
-      <div style={{ ...styles.card, maxWidth: isMobile ? '100%' : '540px' }}>
+    <div style={{
+      ...styles.container,
+      padding: isMobile ? '1rem' : '3rem 2rem',
+      paddingBottom: isMobile ? 72 : undefined,
+      flexDirection: isMobile ? 'column' : 'row',
+    }}>
+      {/* Left Card — Your Spaces */}
+      <div style={{
+        ...styles.card,
+        maxWidth: isMobile ? '100%' : '460px',
+      }}>
         {/* Header */}
         <div style={styles.header}>
           <div>
             <h1 style={styles.title}>crab.ac</h1>
             <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.8rem', marginTop: '0.25rem' }}>
               <a href="https://github.com/cmactaggart/crabac" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)' }}>GitHub</a>
+              <a href="https://bsky.app/profile/crabac.bsky.social" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)' }}>Bluesky</a>
               <a href="mailto:bingo@crab.ac" style={{ color: 'var(--text-muted)' }}>bingo@crab.ac</a>
             </div>
           </div>
@@ -62,8 +73,12 @@ export function Home() {
             {user?.isAdmin && (
               <button onClick={() => navigate('/admin')} style={styles.adminBtn}>Admin</button>
             )}
-            <span>{user?.displayName}</span>
-            {!isMobile && <button onClick={logout} style={styles.logoutBtn}>Sign out</button>}
+            <button
+              onClick={() => setShowAccount(true)}
+              style={styles.usernameBtn}
+            >
+              {user?.displayName}
+            </button>
           </div>
         </div>
 
@@ -95,21 +110,16 @@ export function Home() {
           ) : (
             <div style={styles.spaceList}>
               {spaces.map((space) => (
-                <button
+                <SpaceBrandedCard
                   key={space.id}
+                  name={space.name}
+                  description={space.description || space.slug}
+                  iconUrl={space.iconUrl}
+                  baseColor={space.baseColor}
+                  accentColor={space.accentColor}
+                  textColor={space.textColor}
                   onClick={() => navigate(`/space/${space.id}`)}
-                  style={styles.spaceItem}
-                >
-                  <div style={styles.spaceIcon}>
-                    {space.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 600 }}>{space.name}</div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                      {space.description || space.slug}
-                    </div>
-                  </div>
-                </button>
+                />
               ))}
             </div>
           )}
@@ -122,59 +132,47 @@ export function Home() {
             </button>
           </div>
         </section>
-
-        {/* Account & Security (hidden on mobile — shown in /account tab) */}
-        {!isMobile && (
-          <section>
-            <h2 style={styles.sectionTitle}>Account & Security</h2>
-            <div style={styles.settingsRow}>
-              <div>
-                <div style={{ fontWeight: 600 }}>{user?.email}</div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  {user?.emailVerified ? 'Verified' : 'Not verified'}
-                </div>
-              </div>
-            </div>
-            <div style={styles.settingsRow}>
-              <div>
-                <div style={{ fontWeight: 600 }}>Two-Factor Authentication</div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  {user?.totpEnabled ? 'Enabled' : 'Not enabled'}
-                </div>
-              </div>
-              <button
-                onClick={() => setShowMfa(true)}
-                style={styles.smallBtn}
-              >
-                {user?.totpEnabled ? 'Manage' : 'Set up'}
-              </button>
-            </div>
-          </section>
-        )}
-
-        {showCreate && <CreateSpaceModal onClose={() => setShowCreate(false)} />}
-        {showJoin && <JoinSpaceModal onClose={() => setShowJoin(false)} />}
-        {showMfa && <MfaModal user={user} onClose={() => { setShowMfa(false); }} />}
-        {showAnnouncementModal && unseenAnnouncements.length > 0 && (
-          <AnnouncementModal
-            announcements={unseenAnnouncements}
-            onDismiss={async () => {
-              const maxId = unseenAnnouncements.reduce(
-                (max, a) => (a.id > max ? a.id : max),
-                unseenAnnouncements[0].id,
-              );
-              try {
-                await api('/announcements/dismiss', {
-                  method: 'POST',
-                  body: JSON.stringify({ lastSeenId: maxId }),
-                });
-              } catch {}
-              setShowAnnouncementModal(false);
-              setUnseenAnnouncements([]);
-            }}
-          />
-        )}
       </div>
+
+      {/* Right Card — Discover Spaces */}
+      <div style={{
+        ...styles.rightCard,
+        maxWidth: isMobile ? '100%' : '460px',
+      }}>
+        <h2 style={{ ...styles.sectionTitle, color: '#5a3a3a' }}>Discover Spaces</h2>
+        <PublicSpaceDirectory lightTheme />
+      </div>
+
+      {showCreate && <CreateSpaceModal onClose={() => setShowCreate(false)} />}
+      {showJoin && <JoinSpaceModal onClose={() => setShowJoin(false)} />}
+      {showMfa && <MfaModal user={user} onClose={() => { setShowMfa(false); }} />}
+      {showAccount && (
+        <AccountModal
+          user={user}
+          onClose={() => setShowAccount(false)}
+          onMfa={() => { setShowAccount(false); setShowMfa(true); }}
+          onLogout={logout}
+        />
+      )}
+      {showAnnouncementModal && unseenAnnouncements.length > 0 && (
+        <AnnouncementModal
+          announcements={unseenAnnouncements}
+          onDismiss={async () => {
+            const maxId = unseenAnnouncements.reduce(
+              (max, a) => (a.id > max ? a.id : max),
+              unseenAnnouncements[0].id,
+            );
+            try {
+              await api('/announcements/dismiss', {
+                method: 'POST',
+                body: JSON.stringify({ lastSeenId: maxId }),
+              });
+            } catch {}
+            setShowAnnouncementModal(false);
+            setUnseenAnnouncements([]);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -187,6 +185,49 @@ function formatDate(dateStr: string): string {
 function truncateContent(content: string, maxLen = 150): { text: string; truncated: boolean } {
   if (content.length <= maxLen) return { text: content, truncated: false };
   return { text: content.slice(0, maxLen).trimEnd() + '...', truncated: true };
+}
+
+function AccountModal({ user, onClose, onMfa, onLogout }: { user: any; onClose: () => void; onMfa: () => void; onLogout: () => void }) {
+  return (
+    <div style={styles.overlay} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={styles.modal}>
+        <button onClick={onClose} style={styles.closeBtn}><X size={20} /></button>
+        <h2 style={{ margin: '0 0 0.5rem' }}>Account & Security</h2>
+
+        <div style={styles.settingsRow}>
+          <div>
+            <div style={{ fontWeight: 600 }}>{user?.displayName}</div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>@{user?.username}</div>
+          </div>
+        </div>
+
+        <div style={styles.settingsRow}>
+          <div>
+            <div style={{ fontWeight: 600 }}>{user?.email}</div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              {user?.emailVerified ? 'Verified' : 'Not verified'}
+            </div>
+          </div>
+        </div>
+
+        <div style={styles.settingsRow}>
+          <div>
+            <div style={{ fontWeight: 600 }}>Two-Factor Authentication</div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              {user?.totpEnabled ? 'Enabled' : 'Not enabled'}
+            </div>
+          </div>
+          <button onClick={onMfa} style={styles.smallBtn}>
+            {user?.totpEnabled ? 'Manage' : 'Set up'}
+          </button>
+        </div>
+
+        <button onClick={onLogout} style={{ ...styles.secondaryBtn, marginTop: '0.5rem', color: 'var(--danger)', borderColor: 'var(--danger)' }}>
+          Sign Out
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function AnnouncementModal({ announcements, onDismiss }: { announcements: Announcement[]; onDismiss: () => void }) {
@@ -319,7 +360,6 @@ function MfaModal({ user, onClose }: { user: any; onClose: () => void }) {
 
   const handleComplete = () => {
     setDone(true);
-    // Refresh user data
     api('/users/me').then((u) => useAuthStore.setState({ user: u }));
   };
 
@@ -426,16 +466,28 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     minHeight: '100vh',
     padding: '3rem 2rem',
+    gap: '1.5rem',
   },
   card: {
     background: 'var(--bg-secondary)',
     borderRadius: 'var(--radius)',
     padding: '2rem',
     width: '100%',
-    maxWidth: '540px',
+    maxWidth: '460px',
     display: 'flex',
     flexDirection: 'column',
     gap: '1.5rem',
+  },
+  rightCard: {
+    background: '#f5f0ef',
+    borderRadius: 'var(--radius)',
+    padding: '2rem',
+    width: '100%',
+    maxWidth: '460px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1rem',
+    color: '#2e1a1a',
   },
   header: {
     display: 'flex',
@@ -450,13 +502,14 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '0.9rem',
     color: 'var(--text-secondary)',
   },
-  logoutBtn: {
+  usernameBtn: {
     background: 'none',
     border: '1px solid var(--border)',
-    color: 'var(--text-secondary)',
+    color: 'var(--text-primary)',
     padding: '0.3rem 0.7rem',
     borderRadius: 'var(--radius)',
-    fontSize: '0.8rem',
+    fontSize: '0.85rem',
+    fontWeight: 600,
     cursor: 'pointer',
   },
   adminBtn: {
@@ -488,31 +541,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '0.9rem',
   },
   spaceList: { display: 'flex', flexDirection: 'column', gap: '0.5rem' },
-  spaceItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem',
-    padding: '0.75rem',
-    borderRadius: 'var(--radius)',
-    background: 'var(--bg-input)',
-    border: 'none',
-    color: 'var(--text-primary)',
-    textAlign: 'left' as const,
-    width: '100%',
-    cursor: 'pointer',
-  },
-  spaceIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: '50%',
-    background: 'var(--accent)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: 700,
-    fontSize: '1.1rem',
-    flexShrink: 0,
-  },
   actions: {
     display: 'flex',
     gap: '0.5rem',

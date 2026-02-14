@@ -15,6 +15,8 @@ interface EmbedData {
     displayName: string;
     username: string;
     avatarUrl: string | null;
+    baseColor?: string | null;
+    accentColor?: string | null;
   };
 }
 
@@ -105,6 +107,8 @@ export function MessageLinkEmbed({ messageId }: Props) {
             src={data.author?.avatarUrl || null}
             name={data.author?.displayName || '?'}
             size={20}
+            baseColor={data.author?.baseColor}
+            accentColor={data.author?.accentColor}
           />
           <span style={styles.embedAuthor}>{data.author?.displayName || 'Unknown'}</span>
           <span style={styles.embedSource}>{sourceLabel}</span>
