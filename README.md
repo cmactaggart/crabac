@@ -4,15 +4,20 @@
 
 # crab.ac
 
-An open-source communication platform in the style of Discord and Slack.
+An open-source community chat, public comms, and organization platform.
 
 [GitHub](https://github.com/cmactaggart/crabac) | [Bluesky](https://bsky.app/profile/crabac.bsky.social) | [bingo@crab.ac](mailto:bingo@crab.ac)
 
 ![Screenshot: Space view with channels and chat](docs/screenshots/space-view.png)
 
+![Screenshot: Public web gallery view](docs/screenshots/public-web-gallery.png)
+
 ## Most Recent Updates
 
+- **Public calendar** — public web view for community calendars with per-event visibility control
+- **Media gallery channels** — upload/grid view with detail overlay and public gallery viewer
 - Ability to make Spaces public and discoverable (with role-based privileges for guests)
+- Per-user branding colors with gradient SVG default avatars
 - Public space directory with featured spaces and tag-based filtering
 - Space branding colors (custom gradients on space cards)
 - Community calendar with color-coded event categories and chat embeds
@@ -21,7 +26,7 @@ An open-source communication platform in the style of Discord and Slack.
 
 ## Why crab.ac?
 
-crab.ac was originally built by people who run a bike club. The result is a platform that works well for the usual chat stuff but also has some ideas about how independent communities interact with each other and with the public.
+crab.ac was originally built by people who run a bike club. The result is a platform that works well for the usual chat stuff but also has some ideas about how independent communities interact with each other and with the public — public forums, shared calendars, media galleries, and cross-community channel linking are all first-class features.
 
 ---
 
@@ -52,15 +57,46 @@ Spaces can be made public, allowing anyone to discover and join them from the ho
 
 ![Screenshot: Public space directory](docs/screenshots/public-space-directory.png)
 
-### Public Boards
+### Public Web Components
 
-Spaces can opt in to public-facing web boards — a read-only (or optionally read-write) forum view of selected channels, accessible to anyone on the internet without logging into the full app.
+Not everything belongs behind a login. crab.ac lets spaces selectively expose content to the public internet through dedicated, clean web views — each toggleable independently from Space Settings > Public Web.
 
-This is useful for communities that want some of their discussions to be publicly browsable — FAQs, announcements, event planning — while keeping the rest of the space private. Anonymous browsing can be toggled on or off per space. Users who want to post can register for a lightweight board-only account without needing a full platform account.
+#### Public Boards (Forums)
 
-Board URLs are clean and human-readable: `app.crab.ac/boards/your-space-slug`
+Forum channels can be marked as public to create an external-facing discussion board. Visitors can browse threads and posts without an account (if anonymous browsing is enabled), and register for a lightweight board-only account to participate without needing a full platform membership.
+
+URL: `app.crab.ac/boards/your-space-slug`
 
 ![Screenshot: Public board view](docs/screenshots/public-board.png)
+
+#### Public Galleries
+
+Media gallery channels can be made public, giving the community a browsable image/media gallery on the web. The gallery view shows a responsive grid of uploads with a detail overlay for individual items.
+
+URL: `app.crab.ac/gallery/your-space-slug`
+
+![Screenshot: Media gallery channel in-app](docs/screenshots/in-app-gallery.png)
+
+![Screenshot: Public web gallery view](docs/screenshots/public-web-gallery.png)
+
+#### Public Calendar
+
+The community calendar can be exposed as a read-only public web page. Individual events are marked as public or private when created — public events appear on the web view, while private events stay visible only to space members. Logged-in space members who visit the public URL see all events.
+
+URL: `app.crab.ac/calendar/your-space-slug`
+
+![Screenshot: Public web calendar view](docs/screenshots/public-web-calendar.png)
+
+#### How It Works
+
+Each public web component is controlled by its own toggle in admin settings:
+
+- **Enable Public Boards** — exposes forum channels marked as public
+- **Enable Public Galleries** — exposes media gallery channels marked as public
+- **Enable Public Calendar** — exposes events marked as public
+- **Allow Anonymous Browsing** — shared toggle that controls whether visitors need to log in to view any of the above
+
+All public web views share a consistent light-theme layout with the space name, a login link back to the full app, and a "Powered by crab.ac" footer.
 
 ### GPX Track Rendering
 
@@ -106,9 +142,10 @@ Every user gets a personal color palette (base + accent) that renders as a gradi
 - **User branding colors** — personalized gradient avatars with SVG letter icons
 
 ### Community Tools
-- **Community calendar** with month grid, event categories (color-coded), and rich embed cards that can be posted directly into channels
+- **Community calendar** with month grid, event categories (color-coded), rich embed cards in chat, and public web view
 - **Public space directory** with featured spaces, tags, and custom branding
-- **Public boards** for external-facing forum content
+- **Public web components** — forums, media galleries, and calendars each get a dedicated public web view with optional anonymous browsing
+- **Media gallery channels** with upload grid, detail overlay, and public gallery viewer
 - **Portals** for cross-space channel linking
 - **System announcements** with persistent dismissal tracking
 

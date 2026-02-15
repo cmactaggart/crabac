@@ -28,14 +28,24 @@ async function refreshAccessToken(): Promise<void> {
   const rt = getSavedRefreshToken();
   if (!rt) throw new Error('No refresh token');
 
-  const res = await fetch(`${BASE}/auth/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken: rt }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: rt }),
+    });
+  } catch {
+    // Network error — don't clear tokens, session may still be valid
+    throw new Error('Refresh failed (network)');
+  }
 
   if (!res.ok) {
-    clearTokens();
+    // Only clear tokens if the server explicitly rejected the refresh token (401/403)
+    // Don't clear on 5xx or other transient errors
+    if (res.status === 401 || res.status === 403) {
+      clearTokens();
+    }
     throw new Error('Refresh failed');
   }
 

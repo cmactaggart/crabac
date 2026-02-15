@@ -12,6 +12,8 @@ export async function getSpaceAdminSettings(spaceId: string) {
     return {
       spaceId,
       allowPublicBoards: false,
+      allowPublicGalleries: false,
+      allowPublicCalendar: false,
       allowAnonymousBrowsing: false,
       calendarEnabled: false,
       isPublic: false,
@@ -30,6 +32,8 @@ export async function updateSpaceAdminSettings(
   spaceId: string,
   data: {
     allowPublicBoards?: boolean;
+    allowPublicGalleries?: boolean;
+    allowPublicCalendar?: boolean;
     allowAnonymousBrowsing?: boolean;
     calendarEnabled?: boolean;
     isPublic?: boolean;
@@ -44,6 +48,8 @@ export async function updateSpaceAdminSettings(
   if (existing) {
     const updates: Record<string, any> = {};
     if (data.allowPublicBoards !== undefined) updates.allow_public_boards = data.allowPublicBoards;
+    if (data.allowPublicGalleries !== undefined) updates.allow_public_galleries = data.allowPublicGalleries;
+    if (data.allowPublicCalendar !== undefined) updates.allow_public_calendar = data.allowPublicCalendar;
     if (data.allowAnonymousBrowsing !== undefined) updates.allow_anonymous_browsing = data.allowAnonymousBrowsing;
     if (data.calendarEnabled !== undefined) updates.calendar_enabled = data.calendarEnabled;
     if (data.isPublic !== undefined) updates.is_public = data.isPublic;
@@ -59,6 +65,8 @@ export async function updateSpaceAdminSettings(
     await db('space_settings').insert({
       space_id: spaceId,
       allow_public_boards: data.allowPublicBoards ?? false,
+      allow_public_galleries: data.allowPublicGalleries ?? false,
+      allow_public_calendar: data.allowPublicCalendar ?? false,
       allow_anonymous_browsing: data.allowAnonymousBrowsing ?? false,
       calendar_enabled: data.calendarEnabled ?? false,
       is_public: data.isPublic ?? false,
@@ -120,6 +128,8 @@ function formatSettings(row: any) {
   return {
     spaceId: row.space_id,
     allowPublicBoards: row.allow_public_boards,
+    allowPublicGalleries: !!row.allow_public_galleries,
+    allowPublicCalendar: !!row.allow_public_calendar,
     allowAnonymousBrowsing: row.allow_anonymous_browsing,
     calendarEnabled: !!row.calendar_enabled,
     isPublic: !!row.is_public,

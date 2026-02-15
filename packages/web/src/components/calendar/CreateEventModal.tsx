@@ -24,6 +24,7 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, onClose, onC
   const [eventDate, setEventDate] = useState(editEvent?.eventDate || prefillDate || '');
   const [eventTime, setEventTime] = useState(editEvent?.eventTime || '');
   const [categoryId, setCategoryId] = useState(editEvent?.categoryId || '');
+  const [isPublic, setIsPublic] = useState(editEvent?.isPublic || false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -38,6 +39,7 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, onClose, onC
         eventDate,
         eventTime: eventTime || null,
         categoryId: categoryId || null,
+        isPublic,
       };
 
       if (editEvent) {
@@ -102,6 +104,19 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, onClose, onC
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
+
+          <label style={{ ...styles.label, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 4 }}>
+            <input
+              type="checkbox"
+              checked={isPublic}
+              onChange={(e) => setIsPublic(e.target.checked)}
+              style={{ margin: 0 }}
+            />
+            <span style={{ textTransform: 'none', fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-primary)' }}>Make Public</span>
+          </label>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: -4 }}>
+            Visible on the public calendar web view
+          </span>
 
           <label style={styles.label}>Description (optional)</label>
           <textarea

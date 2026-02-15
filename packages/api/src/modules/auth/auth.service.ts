@@ -159,14 +159,16 @@ export async function refresh(refreshToken: string) {
     throw new UnauthorizedError('Refresh token expired');
   }
 
-  // Revoke old token (single-use rotation)
-  await db('refresh_tokens').where('id', stored.id).delete();
-
   const user = await db('users').where('id', stored.user_id).first();
   if (!user) throw new UnauthorizedError('User not found');
 
-  const tokens = await generateTokens(user);
-  return tokens;
+  // Issue a new access token but keep the same refresh token
+  const payload: JwtPayload = { userId: user.id, email: user.email };
+  const accessToken = jwt.sign(payload, config.jwt.secret, {
+    expiresIn: config.jwt.expiresIn as any,
+  });
+
+  return { accessToken, refreshToken };
 }
 
 export async function logout(refreshToken: string) {

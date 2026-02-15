@@ -33,7 +33,7 @@ const TABS: TabDef[] = [
   { key: 'roles', label: 'Roles', permission: Permissions.MANAGE_ROLES },
   { key: 'members', label: 'Members', permission: Permissions.MANAGE_MEMBERS },
   { key: 'invites', label: 'Invites', permission: Permissions.MANAGE_INVITES },
-  { key: 'boards', label: 'Public Boards', permission: Permissions.MANAGE_SPACE },
+  { key: 'boards', label: 'Public Web', permission: Permissions.MANAGE_SPACE },
   { key: 'calendar', label: 'Calendar', permission: Permissions.MANAGE_SPACE },
 ];
 

@@ -132,11 +132,12 @@ export function ChannelsTab({ spaceId, channels, categories }: Props) {
               <option value="announcement">Announcement</option>
               <option value="read_only">Read Only</option>
               <option value="forum">Forum</option>
+              <option value="media_gallery">Media Gallery</option>
             </select>
-            {editType === 'forum' && (
+            {(editType === 'forum' || editType === 'media_gallery') && (
               <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.8rem', color: editPublic ? 'var(--accent)' : 'var(--text-secondary)', whiteSpace: 'nowrap', cursor: 'pointer' }}>
                 <input type="checkbox" checked={editPublic} onChange={(e) => setEditPublic(e.target.checked)} />
-                Public Board
+                {editType === 'forum' ? 'Public Board' : 'Public Gallery'}
               </label>
             )}
             <div style={{ display: 'flex', gap: 4 }}>
@@ -164,7 +165,7 @@ export function ChannelsTab({ spaceId, channels, categories }: Props) {
         <span style={{ flex: 1, cursor: 'pointer' }} onClick={() => startEditChannel(ch)}>{ch.name}</span>
         {ch.isAdmin && <span style={styles.typeLabel}>admin</span>}
         <span style={styles.typeLabel}>{ch.type}</span>
-        {ch.type === 'forum' && (
+        {(ch.type === 'forum' || ch.type === 'media_gallery') && (
           <button
             onClick={() => updateChannel(spaceId, ch.id, { isPublic: !ch.isPublic })}
             style={{
@@ -172,7 +173,7 @@ export function ChannelsTab({ spaceId, channels, categories }: Props) {
               color: ch.isPublic ? 'var(--accent)' : 'var(--text-muted)',
               background: ch.isPublic ? 'rgba(88, 101, 242, 0.15)' : 'var(--bg-tertiary)',
             }}
-            title={ch.isPublic ? 'Public board — click to make private' : 'Private — click to make public board'}
+            title={ch.isPublic ? 'Public — click to make private' : 'Private — click to make public'}
           >
             <Globe size={12} />
             {ch.isPublic ? 'Public' : 'Private'}

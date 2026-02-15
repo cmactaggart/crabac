@@ -12,6 +12,7 @@ import { ChannelSidebar } from '../components/layout/ChannelSidebar.js';
 import { MembersPanel } from '../components/layout/MembersPanel.js';
 import { MessageArea } from '../components/messages/MessageArea.js';
 import { ForumChannelView } from '../components/forums/ForumChannelView.js';
+import { GalleryChannelView } from '../components/galleries/GalleryChannelView.js';
 import { CalendarView } from '../components/calendar/CalendarView.js';
 
 export function SpaceView() {
@@ -77,12 +78,12 @@ export function SpaceView() {
     };
   }, [spaceId, updateMemberStatus, fetchMembers]);
 
-  // Close members panel when switching to mobile
+  // Close members panel on mobile (on mount and when switching to mobile)
   useEffect(() => {
-    if (isMobile && membersSidebarOpen) {
+    if (isMobile && useLayoutStore.getState().membersSidebarOpen) {
       useLayoutStore.getState().toggleMembersSidebar();
     }
-  }, [isMobile]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isMobile, spaceId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeSpace = spaces.find((s) => s.id === spaceId);
 
@@ -196,6 +197,17 @@ export function SpaceView() {
                 navigate(`/space/${spaceId}`, { replace: true });
               }}
             />
+          ) : activeChannel?.type === 'media_gallery' ? (
+            <GalleryChannelView
+              channelId={channelId}
+              channel={activeChannel}
+              spaceId={spaceId}
+              showBackButton
+              onBack={() => {
+                setMobileView('sidebar');
+                navigate(`/space/${spaceId}`, { replace: true });
+              }}
+            />
           ) : (
             <MessageArea
               channelId={channelId}
@@ -265,6 +277,12 @@ export function SpaceView() {
         ) : channelId && spaceId ? (
           channels.find((c) => c.id === channelId)?.type === 'forum' ? (
             <ForumChannelView
+              channelId={channelId}
+              channel={channels.find((c) => c.id === channelId) || null}
+              spaceId={spaceId}
+            />
+          ) : channels.find((c) => c.id === channelId)?.type === 'media_gallery' ? (
+            <GalleryChannelView
               channelId={channelId}
               channel={channels.find((c) => c.id === channelId) || null}
               spaceId={spaceId}

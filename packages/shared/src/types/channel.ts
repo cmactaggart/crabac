@@ -1,4 +1,4 @@
-export type ChannelType = 'text' | 'announcement' | 'read_only' | 'forum';
+export type ChannelType = 'text' | 'announcement' | 'read_only' | 'forum' | 'media_gallery';
 
 export interface Channel {
   id: string;

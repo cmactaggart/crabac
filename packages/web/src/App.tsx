@@ -26,6 +26,11 @@ import { BoardThreadList } from './pages/boards/BoardThreadList.js';
 import { BoardThreadDetail } from './pages/boards/BoardThreadDetail.js';
 import { BoardRegister } from './pages/boards/BoardRegister.js';
 import { BoardLogin } from './pages/boards/BoardLogin.js';
+import { GalleryLayout } from './pages/galleries/GalleryLayout.js';
+import { PublicGalleryHome } from './pages/galleries/PublicGalleryHome.js';
+import { PublicGalleryView } from './pages/galleries/PublicGalleryView.js';
+import { CalendarLayout } from './pages/calendar/CalendarLayout.js';
+import { PublicCalendarView } from './pages/calendar/PublicCalendarView.js';
 
 export function App() {
   const { user, loading, restore } = useAuthStore();
@@ -80,6 +85,15 @@ export function App() {
           <Route path="login" element={<BoardLogin />} />
           <Route path=":channelName" element={<BoardThreadList />} />
           <Route path=":channelName/:threadId" element={<BoardThreadDetail />} />
+        </Route>
+        {/* Public gallery routes (no auth guard) */}
+        <Route path="/gallery/:spaceSlug" element={<GalleryLayout />}>
+          <Route index element={<PublicGalleryHome />} />
+          <Route path=":channelName" element={<PublicGalleryView />} />
+        </Route>
+        {/* Public calendar routes (no auth guard) */}
+        <Route path="/calendar/:spaceSlug" element={<CalendarLayout />}>
+          <Route index element={<PublicCalendarView />} />
         </Route>
       </Routes>
       {isMobile && user && <BottomTabBar />}

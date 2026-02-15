@@ -87,6 +87,7 @@ export function CreateChannelModal({ spaceId, categories, onClose }: Props) {
               <option value="announcement">Announcement</option>
               <option value="read_only">Read Only</option>
               <option value="forum">Forum</option>
+              <option value="media_gallery">Media Gallery</option>
             </select>
           </div>
 

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, type FormEvent, type KeyboardEvent } from 'react';
-import { Plus, Paperclip, Calendar, X } from 'lucide-react';
+import { Plus, Paperclip, Calendar, X, ImagePlus } from 'lucide-react';
 import { Permissions } from '@crabac/shared';
 import { getSocket } from '../../lib/socket.js';
 import { api } from '../../lib/api.js';
@@ -10,6 +10,7 @@ import { MentionAutocomplete } from './MentionAutocomplete.js';
 import { ChannelAutocomplete } from './ChannelAutocomplete.js';
 import { SlashCommandPalette } from './SlashCommandPalette.js';
 import { CreateEventModal } from '../calendar/CreateEventModal.js';
+import { MediaUploadModal } from './MediaUploadModal.js';
 import { parseSlashCommand } from '../../lib/slashCommands.js';
 import type { Message } from '@crabac/shared';
 
@@ -24,12 +25,14 @@ interface Props {
 export function MessageInput({ channelId, spaceId, onSend, replyingTo, onCancelReply }: Props) {
   const [content, setContent] = useState('');
   const [sending, setSending] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
   const [channelQuery, setChannelQuery] = useState<string | null>(null);
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
+  const [showMediaUpload, setShowMediaUpload] = useState(false);
   const lastTypingEmit = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -170,17 +173,49 @@ export function MessageInput({ channelId, spaceId, onSend, replyingTo, onCancelR
     }
 
     setSending(true);
+    setUploadError(null);
     try {
       if (files.length > 0) {
-        const formData = new FormData();
-        formData.append('content', trimmed);
-        if (replyingTo?.id) formData.append('replyToId', replyingTo.id);
-        files.forEach((f) => formData.append('files', f));
+        // Split files into batches (max 40MB or 4 files per batch for mobile stability)
+        const MAX_BATCH_BYTES = 40 * 1024 * 1024;
+        const MAX_BATCH_FILES = 4;
+        const batches: File[][] = [];
+        let currentBatch: File[] = [];
+        let currentSize = 0;
+        for (const f of files) {
+          if (currentBatch.length > 0 && (currentSize + f.size > MAX_BATCH_BYTES || currentBatch.length >= MAX_BATCH_FILES)) {
+            batches.push(currentBatch);
+            currentBatch = [];
+            currentSize = 0;
+          }
+          currentBatch.push(f);
+          currentSize += f.size;
+        }
+        if (currentBatch.length > 0) batches.push(currentBatch);
+
+        // First batch: create message with files
+        let firstForm: FormData | null = new FormData();
+        firstForm.append('content', trimmed);
+        if (replyingTo?.id) firstForm.append('replyToId', replyingTo.id);
+        batches[0].forEach((f) => firstForm!.append('files', f));
 
         const message = await api<Message>(`/channels/${channelId}/messages/upload`, {
           method: 'POST',
-          body: formData,
+          body: firstForm,
         });
+        firstForm = null; // release for GC
+
+        // Subsequent batches: add attachments to the created message
+        for (let i = 1; i < batches.length; i++) {
+          let batchForm: FormData | null = new FormData();
+          batches[i].forEach((f) => batchForm!.append('files', f));
+          await api(`/channels/${channelId}/messages/${message.id}/attachments`, {
+            method: 'POST',
+            body: batchForm,
+          });
+          batchForm = null; // release for GC
+        }
+
         useMessagesStore.getState().addMessage(message);
       } else {
         await onSend(trimmed, replyingTo?.id);
@@ -190,8 +225,11 @@ export function MessageInput({ channelId, spaceId, onSend, replyingTo, onCancelR
       setMentionQuery(null);
       setSlashQuery(null);
       setChannelQuery(null);
-    } catch {
-      // keep content on failure
+    } catch (err: any) {
+      if (files.length > 0) {
+        const totalMB = (files.reduce((sum, f) => sum + f.size, 0) / (1024 * 1024)).toFixed(1);
+        setUploadError(err?.message || `Upload failed (${totalMB}MB total, ${files.length} files)`);
+      }
     } finally {
       setSending(false);
     }
@@ -222,7 +260,7 @@ export function MessageInput({ channelId, spaceId, onSend, replyingTo, onCancelR
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(e.target.files || []);
-    setFiles((prev) => [...prev, ...selected].slice(0, 5));
+    setFiles((prev) => [...prev, ...selected].slice(0, 20));
     e.target.value = '';
   };
 
@@ -246,17 +284,35 @@ export function MessageInput({ channelId, spaceId, onSend, replyingTo, onCancelR
         </div>
       )}
 
+      {/* Upload error */}
+      {uploadError && (
+        <div style={styles.errorBar}>
+          <span style={{ flex: 1 }}>{uploadError}</span>
+          <button type="button" onClick={() => setUploadError(null)} style={styles.cancelReply}><X size={14} /></button>
+        </div>
+      )}
+
       {/* File preview */}
       {files.length > 0 && (
         <div style={styles.filePreview}>
-          {files.map((f, i) => (
-            <div key={i} style={styles.fileChip}>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>
-                {f.name}
-              </span>
-              <button type="button" onClick={() => removeFile(i)} style={styles.removeFile}><X size={12} /></button>
-            </div>
-          ))}
+          {files.map((f, i) => {
+            const isMedia = f.type.startsWith('image/') || f.type.startsWith('video/');
+            return (
+              <div key={i} style={styles.fileChip}>
+                {isMedia && (
+                  <img
+                    src={URL.createObjectURL(f)}
+                    alt=""
+                    style={{ width: 20, height: 20, objectFit: 'cover', borderRadius: 3, flexShrink: 0 }}
+                  />
+                )}
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>
+                  {f.name}
+                </span>
+                <button type="button" onClick={() => removeFile(i)} style={styles.removeFile}><X size={12} /></button>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -304,6 +360,13 @@ export function MessageInput({ channelId, spaceId, onSend, replyingTo, onCancelR
             <div style={styles.plusMenu}>
               <button
                 type="button"
+                onClick={() => { setShowMediaUpload(true); setShowPlusMenu(false); }}
+                style={styles.plusMenuItem}
+              >
+                <ImagePlus size={16} /> Add Media
+              </button>
+              <button
+                type="button"
                 onClick={() => { fileRef.current?.click(); setShowPlusMenu(false); }}
                 style={styles.plusMenuItem}
               >
@@ -348,9 +411,17 @@ export function MessageInput({ channelId, spaceId, onSend, replyingTo, onCancelR
             opacity: (content.trim() || files.length > 0) ? 1 : 0.4,
           }}
         >
-          {sending ? '...' : 'Send'}
+          {sending ? <AnimatedDots /> : 'Send'}
         </button>
       </div>
+
+      {showMediaUpload && (
+        <MediaUploadModal
+          existingCount={files.length}
+          onAdd={(newFiles) => setFiles((prev) => [...prev, ...newFiles].slice(0, 20))}
+          onClose={() => setShowMediaUpload(false)}
+        />
+      )}
 
       {showCreateEvent && (
         <CreateEventModal
@@ -377,6 +448,21 @@ export function MessageInput({ channelId, spaceId, onSend, replyingTo, onCancelR
   );
 }
 
+function AnimatedDots() {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => (t + 1) % 3), 400);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <span style={{ display: 'inline-flex', gap: 1, minWidth: 24, justifyContent: 'center' }}>
+      {[0, 1, 2].map((i) => (
+        <span key={i} style={{ fontWeight: i === tick ? 800 : 300, opacity: i === tick ? 1 : 0.4, transition: 'all 0.2s' }}>.</span>
+      ))}
+    </span>
+  );
+}
+
 const styles: Record<string, React.CSSProperties> = {
   form: {
     padding: '0 16px 16px',
@@ -392,6 +478,18 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 'var(--radius)',
     fontSize: '0.8rem',
     color: 'var(--text-secondary)',
+  },
+  errorBar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '6px 12px',
+    marginBottom: 4,
+    background: 'rgba(237, 66, 69, 0.15)',
+    border: '1px solid rgba(237, 66, 69, 0.3)',
+    borderRadius: 'var(--radius)',
+    fontSize: '0.8rem',
+    color: '#ed4245',
   },
   cancelReply: {
     background: 'none',

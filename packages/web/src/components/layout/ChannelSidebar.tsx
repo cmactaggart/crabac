@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, ChevronDown, Hash, LogOut, PanelLeftClose, Settings, Shield, Zap, CheckCheck, BellOff, Bell, Link, Copy, Plus, SlidersHorizontal, FolderPlus, GripVertical, ArrowRightLeft, MessageSquareDashed, Trash2, Pencil, Calendar, DoorOpen } from 'lucide-react';
+import { UserPlus, ChevronDown, Hash, LogOut, PanelLeftClose, Settings, Shield, Zap, CheckCheck, BellOff, Bell, Link, Copy, Plus, SlidersHorizontal, FolderPlus, GripVertical, ArrowRightLeft, MessageSquareDashed, Trash2, Pencil, Calendar, DoorOpen, Grid3x3 } from 'lucide-react';
 import { Permissions } from '@crabac/shared';
 import { useSpacesStore } from '../../stores/spaces.js';
 import { useLayoutStore } from '../../stores/layout.js';
@@ -491,7 +491,7 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
     const hasUnread = unread && unread.unreadCount > 0 && !isMuted;
     const isActive = ch.id === activeChannelId;
 
-    const ChannelIcon = ch.isAdmin ? Shield : ch.isPortal ? Zap : ch.type === 'forum' ? MessageSquareDashed : Hash;
+    const ChannelIcon = ch.isAdmin ? Shield : ch.isPortal ? Zap : ch.type === 'forum' ? MessageSquareDashed : ch.type === 'media_gallery' ? Grid3x3 : Hash;
     const iconColor = ch.isAdmin ? 'var(--warning, #f0b232)' : ch.isPortal ? 'var(--accent)' : 'var(--text-muted)';
 
     return (

@@ -31,6 +31,8 @@ import { registerFriendsGateway } from './modules/friends/friends.gateway.js';
 import { forumsRoutes } from './modules/forums/forums.routes.js';
 import { calendarRoutes } from './modules/calendar/calendar.routes.js';
 import { registerForumGateway } from './modules/forums/forums.gateway.js';
+import { galleriesRoutes } from './modules/galleries/galleries.routes.js';
+import { registerGalleryGateway } from './modules/galleries/galleries.gateway.js';
 import { boardsRoutes } from './modules/boards/boards.routes.js';
 import { boardAuthRoutes } from './modules/boards/board-auth.routes.js';
 import { publicSpacesRoutes } from './modules/spaces/public-spaces.routes.js';
@@ -87,6 +89,7 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api/friends', friendsRoutes);
 app.use('/api/spaces', forumsRoutes);
 app.use('/api/spaces', calendarRoutes);
+app.use('/api/channels', galleriesRoutes);
 app.use('/api/boards', publicBoardLimiter, boardsRoutes);
 app.use('/api/boards/auth', boardAuthRoutes);
 
@@ -135,6 +138,7 @@ registerDMGateway();
 registerNotificationGateway();
 registerFriendsGateway();
 registerForumGateway();
+registerGalleryGateway();
 
 // Load plugins, connect Redis, and start server
 async function start() {

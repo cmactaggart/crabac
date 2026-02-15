@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, ArrowLeft } from 'lucide-react';
+import { X, ArrowLeft, ChevronDown } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
@@ -32,6 +32,7 @@ export function Home() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [unseenAnnouncements, setUnseenAnnouncements] = useState<Announcement[]>([]);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [announcementsExpanded, setAnnouncementsExpanded] = useState(!isMobile);
 
   useEffect(() => {
     fetchSpaces();
@@ -50,9 +51,18 @@ export function Home() {
   return (
     <div style={{
       ...styles.container,
-      padding: isMobile ? '1rem' : '3rem 2rem',
-      paddingBottom: isMobile ? 72 : undefined,
-      flexDirection: isMobile ? 'column' : 'row',
+      ...(isMobile ? {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 56,
+        overflowY: 'auto',
+        minHeight: 'unset',
+        padding: '1rem',
+        flexDirection: 'column',
+        justifyContent: 'flex-start',
+      } : {}),
     }}>
       {/* Left Card — Your Spaces */}
       <div style={{
@@ -81,26 +91,6 @@ export function Home() {
             </button>
           </div>
         </div>
-
-        {/* Announcements */}
-        {announcements.length > 0 && (
-          <section>
-            <h2 style={styles.sectionTitle}>Announcements</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {announcements.map((a) => (
-                <div key={a.id} style={styles.announcementCard}>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
-                    {formatDate(a.createdAt)}
-                  </div>
-                  <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>{a.title}</div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                    <Markdown content={a.content} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
 
         {/* Your Spaces */}
         <section>
@@ -132,6 +122,41 @@ export function Home() {
             </button>
           </div>
         </section>
+
+        {/* Announcements */}
+        {announcements.length > 0 && (
+          <section>
+            <button
+              onClick={() => setAnnouncementsExpanded((v) => !v)}
+              style={styles.collapsibleHeader}
+            >
+              <h2 style={{ ...styles.sectionTitle, margin: 0 }}>Announcements</h2>
+              <ChevronDown
+                size={18}
+                style={{
+                  color: 'var(--text-muted)',
+                  transition: 'transform 0.2s',
+                  transform: announcementsExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                }}
+              />
+            </button>
+            {announcementsExpanded && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+                {announcements.map((a) => (
+                  <div key={a.id} style={styles.announcementCard}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
+                      {formatDate(a.createdAt)}
+                    </div>
+                    <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>{a.title}</div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                      <Markdown content={a.content} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </div>
 
       {/* Right Card — Discover Spaces */}
@@ -535,6 +560,16 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--text-secondary)',
     textTransform: 'uppercase',
     letterSpacing: '0.03em',
+  },
+  collapsibleHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    background: 'none',
+    border: 'none',
+    padding: 0,
+    cursor: 'pointer',
   },
   muted: {
     color: 'var(--text-secondary)',

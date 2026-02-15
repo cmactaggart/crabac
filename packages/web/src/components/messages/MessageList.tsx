@@ -9,8 +9,10 @@ import { Markdown } from '../common/Markdown.js';
 import { MessageLinkEmbed, extractMessageLinks } from './MessageLinkEmbed.js';
 import { EmojiPicker } from './EmojiPicker.js';
 import { ContextMenu, useLongPress, type ContextMenuItem } from '../common/ContextMenu.js';
-import type { Message, GpxTrackMetadata } from '@crabac/shared';
+import type { Message, Attachment, GpxTrackMetadata } from '@crabac/shared';
 import { GpxPreviewCard } from './GpxPreviewCard.js';
+import { MediaGrid } from './MediaGrid.js';
+import { MediaCarousel } from './MediaCarousel.js';
 import { CalendarEventCard, extractCalendarEvent } from '../calendar/CalendarEventCard.js';
 
 interface Props {
@@ -117,6 +119,7 @@ function MessageItem({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
+  const [carouselData, setCarouselData] = useState<{ attachments: Attachment[]; startIndex: number } | null>(null);
   const isMuted = useMutesStore((s) => s.isMuted(message.authorId));
   const toggleReaction = useMessagesStore((s) => s.toggleReaction);
   const openThread = useMessagesStore((s) => s.openThread);
@@ -343,28 +346,44 @@ function MessageItem({
           )}
 
           {/* Attachments */}
-          {message.attachments && message.attachments.length > 0 && (
-            <div style={styles.attachments}>
-              {message.attachments.map((att) => {
-                const gpxMeta = (att as any).metadata?.gpx as GpxTrackMetadata | undefined;
-                if (gpxMeta) {
-                  return <GpxPreviewCard key={att.id} attachment={att} gpx={gpxMeta} />;
-                }
-                const isImage = att.mimeType.startsWith('image/');
-                return isImage ? (
-                  <a key={att.id} href={att.url} target="_blank" rel="noopener noreferrer">
-                    <img src={att.url} alt={att.originalName} style={styles.attachmentImage} />
-                  </a>
-                ) : (
+          {message.attachments && message.attachments.length > 0 && (() => {
+            const gpxAtts = message.attachments.filter((att) => (att as any).metadata?.gpx);
+            const mediaAtts = message.attachments.filter((att) =>
+              !(att as any).metadata?.gpx && (att.mimeType.startsWith('image/') || att.mimeType.startsWith('video/'))
+            );
+            const fileAtts = message.attachments.filter((att) =>
+              !(att as any).metadata?.gpx && !att.mimeType.startsWith('image/') && !att.mimeType.startsWith('video/')
+            );
+            return (
+              <div style={styles.attachments}>
+                {gpxAtts.map((att) => (
+                  <GpxPreviewCard key={att.id} attachment={att} gpx={(att as any).metadata!.gpx as GpxTrackMetadata} />
+                ))}
+                {mediaAtts.length > 0 && (
+                  <MediaGrid
+                    mediaAttachments={mediaAtts}
+                    onMediaClick={(index) => setCarouselData({ attachments: mediaAtts, startIndex: index })}
+                  />
+                )}
+                {fileAtts.map((att) => (
                   <a key={att.id} href={att.url} download={att.originalName} style={styles.attachmentFile}>
                     <FileText size={16} /> {att.originalName}
                     <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
                       ({(att.size / 1024).toFixed(1)} KB)
                     </span>
                   </a>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          {/* Media carousel */}
+          {carouselData && (
+            <MediaCarousel
+              attachments={carouselData.attachments}
+              startIndex={carouselData.startIndex}
+              onClose={() => setCarouselData(null)}
+            />
           )}
 
           {/* Reactions */}

@@ -46,7 +46,7 @@ export const joinSpaceSchema = z.object({
 export const createChannelSchema = z.object({
   name: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/, 'Channel name can only contain lowercase letters, numbers, and hyphens'),
   topic: z.string().max(1024).optional(),
-  type: z.enum(['text', 'announcement', 'read_only', 'forum']).optional(),
+  type: z.enum(['text', 'announcement', 'read_only', 'forum', 'media_gallery']).optional(),
   isPrivate: z.boolean().optional(),
   isPublic: z.boolean().optional(),
   categoryId: z.string().optional(),
@@ -55,7 +55,7 @@ export const createChannelSchema = z.object({
 export const updateChannelSchema = z.object({
   name: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).optional(),
   topic: z.string().max(1024).nullable().optional(),
-  type: z.enum(['text', 'announcement', 'read_only', 'forum']).optional(),
+  type: z.enum(['text', 'announcement', 'read_only', 'forum', 'media_gallery']).optional(),
   isPublic: z.boolean().optional(),
   position: z.number().int().min(0).optional(),
 });
@@ -232,6 +232,8 @@ export const threadsQuerySchema = z.object({
 // Space Admin Settings
 export const updateSpaceAdminSettingsSchema = z.object({
   allowPublicBoards: z.boolean().optional(),
+  allowPublicGalleries: z.boolean().optional(),
+  allowPublicCalendar: z.boolean().optional(),
   allowAnonymousBrowsing: z.boolean().optional(),
   calendarEnabled: z.boolean().optional(),
   isPublic: z.boolean().optional(),
@@ -271,6 +273,7 @@ export const createCalendarEventSchema = z.object({
   eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   eventTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
   categoryId: z.string().nullable().optional(),
+  isPublic: z.boolean().optional(),
 });
 
 export const updateCalendarEventSchema = z.object({
@@ -279,6 +282,7 @@ export const updateCalendarEventSchema = z.object({
   eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   eventTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
   categoryId: z.string().nullable().optional(),
+  isPublic: z.boolean().optional(),
 });
 
 export const calendarEventsQuerySchema = z.object({

@@ -102,8 +102,12 @@ export const useAuthStore = create<AuthState>((set) => ({
       useNotificationsStore.getState().fetchUnreadCount();
       useMutesStore.getState().fetchMutes();
       usePreferencesStore.getState().fetchPreferences();
-    } catch {
-      clearTokens();
+    } catch (err: any) {
+      // Only clear tokens if the server explicitly rejected them
+      // Don't clear on network errors or transient failures
+      if (err?.status === 401 || err?.status === 403) {
+        clearTokens();
+      }
       set({ loading: false });
     }
   },

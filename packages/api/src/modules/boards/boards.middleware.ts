@@ -50,7 +50,14 @@ async function loadPublicBoard(req: Request) {
       .where({ space_id: space.id, name: channelName })
       .first();
     if (!channel) throw new NotFoundError('Channel');
-    if (!channel.is_public || channel.type !== 'forum') throw new NotFoundError('Channel');
+    if (!channel.is_public) throw new NotFoundError('Channel');
+    if (channel.type === 'forum') {
+      // forum channels need allow_public_boards (already checked above)
+    } else if (channel.type === 'media_gallery') {
+      if (!settings?.allow_public_galleries) throw new NotFoundError('Channel');
+    } else {
+      throw new NotFoundError('Channel');
+    }
     (req as any).boardChannel = channel;
   }
 }

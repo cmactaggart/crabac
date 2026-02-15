@@ -51,6 +51,8 @@ export interface JoinSpaceRequest {
 export interface SpaceAdminSettings {
   spaceId: string;
   allowPublicBoards: boolean;
+  allowPublicGalleries: boolean;
+  allowPublicCalendar: boolean;
   allowAnonymousBrowsing: boolean;
   calendarEnabled: boolean;
   isPublic: boolean;

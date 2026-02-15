@@ -15,6 +15,7 @@ export interface CalendarEvent {
   description: string | null;
   eventDate: string; // YYYY-MM-DD
   eventTime: string | null; // HH:mm
+  isPublic?: boolean;
   createdAt: string;
   updatedAt: string;
   category?: CalendarCategory | null;

@@ -25,9 +25,11 @@ const attachmentStorage = multer.diskStorage({
 
 const BLOCKED_EXTENSIONS = new Set(['.html', '.htm', '.svg', '.xml', '.xhtml', '.js', '.mjs', '.cjs', '.php', '.asp', '.aspx', '.jsp', '.sh', '.bat', '.cmd', '.ps1', '.exe', '.dll', '.msi']);
 
+const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.webm', '.ogg', '.ogv', '.avi', '.mkv']);
+
 const attachmentUpload = multer({
   storage: attachmentStorage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB per file
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB max (videos)
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (BLOCKED_EXTENSIONS.has(ext)) {
@@ -37,6 +39,22 @@ const attachmentUpload = multer({
     }
   },
 });
+
+/** Wraps multer to forward errors to Express error handling instead of crashing */
+function handleMulterUpload(req: Request, res: Response, next: NextFunction) {
+  attachmentUpload.array('files', 20)(req, res, (err: any) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return next(new BadRequestError('File too large (max 100MB for video, 10MB for other files)'));
+      }
+      if (err.code === 'LIMIT_FILE_COUNT') {
+        return next(new BadRequestError('Too many files (max 20)'));
+      }
+      return next(new BadRequestError(err.message || 'Upload failed'));
+    }
+    next();
+  });
+}
 
 export const messagesRoutes = Router();
 
@@ -275,7 +293,7 @@ messagesRoutes.get(
 messagesRoutes.post(
   '/:channelId/messages/upload',
   requireChannelAccess,
-  attachmentUpload.array('files', 5),
+  handleMulterUpload,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const perms = (req as any).channelPerms as bigint;
@@ -286,8 +304,18 @@ messagesRoutes.post(
         return next(new ForbiddenError('You do not have permission to attach files'));
       }
 
+      // Enforce 10MB limit for non-video files (videos get 100MB via multer limits)
+      const uploadedFiles = (req.files as Express.Multer.File[]) || [];
+      for (const file of uploadedFiles) {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const isVideo = file.mimetype.startsWith('video/') || VIDEO_EXTENSIONS.has(ext);
+        if (!isVideo && file.size > 10 * 1024 * 1024) {
+          return next(new BadRequestError(`File "${file.originalname}" exceeds 10MB limit for non-video files`));
+        }
+      }
+
       const content = req.body.content || '';
-      if (!content && (!req.files || (req.files as Express.Multer.File[]).length === 0)) {
+      if (!content && uploadedFiles.length === 0) {
         return next(new BadRequestError('Message must have content or at least one file'));
       }
 
@@ -301,8 +329,7 @@ messagesRoutes.post(
         { skipEvent: true },
       );
 
-      const files = (req.files as Express.Multer.File[]) || [];
-      for (const file of files) {
+      for (const file of uploadedFiles) {
         let metadata: Record<string, any> | null = null;
 
         // Parse GPX files to extract track metadata + GeoJSON
@@ -332,6 +359,69 @@ messagesRoutes.post(
       const fullMessage = messages.find((m: any) => m.id === message.id) || message;
 
       res.status(201).json(fullMessage);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Add attachments to an existing message (for batched uploads)
+messagesRoutes.post(
+  '/:channelId/messages/:messageId/attachments',
+  requireChannelAccess,
+  handleMulterUpload,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const perms = (req as any).channelPerms as bigint;
+      if (!hasPermission(perms, Permissions.ATTACH_FILES)) {
+        return next(new ForbiddenError('You do not have permission to attach files'));
+      }
+
+      // Verify the message exists and belongs to this user
+      const msg = await db('messages')
+        .where({ id: req.params.messageId, channel_id: req.params.channelId })
+        .first();
+      if (!msg) return next(new BadRequestError('Message not found'));
+      if (String(msg.author_id) !== req.user!.userId) {
+        return next(new ForbiddenError('You can only add attachments to your own messages'));
+      }
+
+      const uploadedFiles = (req.files as Express.Multer.File[]) || [];
+      for (const file of uploadedFiles) {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const isVideo = file.mimetype.startsWith('video/') || VIDEO_EXTENSIONS.has(ext);
+        if (!isVideo && file.size > 10 * 1024 * 1024) {
+          return next(new BadRequestError(`File "${file.originalname}" exceeds 10MB limit for non-video files`));
+        }
+      }
+
+      if (uploadedFiles.length === 0) {
+        return next(new BadRequestError('No files provided'));
+      }
+
+      for (const file of uploadedFiles) {
+        let metadata: Record<string, any> | null = null;
+        if (file.originalname.toLowerCase().endsWith('.gpx')) {
+          const gpx = await parseGpxFile(file.path);
+          if (gpx) metadata = { gpx };
+        }
+        await messagesService.createAttachment(
+          req.params.messageId,
+          {
+            filename: file.filename,
+            originalName: file.originalname,
+            mimeType: file.mimetype,
+            size: file.size,
+            url: `/uploads/${file.filename}`,
+          },
+          metadata,
+        );
+      }
+
+      // Re-emit so all clients see updated attachments
+      await messagesService.emitMessageCreated(req.params.channelId, req.params.messageId);
+
+      res.status(200).json({ ok: true });
     } catch (err) {
       next(err);
     }

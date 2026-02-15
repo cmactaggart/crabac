@@ -103,7 +103,7 @@ export async function getEvent(id: string) {
 export async function createEvent(
   spaceId: string,
   creatorId: string,
-  data: { name: string; description?: string | null; eventDate: string; eventTime?: string | null; categoryId?: string | null },
+  data: { name: string; description?: string | null; eventDate: string; eventTime?: string | null; categoryId?: string | null; isPublic?: boolean },
 ) {
   const id = snowflake.generate();
   await db('calendar_events').insert({
@@ -115,13 +115,14 @@ export async function createEvent(
     description: data.description || null,
     event_date: data.eventDate,
     event_time: data.eventTime || null,
+    is_public: data.isPublic ?? false,
   });
   return getEvent(id);
 }
 
 export async function updateEvent(
   id: string,
-  data: { name?: string; description?: string | null; eventDate?: string; eventTime?: string | null; categoryId?: string | null },
+  data: { name?: string; description?: string | null; eventDate?: string; eventTime?: string | null; categoryId?: string | null; isPublic?: boolean },
 ) {
   const updates: Record<string, any> = {};
   if (data.name !== undefined) updates.name = data.name;
@@ -129,6 +130,7 @@ export async function updateEvent(
   if (data.eventDate !== undefined) updates.event_date = data.eventDate;
   if (data.eventTime !== undefined) updates.event_time = data.eventTime;
   if (data.categoryId !== undefined) updates.category_id = data.categoryId;
+  if (data.isPublic !== undefined) updates.is_public = data.isPublic;
 
   if (Object.keys(updates).length > 0) {
     updates.updated_at = db.fn.now(3);
@@ -136,6 +138,29 @@ export async function updateEvent(
     if (!affected) throw new NotFoundError('Calendar event');
   }
   return getEvent(id);
+}
+
+export async function listPublicEvents(spaceId: string, from: string, to: string) {
+  const rows = await db('calendar_events')
+    .leftJoin('calendar_categories', 'calendar_events.category_id', 'calendar_categories.id')
+    .leftJoin('users', 'calendar_events.creator_id', 'users.id')
+    .where('calendar_events.space_id', spaceId)
+    .where('calendar_events.is_public', true)
+    .whereBetween('calendar_events.event_date', [from, to])
+    .select(
+      'calendar_events.*',
+      'calendar_categories.name as cat_name',
+      'calendar_categories.color as cat_color',
+      'calendar_categories.space_id as cat_space_id',
+      'calendar_categories.created_at as cat_created_at',
+      'users.username as creator_username',
+      'users.display_name as creator_display_name',
+      'users.avatar_url as creator_avatar_url',
+    )
+    .orderBy('calendar_events.event_date', 'asc')
+    .orderBy('calendar_events.event_time', 'asc');
+
+  return rows.map(formatEvent);
 }
 
 export async function deleteEvent(id: string) {
@@ -167,6 +192,7 @@ function formatEvent(row: any) {
     description: row.description,
     eventDate,
     eventTime: eventTime || null,
+    isPublic: !!row.is_public,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

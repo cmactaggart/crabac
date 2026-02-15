@@ -20,7 +20,7 @@ export function BoardSettingsTab({ spaceId }: Props) {
       .catch((err) => { setError(err.message); setLoading(false); });
   }, [spaceId]);
 
-  const handleToggle = async (key: 'allowPublicBoards' | 'allowAnonymousBrowsing') => {
+  const handleToggle = async (key: 'allowPublicBoards' | 'allowPublicGalleries' | 'allowPublicCalendar' | 'allowAnonymousBrowsing') => {
     if (!settings) return;
     setSaving(true);
     setError('');
@@ -42,6 +42,8 @@ export function BoardSettingsTab({ spaceId }: Props) {
   if (loading) return <div style={{ color: 'var(--text-muted)' }}>Loading...</div>;
 
   const boardUrl = `${window.location.origin}/boards/${space?.slug || spaceId}`;
+  const galleryUrl = `${window.location.origin}/gallery/${space?.slug || spaceId}`;
+  const calendarUrl = `${window.location.origin}/calendar/${space?.slug || spaceId}`;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -71,9 +73,53 @@ export function BoardSettingsTab({ spaceId }: Props) {
 
       <div style={styles.settingRow}>
         <div style={styles.settingInfo}>
+          <span style={styles.settingLabel}>Enable Public Galleries</span>
+          <span style={styles.settingDesc}>
+            Allow media gallery channels to be marked as public and viewable without a space membership.
+          </span>
+        </div>
+        <button
+          onClick={() => handleToggle('allowPublicGalleries')}
+          disabled={saving}
+          style={{
+            ...styles.toggle,
+            background: settings?.allowPublicGalleries ? 'var(--accent)' : 'var(--bg-tertiary)',
+          }}
+        >
+          <div style={{
+            ...styles.toggleKnob,
+            transform: settings?.allowPublicGalleries ? 'translateX(18px)' : 'translateX(0)',
+          }} />
+        </button>
+      </div>
+
+      <div style={styles.settingRow}>
+        <div style={styles.settingInfo}>
+          <span style={styles.settingLabel}>Enable Public Calendar</span>
+          <span style={styles.settingDesc}>
+            Allow the community calendar to be viewed publicly via a dedicated web page.
+          </span>
+        </div>
+        <button
+          onClick={() => handleToggle('allowPublicCalendar')}
+          disabled={saving}
+          style={{
+            ...styles.toggle,
+            background: settings?.allowPublicCalendar ? 'var(--accent)' : 'var(--bg-tertiary)',
+          }}
+        >
+          <div style={{
+            ...styles.toggleKnob,
+            transform: settings?.allowPublicCalendar ? 'translateX(18px)' : 'translateX(0)',
+          }} />
+        </button>
+      </div>
+
+      <div style={styles.settingRow}>
+        <div style={styles.settingInfo}>
           <span style={styles.settingLabel}>Allow Anonymous Browsing</span>
           <span style={styles.settingDesc}>
-            Let visitors browse public boards without logging in. Posting still requires authentication.
+            Let visitors browse public boards, galleries, and calendar without logging in. Posting still requires authentication.
           </span>
         </div>
         <button
@@ -105,6 +151,42 @@ export function BoardSettingsTab({ spaceId }: Props) {
           </a>
           <span style={styles.settingDesc}>
             Mark individual forum channels as public in the Channels tab.
+          </span>
+        </div>
+      )}
+
+      {settings?.allowPublicGalleries && (
+        <div style={styles.urlBox}>
+          <span style={styles.settingLabel}>Public Gallery URL</span>
+          <a
+            href={galleryUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={styles.urlLink}
+          >
+            <code style={styles.urlCode}>{galleryUrl}</code>
+            <ExternalLink size={14} style={{ flexShrink: 0 }} />
+          </a>
+          <span style={styles.settingDesc}>
+            Mark individual media gallery channels as public in the Channels tab.
+          </span>
+        </div>
+      )}
+
+      {settings?.allowPublicCalendar && (
+        <div style={styles.urlBox}>
+          <span style={styles.settingLabel}>Public Calendar URL</span>
+          <a
+            href={calendarUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={styles.urlLink}
+          >
+            <code style={styles.urlCode}>{calendarUrl}</code>
+            <ExternalLink size={14} style={{ flexShrink: 0 }} />
+          </a>
+          <span style={styles.settingDesc}>
+            Mark individual events as public when creating or editing them.
           </span>
         </div>
       )}

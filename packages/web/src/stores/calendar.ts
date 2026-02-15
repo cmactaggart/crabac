@@ -17,8 +17,8 @@ interface CalendarState {
   deleteCategory: (spaceId: string, id: string) => Promise<void>;
 
   fetchEvents: (spaceId: string) => Promise<void>;
-  createEvent: (spaceId: string, data: { name: string; description?: string | null; eventDate: string; eventTime?: string | null; categoryId?: string | null }) => Promise<CalendarEvent>;
-  updateEvent: (spaceId: string, id: string, data: { name?: string; description?: string | null; eventDate?: string; eventTime?: string | null; categoryId?: string | null }) => Promise<CalendarEvent>;
+  createEvent: (spaceId: string, data: { name: string; description?: string | null; eventDate: string; eventTime?: string | null; categoryId?: string | null; isPublic?: boolean }) => Promise<CalendarEvent>;
+  updateEvent: (spaceId: string, id: string, data: { name?: string; description?: string | null; eventDate?: string; eventTime?: string | null; categoryId?: string | null; isPublic?: boolean }) => Promise<CalendarEvent>;
   deleteEvent: (spaceId: string, id: string) => Promise<void>;
 
   setSelectedDate: (date: string | null) => void;
