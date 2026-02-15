@@ -12,12 +12,9 @@ An open-source communication platform in the style of Discord and Slack.
 
 ## Most Recent Updates
 
-- Per-user branding colors with gradient SVG default avatars
+- Ability to make Spaces public and discoverable (with role-based privileges for guests)
 - Public space directory with featured spaces and tag-based filtering
 - Space branding colors (custom gradients on space cards)
-- Slash commands (`/shrug`, `/tableflip`, `/lenny`, `/me`, etc.)
-- Plugin system with RAGflow chatbot integration
-- Cross-platform desktop app (Windows, macOS, Linux) with auto-updater
 - Community calendar with color-coded event categories and chat embeds
 - Mobile-responsive layout with fixed message input
 - Forum channels with threaded discussions and public boards
@@ -114,7 +111,6 @@ Every user gets a personal color palette (base + accent) that renders as a gradi
 - **Public boards** for external-facing forum content
 - **Portals** for cross-space channel linking
 - **System announcements** with persistent dismissal tracking
-- **Plugin system** with chatbot integration (RAGflow-powered bots with BOT badge)
 
 ### Media & Files
 - **File uploads** with image previews and lightbox
@@ -141,8 +137,6 @@ Every user gets a personal color palette (base + accent) that renders as a gradi
 | **Native mobile** | In testing |
 
 ![Screenshot: Mobile layout](docs/screenshots/mobile-layout.png)
-
-![Screenshot: Desktop app](docs/screenshots/desktop-app.png)
 
 ---
 
