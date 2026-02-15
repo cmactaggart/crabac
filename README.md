@@ -6,20 +6,22 @@
 
 An open-source community chat, public comms, and organization platform.
 
+Basically, over the last few years I've been cobbling together small proofs of concept around tools I thought would be helpful for organizing a bike community. Recently I started integrating them all into and around a chat client. The result is a platform that is tailored to organizing a real world community in a cohesive manner. In merging all of these concepts into a unified platform, I realized some things that would make it work better and generally be more usable and intuitive, and I figured the best path forward was to just open source the whole thing and start working on it and iterating it in public.
+
 [GitHub](https://github.com/cmactaggart/crabac) | [Bluesky](https://bsky.app/profile/crabac.bsky.social) | [bingo@crab.ac](mailto:bingo@crab.ac)
 
 ![Screenshot: Space view with channels and chat](docs/screenshots/space-view.png)
-
-![Screenshot: Public web gallery view](docs/screenshots/public-web-gallery.png)
 
 ## Most Recent Updates
 
 - **Public calendar** — public web view for community calendars with per-event visibility control
 - **Media gallery channels** — upload/grid view with detail overlay and public gallery viewer
-- Ability to make Spaces public and discoverable (with role-based privileges for guests)
 - Per-user branding colors with gradient SVG default avatars
 - Public space directory with featured spaces and tag-based filtering
 - Space branding colors (custom gradients on space cards)
+- Slash commands (`/shrug`, `/tableflip`, `/lenny`, `/me`, etc.)
+- Plugin system with RAGflow chatbot integration
+- Cross-platform desktop app (Windows, macOS, Linux) with auto-updater
 - Community calendar with color-coded event categories and chat embeds
 - Mobile-responsive layout with fixed message input
 - Forum channels with threaded discussions and public boards
@@ -75,17 +77,11 @@ Media gallery channels can be made public, giving the community a browsable imag
 
 URL: `app.crab.ac/gallery/your-space-slug`
 
-![Screenshot: Media gallery channel in-app](docs/screenshots/in-app-gallery.png)
-
-![Screenshot: Public web gallery view](docs/screenshots/public-web-gallery.png)
-
 #### Public Calendar
 
 The community calendar can be exposed as a read-only public web page. Individual events are marked as public or private when created — public events appear on the web view, while private events stay visible only to space members. Logged-in space members who visit the public URL see all events.
 
 URL: `app.crab.ac/calendar/your-space-slug`
-
-![Screenshot: Public web calendar view](docs/screenshots/public-web-calendar.png)
 
 #### How It Works
 
@@ -148,6 +144,7 @@ Every user gets a personal color palette (base + accent) that renders as a gradi
 - **Media gallery channels** with upload grid, detail overlay, and public gallery viewer
 - **Portals** for cross-space channel linking
 - **System announcements** with persistent dismissal tracking
+- **Plugin system** with chatbot integration (RAGflow-powered bots with BOT badge)
 
 ### Media & Files
 - **File uploads** with image previews and lightbox
@@ -174,6 +171,8 @@ Every user gets a personal color palette (base + accent) that renders as a gradi
 | **Native mobile** | In testing |
 
 ![Screenshot: Mobile layout](docs/screenshots/mobile-layout.png)
+
+![Screenshot: Desktop app](docs/screenshots/desktop-app.png)
 
 ---
 
