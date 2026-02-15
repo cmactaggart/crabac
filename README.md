@@ -4,11 +4,11 @@
 
 # crab.ac
 
+[GitHub](https://github.com/cmactaggart/crabac) | [Bluesky](https://bsky.app/profile/crabac.bsky.social) | [bingo@crab.ac](mailto:bingo@crab.ac)
+
 An open-source community chat, public comms, and organization platform.
 
 Basically, over the last few years I've been cobbling together small proofs of concept around tools I thought would be helpful for organizing a bike community. Recently I started integrating them all into and around a chat client. The result is a platform that is tailored to organizing a real world community in a cohesive manner. In merging all of these concepts into a unified platform, I realized some things that would make it work better and generally be more usable and intuitive, and I figured the best path forward was to just open source the whole thing and start working on it and iterating it in public.
-
-[GitHub](https://github.com/cmactaggart/crabac) | [Bluesky](https://bsky.app/profile/crabac.bsky.social) | [bingo@crab.ac](mailto:bingo@crab.ac)
 
 ![Screenshot: Space view with channels and chat](docs/screenshots/space-view.png)
 
