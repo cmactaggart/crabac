@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCheck, AtSign, Reply, Zap } from 'lucide-react';
+import { CheckCheck, AtSign, Reply, Zap, CalendarX } from 'lucide-react';
 import { useNotificationsStore } from '../stores/notifications.js';
-import type { Notification, MentionNotificationData, ReplyNotificationData } from '@crabac/shared';
+import type { Notification, MentionNotificationData, ReplyNotificationData, EventCancelledNotificationData } from '@crabac/shared';
 
 export function NotificationsPage() {
   const { notifications, loading, hasMore, fetchNotifications, markAsRead, markAllAsRead } = useNotificationsStore();
@@ -55,6 +55,7 @@ export function NotificationsPage() {
               {n.type === 'mention' && <AtSign size={18} style={{ color: 'var(--accent)' }} />}
               {n.type === 'reply' && <Reply size={18} style={{ color: 'var(--accent)' }} />}
               {n.type === 'portal_invite' && <Zap size={18} style={{ color: 'var(--accent)' }} />}
+              {n.type === 'event_cancelled' && <CalendarX size={18} style={{ color: 'var(--danger)' }} />}
             </div>
             <div style={styles.itemBody}>
               <div style={styles.itemTitle}>
@@ -94,6 +95,10 @@ function formatTitle(n: Notification): string {
     }
     case 'portal_invite':
       return `Portal invite from ${data.sourceSpaceName}`;
+    case 'event_cancelled': {
+      const d = data as EventCancelledNotificationData;
+      return `Event cancelled: ${d.eventName} (${d.eventDate})`;
+    }
     default:
       return 'Notification';
   }

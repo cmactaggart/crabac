@@ -1,3 +1,4 @@
+
 <p align="center">
   <img src="docs/screenshots/crabac.png" alt="crab.ac" width="128">
 </p>
@@ -5,6 +6,8 @@
 # crab.ac
 
 An open-source community chat, public comms, and organization platform.
+
+Over the last few years I've been cobbling together small proofs of concept around tools I thought would be helpful for organizing a bike community. Recently I started integrating them all into and around a chat client. The result is a platform that is tailored to organizing a real world community in a cohesive manner. In merging all of these concepts into a unified platform, I realized some things that would make it work better and generally be more usable and intuitive, and I figured the best path forward was to just open source the whole thing and start working on it and iterating it in public.
 
 [GitHub](https://github.com/cmactaggart/crabac) | [Bluesky](https://bsky.app/profile/crabac.bsky.social) | [bingo@crab.ac](mailto:bingo@crab.ac)
 
@@ -14,13 +17,15 @@ An open-source community chat, public comms, and organization platform.
 
 ## Most Recent Updates
 
+- **Route library channels** — GPX route management with upload, categories, activity types, star/favorites, filtering and sorting, and public route web views
+- **Recurring events** — create weekly or monthly event series with per-occurrence overrides, cancellations, and RSVP-aware notifications
+- **Community blog** — draft/publish workflow with Markdown editor, inline image uploads, and a public blog web view
+- **Event RSVP** — going/maybe/not going with counts displayed on event cards
+- **Calendar enhancements** — location field, activity type (ride/run/walk), route linking from the route library
 - **Public calendar** — public web view for community calendars with per-event visibility control
 - **Media gallery channels** — upload/grid view with detail overlay and public gallery viewer
 - Ability to make Spaces public and discoverable (with role-based privileges for guests)
 - Per-user branding colors with gradient SVG default avatars
-- Public space directory with featured spaces and tag-based filtering
-- Space branding colors (custom gradients on space cards)
-- Community calendar with color-coded event categories and chat embeds
 - Mobile-responsive layout with fixed message input
 - Forum channels with threaded discussions and public boards
 
@@ -34,11 +39,12 @@ crab.ac was originally built by people who run a bike club. The result is a plat
 
 ### Portals
 
-Portals allow two completely independent spaces to share a single channel between them. Messages sent in one space appear in the other, and vice versa.
+Portals allow two or more completely independent spaces to share a single channel between them. Messages sent in one space appear in the others, and vice versa. This works for any channel type — text channels, media galleries, and route libraries can all be portaled.
 
-This solves a real problem: two groups that want their own independent spaces — their own roles, their own channels, their own members — but need a place to coordinate. For example:
+A single channel can be portaled into multiple spaces simultaneously, so one source of truth fans out across your whole community. For example:
 
-- A **cycling club** and a **running club** in the same city might portal a `#weekend-rides-and-runs` channel so members of either group can plan joint events without needing to join both spaces.
+- A **city cycling coalition** might portal a single route library into five different club spaces, so every group curates and benefits from the same collection of local routes.
+- A **running club** and a **cycling club** might portal a shared media gallery for race day photos — members of either group upload to the same gallery without joining both spaces.
 - A **game development studio** and their **community playtest group** might portal a `#feedback` channel so testers can talk directly to devs without getting access to internal channels.
 - A **neighborhood association** and the **local parks department** might portal a `#park-projects` channel for public collaboration while keeping their internal discussions private.
 
@@ -79,6 +85,12 @@ URL: `app.crab.ac/gallery/your-space-slug`
 
 ![Screenshot: Public web gallery view](docs/screenshots/public-web-gallery.png)
 
+#### Public Route Library
+
+Route library channels can be made public, creating a browsable route catalog on the web. The default view aggregates routes across all public route libraries in the space with filtering by activity type, category, and search. Visitors can view route details including distance, elevation, and a map preview.
+
+URL: `app.crab.ac/routes/your-space-slug`
+
 #### Public Calendar
 
 The community calendar can be exposed as a read-only public web page. Individual events are marked as public or private when created — public events appear on the web view, while private events stay visible only to space members. Logged-in space members who visit the public URL see all events.
@@ -87,13 +99,21 @@ URL: `app.crab.ac/calendar/your-space-slug`
 
 ![Screenshot: Public web calendar view](docs/screenshots/public-web-calendar.png)
 
+#### Public Blog
+
+The community blog can be exposed as a public web page. Blog posts are authored by members with the Manage Blog permission and can individually be marked as public. The public blog shows published posts in reverse chronological order with full Markdown rendering.
+
+URL: `app.crab.ac/blog/your-space-slug`
+
 #### How It Works
 
 Each public web component is controlled by its own toggle in admin settings:
 
 - **Enable Public Boards** — exposes forum channels marked as public
 - **Enable Public Galleries** — exposes media gallery channels marked as public
+- **Enable Public Routes** — exposes route library channels marked as public
 - **Enable Public Calendar** — exposes events marked as public
+- **Enable Public Blog** — exposes blog posts marked as public
 - **Allow Anonymous Browsing** — shared toggle that controls whether visitors need to log in to view any of the above
 
 All public web views share a consistent light-theme layout with the space name, a login link back to the full app, and a "Powered by crab.ac" footer.
@@ -106,6 +126,16 @@ This exists because the people who built this needed it. If your community invol
 
 ![Screenshot: GPX track card in chat](docs/screenshots/gpx-card-1.png)
 ![Screenshot: GPX expanded](docs/screenshots/gpx-card.png)
+
+### Route Library
+
+Route library channels take GPX handling further — they're dedicated spaces for organizing and curating routes. Upload GPX files (or add them directly from chat message attachments), categorize them, tag by activity type (ride/run/walk), and star your favorites. Routes are searchable and sortable by name, distance, elevation, or flatness, with both card and table views.
+
+Route libraries can be made public, creating an external-facing route catalog that anyone can browse. Routes can also be linked directly to calendar events — creating an event from a route pre-fills the location and activity type.
+
+### Community Blog
+
+Spaces can enable a community blog where members with the Manage Blog permission can author posts using a Markdown editor with inline image uploads and a live preview. Posts go through a draft/publish workflow and can individually be made public for the external blog web view.
 
 ### User Branding & Gradient Avatars
 
@@ -129,7 +159,7 @@ Every user gets a personal color palette (base + accent) that renders as a gradi
 
 ### Organization
 - **Spaces** with channels, categories, and drag-and-drop reordering
-- **Role-based access control** with granular bitfield permissions (20+ permission flags)
+- **Role-based access control** with granular bitfield permissions (22 permission flags)
 - **Channel categories** with collapsible groups
 - **Invite system** with configurable expiry and usage limits
 - **Space branding** — custom gradient colors and text color for space cards
@@ -142,9 +172,11 @@ Every user gets a personal color palette (base + accent) that renders as a gradi
 - **User branding colors** — personalized gradient avatars with SVG letter icons
 
 ### Community Tools
-- **Community calendar** with month grid, event categories (color-coded), rich embed cards in chat, and public web view
+- **Community calendar** with month grid, event categories (color-coded), recurring series (weekly/monthly), RSVP tracking, route linking, and public web view
+- **Route library channels** — GPX route management with categories, activity types, star/favorites, search/filter/sort, card and table views, and public route web views
+- **Community blog** with draft/publish workflow, Markdown editor with image uploads, and public blog web view
 - **Public space directory** with featured spaces, tags, and custom branding
-- **Public web components** — forums, media galleries, and calendars each get a dedicated public web view with optional anonymous browsing
+- **Public web components** — forums, media galleries, route libraries, calendars, and blogs each get a dedicated public web view with optional anonymous browsing
 - **Media gallery channels** with upload grid, detail overlay, and public gallery viewer
 - **Portals** for cross-space channel linking
 - **System announcements** with persistent dismissal tracking

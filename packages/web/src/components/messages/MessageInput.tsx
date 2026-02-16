@@ -578,7 +578,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'none',
     border: 'none',
     color: 'var(--text-primary)',
-    fontSize: '0.95rem',
+    fontSize: '1rem',
     resize: 'none',
     outline: 'none',
     lineHeight: 1.4,

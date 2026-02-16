@@ -46,7 +46,7 @@ export const joinSpaceSchema = z.object({
 export const createChannelSchema = z.object({
   name: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/, 'Channel name can only contain lowercase letters, numbers, and hyphens'),
   topic: z.string().max(1024).optional(),
-  type: z.enum(['text', 'announcement', 'read_only', 'forum', 'media_gallery']).optional(),
+  type: z.enum(['text', 'announcement', 'read_only', 'forum', 'media_gallery', 'route_library']).optional(),
   isPrivate: z.boolean().optional(),
   isPublic: z.boolean().optional(),
   categoryId: z.string().optional(),
@@ -55,7 +55,7 @@ export const createChannelSchema = z.object({
 export const updateChannelSchema = z.object({
   name: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).optional(),
   topic: z.string().max(1024).nullable().optional(),
-  type: z.enum(['text', 'announcement', 'read_only', 'forum', 'media_gallery']).optional(),
+  type: z.enum(['text', 'announcement', 'read_only', 'forum', 'media_gallery', 'route_library']).optional(),
   isPublic: z.boolean().optional(),
   position: z.number().int().min(0).optional(),
 });
@@ -234,8 +234,11 @@ export const updateSpaceAdminSettingsSchema = z.object({
   allowPublicBoards: z.boolean().optional(),
   allowPublicGalleries: z.boolean().optional(),
   allowPublicCalendar: z.boolean().optional(),
+  allowPublicRoutes: z.boolean().optional(),
   allowAnonymousBrowsing: z.boolean().optional(),
   calendarEnabled: z.boolean().optional(),
+  blogEnabled: z.boolean().optional(),
+  allowPublicBlog: z.boolean().optional(),
   isPublic: z.boolean().optional(),
   requireVerifiedEmail: z.boolean().optional(),
   baseColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
@@ -274,6 +277,9 @@ export const createCalendarEventSchema = z.object({
   eventTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
   categoryId: z.string().nullable().optional(),
   isPublic: z.boolean().optional(),
+  location: z.string().max(500).nullable().optional(),
+  activityType: z.enum(['ride', 'run', 'walk']).nullable().optional(),
+  routeId: z.string().nullable().optional(),
 });
 
 export const updateCalendarEventSchema = z.object({
@@ -283,11 +289,72 @@ export const updateCalendarEventSchema = z.object({
   eventTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
   categoryId: z.string().nullable().optional(),
   isPublic: z.boolean().optional(),
+  location: z.string().max(500).nullable().optional(),
+  activityType: z.enum(['ride', 'run', 'walk']).nullable().optional(),
+  routeId: z.string().nullable().optional(),
 });
 
 export const calendarEventsQuerySchema = z.object({
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+// Recurring Events
+export const recurrenceRuleSchema = z.object({
+  freq: z.enum(['weekly', 'monthly']),
+  interval: z.number().int().min(1).max(52),
+  byDay: z.array(z.enum(['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'])).min(1),
+  bySetPos: z.number().int().min(1).max(5).optional(),
+  dtstart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export const createEventSeriesSchema = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().max(4000).nullable().optional(),
+  eventTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+  categoryId: z.string().nullable().optional(),
+  isPublic: z.boolean().optional(),
+  location: z.string().max(500).nullable().optional(),
+  activityType: z.enum(['ride', 'run', 'walk']).nullable().optional(),
+  routeId: z.string().nullable().optional(),
+  recurrenceRule: recurrenceRuleSchema,
+});
+
+export const updateEventSeriesSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(4000).nullable().optional(),
+  eventTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+  categoryId: z.string().nullable().optional(),
+  isPublic: z.boolean().optional(),
+  location: z.string().max(500).nullable().optional(),
+  activityType: z.enum(['ride', 'run', 'walk']).nullable().optional(),
+  routeId: z.string().nullable().optional(),
+  recurrenceRule: recurrenceRuleSchema.optional(),
+  updateMode: z.enum(['all', 'future']).default('all'),
+});
+
+// Blog
+export const createBlogPostSchema = z.object({
+  title: z.string().min(1).max(500),
+  summary: z.string().max(140).nullable().optional(),
+  content: z.string().min(1).max(100000),
+  status: z.enum(['draft', 'published']).default('draft'),
+  isPublic: z.boolean().optional(),
+});
+
+export const updateBlogPostSchema = z.object({
+  title: z.string().min(1).max(500).optional(),
+  summary: z.string().max(140).nullable().optional(),
+  content: z.string().min(1).max(100000).optional(),
+  status: z.enum(['draft', 'published']).optional(),
+  isPublic: z.boolean().optional(),
+});
+
+export const blogPostsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  before: z.string().optional(),
+  status: z.enum(['draft', 'published']).optional(),
 });
 
 // Board Auth
@@ -302,4 +369,44 @@ export const boardRegisterSchema = z.object({
 export const boardLoginSchema = z.object({
   login: z.string().min(1),
   password: z.string().min(1),
+});
+
+// Route Library
+export const createRouteSchema = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().max(4000).optional(),
+  categoryId: z.string().optional(),
+  isPublic: z.boolean().optional(),
+  activityType: z.enum(['ride', 'run', 'walk']).nullable().optional(),
+});
+
+export const createRouteCategorySchema = z.object({
+  name: z.string().min(1).max(100),
+});
+
+export const routesQuerySchema = z.object({
+  before: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+  search: z.string().max(200).optional(),
+  category: z.string().optional(),
+  author: z.string().max(200).optional(),
+  type: z.enum(['ride', 'run', 'walk']).optional(),
+  sort: z.enum(['name', 'distance', 'elevation', 'flatness', 'newest']).default('newest'),
+  order: z.enum(['asc', 'desc']).default('desc'),
+  starred: z.coerce.boolean().optional(),
+});
+
+// RSVP
+export const rsvpSchema = z.object({
+  status: z.enum(['going', 'maybe', 'not_going']),
+});
+
+// Route from attachment
+export const createRouteFromAttachmentSchema = z.object({
+  attachmentUrl: z.string().min(1),
+  name: z.string().min(1).max(200),
+  description: z.string().max(4000).optional(),
+  categoryId: z.string().optional(),
+  activityType: z.enum(['ride', 'run', 'walk']).nullable().optional(),
+  isPublic: z.boolean().optional(),
 });

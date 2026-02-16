@@ -1,4 +1,4 @@
-export type NotificationType = 'mention' | 'reply' | 'portal_invite' | 'friend_request' | 'dm_request';
+export type NotificationType = 'mention' | 'reply' | 'portal_invite' | 'friend_request' | 'dm_request' | 'event_cancelled';
 
 export interface MentionNotificationData {
   messageId: string;
@@ -43,12 +43,22 @@ export interface DMRequestNotificationData {
   fromUserId: string;
 }
 
+export interface EventCancelledNotificationData {
+  eventId: string;
+  eventName: string;
+  eventDate: string;
+  eventTime: string | null;
+  spaceId: string;
+  spaceName: string;
+}
+
 export type NotificationData =
   | MentionNotificationData
   | ReplyNotificationData
   | PortalInviteNotificationData
   | FriendRequestNotificationData
-  | DMRequestNotificationData;
+  | DMRequestNotificationData
+  | EventCancelledNotificationData;
 
 export interface Notification {
   id: string;

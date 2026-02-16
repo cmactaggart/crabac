@@ -1,7 +1,9 @@
 import React, { useState, useMemo, Suspense } from 'react';
-import { MapPin, Mountain, Clock, Download } from 'lucide-react';
-import type { Attachment, GpxTrackMetadata, DistanceUnits } from '@crabac/shared';
+import { MapPin, MapPinned, Mountain, Clock, Download, X } from 'lucide-react';
+import type { Attachment, GpxTrackMetadata, DistanceUnits, RouteItem, Channel } from '@crabac/shared';
+import { api } from '../../lib/api.js';
 import { usePreferencesStore } from '../../stores/preferences.js';
+import { useChannelsStore } from '../../stores/channels.js';
 
 const LazyGpxMapModal = React.lazy(() => import('./GpxMapModal.js'));
 
@@ -91,8 +93,11 @@ function generateMiniMapPoints(gpx: GpxTrackMetadata, width: number, height: num
 
 export function GpxPreviewCard({ attachment, gpx }: Props) {
   const [showModal, setShowModal] = useState(false);
+  const [showAddToLibrary, setShowAddToLibrary] = useState(false);
   const polylinePoints = useMemo(() => generateMiniMapPoints(gpx, 160, 100), [gpx]);
   const units = usePreferencesStore((s) => s.preferences.distanceUnits);
+  const channels = useChannelsStore((s) => s.channels);
+  const routeLibraryChannels = channels.filter((c: Channel) => c.type === 'route_library');
 
   return (
     <>
@@ -140,6 +145,14 @@ export function GpxPreviewCard({ attachment, gpx }: Props) {
           >
             <Download size={13} /> Download GPX
           </a>
+          {routeLibraryChannels.length > 0 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowAddToLibrary(true); }}
+              style={{ ...styles.download, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              <MapPinned size={13} /> Add to Library
+            </button>
+          )}
         </div>
       </div>
 
@@ -153,7 +166,110 @@ export function GpxPreviewCard({ attachment, gpx }: Props) {
           />
         </Suspense>
       )}
+
+      {showAddToLibrary && (
+        <AddToLibraryModal
+          attachment={attachment}
+          gpx={gpx}
+          channels={routeLibraryChannels}
+          onClose={() => setShowAddToLibrary(false)}
+        />
+      )}
     </>
+  );
+}
+
+function AddToLibraryModal({ attachment, gpx, channels, onClose }: {
+  attachment: Attachment;
+  gpx: GpxTrackMetadata;
+  channels: Channel[];
+  onClose: () => void;
+}) {
+  const [channelId, setChannelId] = useState(channels.length === 1 ? channels[0].id : '');
+  const [name, setName] = useState(gpx.trackName || attachment.originalName.replace(/\.gpx$/i, ''));
+  const [description, setDescription] = useState('');
+  const [activityType, setActivityType] = useState('');
+  const [isPublic, setIsPublic] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!channelId || !name.trim()) return;
+    setSaving(true);
+    setError('');
+    try {
+      await api<RouteItem>(`/channels/${channelId}/routes/from-attachment`, {
+        method: 'POST',
+        body: JSON.stringify({
+          attachmentUrl: attachment.url,
+          name: name.trim(),
+          description: description.trim() || undefined,
+          activityType: activityType || undefined,
+          isPublic,
+        }),
+      });
+      setSuccess(true);
+      setTimeout(onClose, 1500);
+    } catch (err: any) {
+      setError(err.message || 'Failed to add route');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }} onClick={onClose}>
+      <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius)', width: 420, maxWidth: '90vw', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid var(--border)' }}>
+          <h3 style={{ margin: 0, fontSize: '1rem' }}>Add to Route Library</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}><X size={18} /></button>
+        </div>
+        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {error && <div style={{ background: 'rgba(237,66,69,0.15)', color: 'var(--danger)', padding: '8px 12px', borderRadius: 'var(--radius)', fontSize: '0.85rem' }}>{error}</div>}
+          {success && <div style={{ background: 'rgba(67,181,129,0.15)', color: '#43b581', padding: '8px 12px', borderRadius: 'var(--radius)', fontSize: '0.85rem' }}>Route added successfully!</div>}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>Route Library Channel</label>
+            <select value={channelId} onChange={(e) => setChannelId(e.target.value)} style={{ padding: '8px 12px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', color: 'var(--text-primary)', fontSize: '0.9rem', outline: 'none' }}>
+              {channels.length > 1 && <option value="">Select a channel...</option>}
+              {channels.map((c) => <option key={c.id} value={c.id}>#{c.name}</option>)}
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>Name</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} style={{ padding: '8px 12px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', color: 'var(--text-primary)', fontSize: '0.9rem', outline: 'none' }} maxLength={200} />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>Description (optional)</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} style={{ padding: '8px 12px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', color: 'var(--text-primary)', fontSize: '0.9rem', outline: 'none', minHeight: 60, resize: 'vertical', fontFamily: 'inherit' }} maxLength={4000} placeholder="Route description..." />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>Activity Type</label>
+            <select value={activityType} onChange={(e) => setActivityType(e.target.value)} style={{ padding: '8px 12px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', color: 'var(--text-primary)', fontSize: '0.9rem', outline: 'none' }}>
+              <option value="">None</option>
+              <option value="ride">Ride</option>
+              <option value="run">Run</option>
+              <option value="walk">Walk</option>
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input type="checkbox" id="atl-public" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
+            <label htmlFor="atl-public" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Make public</label>
+          </div>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
+          <button onClick={onClose} style={{ padding: '8px 16px', background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.85rem' }}>Cancel</button>
+          <button onClick={handleSubmit} disabled={saving || !channelId || !name.trim() || success} style={{ padding: '8px 16px', background: 'var(--accent)', border: 'none', borderRadius: 'var(--radius)', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, opacity: (saving || !channelId || !name.trim() || success) ? 0.5 : 1 }}>
+            {saving ? 'Adding...' : 'Add to Library'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -166,7 +282,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid var(--border)',
     borderRadius: 'var(--radius)',
     cursor: 'pointer',
-    maxWidth: 420,
+    maxWidth: 'min(420px, 100%)',
     transition: 'border-color 0.15s',
   },
   miniMap: {

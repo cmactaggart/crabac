@@ -10,5 +10,7 @@ export * from './types/portal.js';
 export * from './types/forum.js';
 export * from './types/gallery.js';
 export * from './types/calendar.js';
+export * from './types/route.js';
+export * from './types/blog.js';
 export * from './permissions.js';
 export * as validation from './validation/index.js';

@@ -249,7 +249,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '4px 8px',
   },
   img: {
-    maxWidth: 400,
+    maxWidth: '100%',
     maxHeight: 300,
     borderRadius: 'var(--radius)',
   },

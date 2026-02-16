@@ -20,7 +20,7 @@ export function BoardSettingsTab({ spaceId }: Props) {
       .catch((err) => { setError(err.message); setLoading(false); });
   }, [spaceId]);
 
-  const handleToggle = async (key: 'allowPublicBoards' | 'allowPublicGalleries' | 'allowPublicCalendar' | 'allowAnonymousBrowsing') => {
+  const handleToggle = async (key: 'allowPublicBoards' | 'allowPublicGalleries' | 'allowPublicCalendar' | 'allowPublicRoutes' | 'allowPublicBlog' | 'allowAnonymousBrowsing') => {
     if (!settings) return;
     setSaving(true);
     setError('');
@@ -43,7 +43,9 @@ export function BoardSettingsTab({ spaceId }: Props) {
 
   const boardUrl = `${window.location.origin}/boards/${space?.slug || spaceId}`;
   const galleryUrl = `${window.location.origin}/gallery/${space?.slug || spaceId}`;
+  const routesUrl = `${window.location.origin}/routes/${space?.slug || spaceId}`;
   const calendarUrl = `${window.location.origin}/calendar/${space?.slug || spaceId}`;
+  const blogUrl = `${window.location.origin}/blog/${space?.slug || spaceId}`;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -95,6 +97,28 @@ export function BoardSettingsTab({ spaceId }: Props) {
 
       <div style={styles.settingRow}>
         <div style={styles.settingInfo}>
+          <span style={styles.settingLabel}>Enable Public Routes</span>
+          <span style={styles.settingDesc}>
+            Allow route library channels to be marked as public and browsable without a space membership.
+          </span>
+        </div>
+        <button
+          onClick={() => handleToggle('allowPublicRoutes')}
+          disabled={saving}
+          style={{
+            ...styles.toggle,
+            background: settings?.allowPublicRoutes ? 'var(--accent)' : 'var(--bg-tertiary)',
+          }}
+        >
+          <div style={{
+            ...styles.toggleKnob,
+            transform: settings?.allowPublicRoutes ? 'translateX(18px)' : 'translateX(0)',
+          }} />
+        </button>
+      </div>
+
+      <div style={styles.settingRow}>
+        <div style={styles.settingInfo}>
           <span style={styles.settingLabel}>Enable Public Calendar</span>
           <span style={styles.settingDesc}>
             Allow the community calendar to be viewed publicly via a dedicated web page.
@@ -111,6 +135,28 @@ export function BoardSettingsTab({ spaceId }: Props) {
           <div style={{
             ...styles.toggleKnob,
             transform: settings?.allowPublicCalendar ? 'translateX(18px)' : 'translateX(0)',
+          }} />
+        </button>
+      </div>
+
+      <div style={styles.settingRow}>
+        <div style={styles.settingInfo}>
+          <span style={styles.settingLabel}>Enable Public Blog</span>
+          <span style={styles.settingDesc}>
+            Allow published blog posts marked as public to be viewable on a dedicated web page.
+          </span>
+        </div>
+        <button
+          onClick={() => handleToggle('allowPublicBlog')}
+          disabled={saving}
+          style={{
+            ...styles.toggle,
+            background: settings?.allowPublicBlog ? 'var(--accent)' : 'var(--bg-tertiary)',
+          }}
+        >
+          <div style={{
+            ...styles.toggleKnob,
+            transform: settings?.allowPublicBlog ? 'translateX(18px)' : 'translateX(0)',
           }} />
         </button>
       </div>
@@ -173,6 +219,24 @@ export function BoardSettingsTab({ spaceId }: Props) {
         </div>
       )}
 
+      {settings?.allowPublicRoutes && (
+        <div style={styles.urlBox}>
+          <span style={styles.settingLabel}>Public Routes URL</span>
+          <a
+            href={routesUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={styles.urlLink}
+          >
+            <code style={styles.urlCode}>{routesUrl}</code>
+            <ExternalLink size={14} style={{ flexShrink: 0 }} />
+          </a>
+          <span style={styles.settingDesc}>
+            Mark individual route library channels as public in the Channels tab.
+          </span>
+        </div>
+      )}
+
       {settings?.allowPublicCalendar && (
         <div style={styles.urlBox}>
           <span style={styles.settingLabel}>Public Calendar URL</span>
@@ -187,6 +251,24 @@ export function BoardSettingsTab({ spaceId }: Props) {
           </a>
           <span style={styles.settingDesc}>
             Mark individual events as public when creating or editing them.
+          </span>
+        </div>
+      )}
+
+      {settings?.allowPublicBlog && (
+        <div style={styles.urlBox}>
+          <span style={styles.settingLabel}>Public Blog URL</span>
+          <a
+            href={blogUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={styles.urlLink}
+          >
+            <code style={styles.urlCode}>{blogUrl}</code>
+            <ExternalLink size={14} style={{ flexShrink: 0 }} />
+          </a>
+          <span style={styles.settingDesc}>
+            Mark individual posts as public when creating or editing them.
           </span>
         </div>
       )}

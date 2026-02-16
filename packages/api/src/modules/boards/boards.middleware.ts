@@ -36,9 +36,10 @@ async function loadPublicBoard(req: Request) {
   const space = await db('spaces').where('slug', spaceSlug).first();
   if (!space) throw new NotFoundError('Space');
 
-  // Check space settings
+  // Check space settings — at least one public feature must be enabled
   const settings = await db('space_settings').where('space_id', space.id).first();
-  if (!settings?.allow_public_boards) throw new NotFoundError('Space');
+  const hasAnyPublic = settings?.allow_public_boards || settings?.allow_public_galleries || settings?.allow_public_routes || settings?.allow_public_blog;
+  if (!hasAnyPublic) throw new NotFoundError('Space');
 
   // Store space data on request for downstream use
   (req as any).boardSpace = space;
@@ -55,6 +56,8 @@ async function loadPublicBoard(req: Request) {
       // forum channels need allow_public_boards (already checked above)
     } else if (channel.type === 'media_gallery') {
       if (!settings?.allow_public_galleries) throw new NotFoundError('Channel');
+    } else if (channel.type === 'route_library') {
+      if (!settings?.allow_public_routes) throw new NotFoundError('Channel');
     } else {
       throw new NotFoundError('Channel');
     }

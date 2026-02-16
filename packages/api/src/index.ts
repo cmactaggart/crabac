@@ -33,6 +33,10 @@ import { calendarRoutes } from './modules/calendar/calendar.routes.js';
 import { registerForumGateway } from './modules/forums/forums.gateway.js';
 import { galleriesRoutes } from './modules/galleries/galleries.routes.js';
 import { registerGalleryGateway } from './modules/galleries/galleries.gateway.js';
+import { routeLibraryRoutes } from './modules/route-library/route-library.routes.js';
+import { routeCategoriesRoutes } from './modules/route-library/route-categories.routes.js';
+import { registerRouteLibraryGateway } from './modules/route-library/route-library.gateway.js';
+import { blogRoutes } from './modules/blog/blog.routes.js';
 import { boardsRoutes } from './modules/boards/boards.routes.js';
 import { boardAuthRoutes } from './modules/boards/board-auth.routes.js';
 import { publicSpacesRoutes } from './modules/spaces/public-spaces.routes.js';
@@ -90,6 +94,9 @@ app.use('/api/friends', friendsRoutes);
 app.use('/api/spaces', forumsRoutes);
 app.use('/api/spaces', calendarRoutes);
 app.use('/api/channels', galleriesRoutes);
+app.use('/api/channels', routeLibraryRoutes);
+app.use('/api/spaces', routeCategoriesRoutes);
+app.use('/api/spaces', blogRoutes);
 app.use('/api/boards', publicBoardLimiter, boardsRoutes);
 app.use('/api/boards/auth', boardAuthRoutes);
 
@@ -139,6 +146,7 @@ registerNotificationGateway();
 registerFriendsGateway();
 registerForumGateway();
 registerGalleryGateway();
+registerRouteLibraryGateway();
 
 // Load plugins, connect Redis, and start server
 async function start() {

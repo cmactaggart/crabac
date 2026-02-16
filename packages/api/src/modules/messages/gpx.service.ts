@@ -8,6 +8,8 @@ export interface GpxMetadata {
   elevationGainM: number | null;
   elevationLossM: number | null;
   durationSec: number;
+  startLat: number | null;
+  startLng: number | null;
   bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number } | null;
   geojson: any;
 }
@@ -52,6 +54,8 @@ export async function parseGpxFile(filePath: string): Promise<GpxMetadata | null
     let trackName: string | null = null;
     let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
     let hasPoints = false;
+    let startLat: number | null = null;
+    let startLng: number | null = null;
 
     for (const track of parsed.tracks) {
       if (!trackName && track.name) trackName = track.name;
@@ -67,6 +71,7 @@ export async function parseGpxFile(filePath: string): Promise<GpxMetadata | null
 
       for (const pt of track.points) {
         hasPoints = true;
+        if (startLat == null) { startLat = pt.latitude; startLng = pt.longitude; }
         if (pt.latitude < minLat) minLat = pt.latitude;
         if (pt.latitude > maxLat) maxLat = pt.latitude;
         if (pt.longitude < minLng) minLng = pt.longitude;
@@ -89,6 +94,7 @@ export async function parseGpxFile(filePath: string): Promise<GpxMetadata | null
 
       for (const pt of route.points) {
         hasPoints = true;
+        if (startLat == null) { startLat = pt.latitude; startLng = pt.longitude; }
         if (pt.latitude < minLat) minLat = pt.latitude;
         if (pt.latitude > maxLat) maxLat = pt.latitude;
         if (pt.longitude < minLng) minLng = pt.longitude;
@@ -122,6 +128,8 @@ export async function parseGpxFile(filePath: string): Promise<GpxMetadata | null
       elevationGainM: totalElevGain != null ? Math.round(totalElevGain) : null,
       elevationLossM: totalElevLoss != null ? Math.round(totalElevLoss) : null,
       durationSec: Math.round(totalDurationSec),
+      startLat,
+      startLng,
       bounds: hasPoints
         ? { minLat, maxLat, minLng, maxLng }
         : null,

@@ -28,6 +28,12 @@ html, body, #root {
   width: 100%;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
     Ubuntu, Cantarell, sans-serif;
@@ -35,6 +41,7 @@ body {
   color: var(--text-primary);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
 }
 
 a {
@@ -54,6 +61,11 @@ input, textarea {
   font-size: inherit;
 }
 
+img, video {
+  max-width: 100%;
+  height: auto;
+}
+
 /* Mobile touch scrolling */
 @media (max-width: 768px) {
   * {
@@ -64,6 +76,11 @@ input, textarea {
     position: fixed;
     width: 100%;
     height: 100%;
+    touch-action: manipulation;
+  }
+  /* Prevent iOS auto-zoom on input focus (requires >= 16px) */
+  input, select, textarea {
+    font-size: 16px !important;
   }
 }
 

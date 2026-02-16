@@ -95,7 +95,7 @@ export async function listUserSpaces(userId: string) {
     .join('space_members', 'spaces.id', 'space_members.space_id')
     .leftJoin('space_settings', 'spaces.id', 'space_settings.space_id')
     .where('space_members.user_id', userId)
-    .select('spaces.*', 'space_settings.calendar_enabled', 'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color');
+    .select('spaces.*', 'space_settings.calendar_enabled', 'space_settings.blog_enabled', 'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color');
 
   return spaces.map(formatSpace);
 }
@@ -104,7 +104,7 @@ export async function getSpace(spaceId: string) {
   const space = await db('spaces')
     .leftJoin('space_settings', 'spaces.id', 'space_settings.space_id')
     .where('spaces.id', spaceId)
-    .select('spaces.*', 'space_settings.calendar_enabled', 'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color')
+    .select('spaces.*', 'space_settings.calendar_enabled', 'space_settings.blog_enabled', 'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color')
     .first();
   if (!space) throw new NotFoundError('Space');
   return formatSpace(space);
@@ -114,7 +114,7 @@ export async function getSpaceBySlug(slug: string) {
   const space = await db('spaces')
     .leftJoin('space_settings', 'spaces.id', 'space_settings.space_id')
     .where('spaces.slug', slug)
-    .select('spaces.*', 'space_settings.calendar_enabled', 'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color')
+    .select('spaces.*', 'space_settings.calendar_enabled', 'space_settings.blog_enabled', 'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color')
     .first();
   if (!space) throw new NotFoundError('Space');
   return formatSpace(space);
@@ -263,11 +263,11 @@ export async function joinViaInvite(userId: string, code: string) {
     throw new BadRequestError('Invite has reached maximum uses');
   }
 
-  // Check if already a member
+  // If already a member, just return the space (idempotent)
   const existingMember = await db('space_members')
     .where({ space_id: invite.space_id, user_id: userId })
     .first();
-  if (existingMember) throw new ConflictError('Already a member of this space');
+  if (existingMember) return getSpace(invite.space_id);
 
   await db.transaction(async (trx) => {
     // Add member
@@ -462,6 +462,7 @@ function formatSpace(row: any) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     calendarEnabled: !!row.calendar_enabled,
+    blogEnabled: !!row.blog_enabled,
     isPublic: !!row.is_public,
     baseColor: row.base_color || null,
     accentColor: row.accent_color || null,

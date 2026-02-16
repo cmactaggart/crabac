@@ -17,15 +17,8 @@ const MIME = {
   '.ico': 'image/x-icon',
 };
 
-// Read and render README once at startup
-const readme = readFileSync(join(ROOT, 'README.md'), 'utf-8');
-
-// Rewrite image paths: docs/screenshots/foo.png → /images/foo.png
-const rewritten = readme.replace(/docs\/screenshots\//g, '/images/');
-
-const content = marked.parse(rewritten, { async: false });
-
-// API doc path — read fresh on each request
+// Markdown file paths — both re-read from disk on each request
+const README_PATH = join(ROOT, 'README.md');
 const API_DOC_PATH = join(ROOT, 'docs', 'api.md');
 
 function buildPage(body) {
@@ -55,6 +48,7 @@ function buildPage(body) {
     background: var(--bg);
     color: var(--text);
     line-height: 1.6;
+    overflow-x: hidden;
   }
 
   .layout {
@@ -220,13 +214,20 @@ function buildPage(body) {
     margin: 2rem 0;
   }
 
-  /* Hide the centered logo + links line from the raw README since we have the sidebar */
+  /* Hide the centered logo image (already in sidebar) */
   .main > p:first-child { display: none; }
-  .main > h1:first-of-type + p { display: none; }
+
+  /* Hide the GitHub|Bluesky|email links line (already in sidebar) */
+  .main > p > a[href*="github.com"]:first-child { }
+  .main > h1 ~ p:has(> a[href*="github.com"]:first-child) { display: none; }
 
   /* ─── Mobile ─── */
   @media (max-width: 768px) {
-    .layout { flex-direction: column; }
+    .layout {
+      flex-direction: column;
+      max-width: 100vw;
+      overflow-x: hidden;
+    }
 
     .sidebar {
       width: 100%;
@@ -258,6 +259,10 @@ function buildPage(body) {
 
     .main {
       padding: 1.5rem 1rem 3rem;
+      width: 100%;
+      overflow-x: hidden;
+      overflow-wrap: break-word;
+      word-break: break-word;
     }
   }
 </style>
@@ -303,8 +308,6 @@ function buildPage(body) {
 </html>`;
 }
 
-const html = buildPage(content);
-
 const server = createServer((req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const path = url.pathname;
@@ -332,14 +335,17 @@ const server = createServer((req, res) => {
     return;
   }
 
-  // Serve index
+  // Serve index (re-read from disk so edits go live immediately)
   if (path === '/' || path === '/index.html') {
+    const readme = readFileSync(README_PATH, 'utf-8');
+    const rewritten = readme.replace(/docs\/screenshots\//g, '/images/');
+    const html = buildPage(marked.parse(rewritten, { async: false }));
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(html);
     return;
   }
 
-  // Serve API docs (re-read from disk on each request so edits go live immediately)
+  // Serve API docs (re-read from disk so edits go live immediately)
   if (path === '/api-doc') {
     const apiDoc = readFileSync(API_DOC_PATH, 'utf-8');
     const apiHtml = buildPage(marked.parse(apiDoc, { async: false }));

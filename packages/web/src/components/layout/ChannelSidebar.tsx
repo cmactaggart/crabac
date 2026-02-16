@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, ChevronDown, Hash, LogOut, PanelLeftClose, Settings, Shield, Zap, CheckCheck, BellOff, Bell, Link, Copy, Plus, SlidersHorizontal, FolderPlus, GripVertical, ArrowRightLeft, MessageSquareDashed, Trash2, Pencil, Calendar, DoorOpen, Grid3x3 } from 'lucide-react';
+import { UserPlus, ChevronDown, Hash, LogOut, PanelLeftClose, Settings, Shield, Zap, CheckCheck, BellOff, Bell, Link, Copy, Plus, SlidersHorizontal, FolderPlus, GripVertical, ArrowRightLeft, MessageSquareDashed, Trash2, Pencil, Calendar, DoorOpen, Grid3x3, MapPinned, Globe, Lock, BookOpen } from 'lucide-react';
 import { Permissions } from '@crabac/shared';
+import type { SpaceAdminSettings } from '@crabac/shared';
+import { api } from '../../lib/api.js';
 import { useSpacesStore } from '../../stores/spaces.js';
 import { useLayoutStore } from '../../stores/layout.js';
 import { useAuthStore } from '../../stores/auth.js';
@@ -153,6 +155,8 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
   const toggleChannelSidebar = useLayoutStore((s) => s.toggleChannelSidebar);
   const calendarOpen = useLayoutStore((s) => s.calendarOpen);
   const setCalendarOpen = useLayoutStore((s) => s.setCalendarOpen);
+  const blogOpen = useLayoutStore((s) => s.blogOpen);
+  const setBlogOpen = useLayoutStore((s) => s.setBlogOpen);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const unreads = useChannelsStore((s) => s.unreads);
@@ -184,6 +188,13 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
   const joinPublicSpace = useSpacesStore((s) => s.joinPublicSpace);
   const fetchMembers = useSpacesStore((s) => s.fetchMembers);
   const [joining, setJoining] = useState(false);
+  const [adminSettings, setAdminSettings] = useState<SpaceAdminSettings | null>(null);
+  const updateChannel = useChannelsStore((s) => s.updateChannel);
+
+  useEffect(() => {
+    if (!space?.id || !canCreateChannels) return;
+    api<SpaceAdminSettings>(`/spaces/${space.id}/admin-settings`).then(setAdminSettings).catch(() => {});
+  }, [space?.id, canCreateChannels]);
 
   // Detect if user is a guest (viewing public space but not a member)
   const isMemberOfSpace = space ? spaces.some((s) => s.id === space.id) : false;
@@ -197,7 +208,7 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
   );
 
   if (!space) {
-    return <div style={{ ...sidebarStyles.sidebar, width: fullWidth ? '100%' : 240 }} />;
+    return <div style={{ ...sidebarStyles.sidebar, ...(fullWidth ? { width: undefined, flex: 1, flexShrink: 1, minWidth: 0 } : { width: 240 }) }} />;
   }
 
   const toggleCategory = (catId: string) => {
@@ -339,6 +350,21 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
         icon: <Zap size={16} />,
         onClick: () => setPortalChannelId(ch.id),
       });
+    }
+
+    // Make Public/Private toggle for route_library, media_gallery, forum channels
+    if (canCreateChannels && !ch.isAdmin && !ch.isPortal && adminSettings) {
+      const showToggle =
+        (ch.type === 'route_library' && adminSettings.allowPublicRoutes) ||
+        (ch.type === 'media_gallery' && adminSettings.allowPublicGalleries) ||
+        (ch.type === 'forum' && adminSettings.allowPublicBoards);
+      if (showToggle) {
+        items.push({
+          label: ch.isPublic ? 'Make Private' : 'Make Public',
+          icon: ch.isPublic ? <Lock size={16} /> : <Globe size={16} />,
+          onClick: () => updateChannel(space.id, ch.id, { isPublic: !ch.isPublic }),
+        });
+      }
     }
 
     // "Move to..." options (only for users with MANAGE_CHANNELS, and not for portals/admin)
@@ -491,7 +517,8 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
     const hasUnread = unread && unread.unreadCount > 0 && !isMuted;
     const isActive = ch.id === activeChannelId;
 
-    const ChannelIcon = ch.isAdmin ? Shield : ch.isPortal ? Zap : ch.type === 'forum' ? MessageSquareDashed : ch.type === 'media_gallery' ? Grid3x3 : Hash;
+    const TypeIcon = ch.type === 'forum' ? MessageSquareDashed : ch.type === 'media_gallery' ? Grid3x3 : ch.type === 'route_library' ? MapPinned : Hash;
+    const ChannelIcon = ch.isAdmin ? Shield : ch.isPortal ? Zap : TypeIcon;
     const iconColor = ch.isAdmin ? 'var(--warning, #f0b232)' : ch.isPortal ? 'var(--accent)' : 'var(--text-muted)';
 
     return (
@@ -517,7 +544,14 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
             <GripVertical size={14} />
           </span>
         )}
-        <ChannelIcon size={18} style={{ color: iconColor, flexShrink: 0 }} />
+        {ch.isPortal ? (
+          <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0, gap: 1 }}>
+            <Zap size={14} style={{ color: iconColor }} />
+            <TypeIcon size={14} style={{ color: iconColor }} />
+          </span>
+        ) : (
+          <ChannelIcon size={18} style={{ color: iconColor, flexShrink: 0 }} />
+        )}
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ch.name}</span>
         {hasUnread && (
           <span style={sidebarStyles.badge}>
@@ -588,6 +622,7 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
           <button
             onClick={() => {
               setCalendarOpen(true);
+              useLayoutStore.getState().setMobileView('chat');
               navigate(`/space/${space.id}`, { replace: true });
             }}
             onContextMenu={(e) => {
@@ -604,6 +639,24 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
           >
             <Calendar size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} />
             <span style={{ flex: 1 }}>Calendar</span>
+          </button>
+        )}
+        {space.blogEnabled && (
+          <button
+            onClick={() => {
+              setBlogOpen(true);
+              useLayoutStore.getState().setMobileView('chat');
+              navigate(`/space/${space.id}`, { replace: true });
+            }}
+            style={{
+              ...sidebarStyles.channelItem,
+              background: blogOpen ? 'var(--hover)' : 'transparent',
+              color: blogOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
+              marginBottom: 4,
+            }}
+          >
+            <BookOpen size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+            <span style={{ flex: 1 }}>Blog</span>
           </button>
         )}
         <DndContext

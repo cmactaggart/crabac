@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../lib/api.js';
-import type { CalendarCategory, CalendarEvent } from '@crabac/shared';
+import type { CalendarCategory, CalendarEvent, EventRsvp, EventSeries } from '@crabac/shared';
 
 interface CalendarState {
   categories: CalendarCategory[];
@@ -17,9 +17,27 @@ interface CalendarState {
   deleteCategory: (spaceId: string, id: string) => Promise<void>;
 
   fetchEvents: (spaceId: string) => Promise<void>;
-  createEvent: (spaceId: string, data: { name: string; description?: string | null; eventDate: string; eventTime?: string | null; categoryId?: string | null; isPublic?: boolean }) => Promise<CalendarEvent>;
-  updateEvent: (spaceId: string, id: string, data: { name?: string; description?: string | null; eventDate?: string; eventTime?: string | null; categoryId?: string | null; isPublic?: boolean }) => Promise<CalendarEvent>;
+  createEvent: (spaceId: string, data: {
+    name: string; description?: string | null; eventDate: string; eventTime?: string | null;
+    categoryId?: string | null; isPublic?: boolean;
+    location?: string | null; activityType?: string | null; routeId?: string | null;
+  }) => Promise<CalendarEvent>;
+  updateEvent: (spaceId: string, id: string, data: {
+    name?: string; description?: string | null; eventDate?: string; eventTime?: string | null;
+    categoryId?: string | null; isPublic?: boolean;
+    location?: string | null; activityType?: string | null; routeId?: string | null;
+  }) => Promise<CalendarEvent>;
   deleteEvent: (spaceId: string, id: string) => Promise<void>;
+
+  rsvp: (spaceId: string, eventId: string, status: 'going' | 'maybe' | 'not_going') => Promise<void>;
+  removeRsvp: (spaceId: string, eventId: string) => Promise<void>;
+  fetchRsvps: (spaceId: string, eventId: string) => Promise<EventRsvp[]>;
+
+  createSeries: (spaceId: string, data: any) => Promise<EventSeries>;
+  updateSeries: (spaceId: string, seriesId: string, data: any) => Promise<EventSeries>;
+  deleteSeries: (spaceId: string, seriesId: string) => Promise<void>;
+  overrideOccurrence: (spaceId: string, eventId: string, data: any) => Promise<CalendarEvent>;
+  cancelOccurrence: (spaceId: string, eventId: string) => Promise<CalendarEvent>;
 
   setSelectedDate: (date: string | null) => void;
   setSelectedEvent: (event: CalendarEvent | null) => void;
@@ -124,6 +142,78 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
       events: s.events.filter((e) => e.id !== id),
       selectedEvent: s.selectedEvent?.id === id ? null : s.selectedEvent,
     }));
+  },
+
+  rsvp: async (spaceId, eventId, status) => {
+    const event = await api<CalendarEvent>(`/spaces/${spaceId}/calendar/events/${eventId}/rsvp`, {
+      method: 'POST',
+      body: JSON.stringify({ status }),
+    });
+    set((s) => ({
+      events: s.events.map((e) => (e.id === eventId ? event : e)),
+      selectedEvent: s.selectedEvent?.id === eventId ? event : s.selectedEvent,
+    }));
+  },
+
+  removeRsvp: async (spaceId, eventId) => {
+    const event = await api<CalendarEvent>(`/spaces/${spaceId}/calendar/events/${eventId}/rsvp`, {
+      method: 'DELETE',
+    });
+    set((s) => ({
+      events: s.events.map((e) => (e.id === eventId ? event : e)),
+      selectedEvent: s.selectedEvent?.id === eventId ? event : s.selectedEvent,
+    }));
+  },
+
+  fetchRsvps: async (spaceId, eventId) => {
+    return api<EventRsvp[]>(`/spaces/${spaceId}/calendar/events/${eventId}/rsvps`);
+  },
+
+  createSeries: async (spaceId, data) => {
+    const series = await api<EventSeries>(`/spaces/${spaceId}/calendar/series`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    // Refetch events to pick up new occurrences
+    get().fetchEvents(spaceId);
+    return series;
+  },
+
+  updateSeries: async (spaceId, seriesId, data) => {
+    const series = await api<EventSeries>(`/spaces/${spaceId}/calendar/series/${seriesId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    get().fetchEvents(spaceId);
+    return series;
+  },
+
+  deleteSeries: async (spaceId, seriesId) => {
+    await api(`/spaces/${spaceId}/calendar/series/${seriesId}`, { method: 'DELETE' });
+    get().fetchEvents(spaceId);
+  },
+
+  overrideOccurrence: async (spaceId, eventId, data) => {
+    const event = await api<CalendarEvent>(`/spaces/${spaceId}/calendar/events/${eventId}/override`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    set((s) => ({
+      events: s.events.map((e) => (e.id === eventId ? event : e)),
+      selectedEvent: s.selectedEvent?.id === eventId ? event : s.selectedEvent,
+    }));
+    return event;
+  },
+
+  cancelOccurrence: async (spaceId, eventId) => {
+    const event = await api<CalendarEvent>(`/spaces/${spaceId}/calendar/events/${eventId}/cancel`, {
+      method: 'POST',
+    });
+    set((s) => ({
+      events: s.events.filter((e) => e.id !== eventId),
+      selectedEvent: s.selectedEvent?.id === eventId ? null : s.selectedEvent,
+    }));
+    return event;
   },
 
   setSelectedDate: (date) => set({ selectedDate: date }),

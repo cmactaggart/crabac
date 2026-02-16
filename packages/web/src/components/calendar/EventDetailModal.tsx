@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { X, Pencil, Trash2, Send } from 'lucide-react';
-import type { CalendarEvent } from '@crabac/shared';
+import { useState, useEffect, useMemo } from 'react';
+import { X, Pencil, Trash2, Send, MapPin, Check, HelpCircle, XCircle, Repeat } from 'lucide-react';
+import type { CalendarEvent, EventRsvp } from '@crabac/shared';
 import { useCalendarStore } from '../../stores/calendar.js';
 import { useChannelsStore } from '../../stores/channels.js';
 import { useMessagesStore } from '../../stores/messages.js';
+import { useAuthStore } from '../../stores/auth.js';
 
 interface Props {
   event: CalendarEvent;
@@ -13,20 +14,82 @@ interface Props {
   onEdit: () => void;
 }
 
+function generateMiniMapPoints(geojson: any, width: number, height: number): string {
+  const coords: [number, number][] = [];
+  if (!geojson?.features) return '';
+  for (const feature of geojson.features) {
+    const geom = feature.geometry;
+    if (geom.type === 'LineString') {
+      for (const c of geom.coordinates) coords.push([c[0], c[1]]);
+    } else if (geom.type === 'MultiLineString') {
+      for (const line of geom.coordinates) {
+        for (const c of line) coords.push([c[0], c[1]]);
+      }
+    }
+  }
+  if (coords.length < 2) return '';
+  const maxPts = 80;
+  let sampled = coords;
+  if (coords.length > maxPts) {
+    const step = (coords.length - 1) / (maxPts - 1);
+    sampled = [];
+    for (let i = 0; i < maxPts - 1; i++) sampled.push(coords[Math.round(i * step)]);
+    sampled.push(coords[coords.length - 1]);
+  }
+  let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
+  for (const [lng, lat] of sampled) {
+    if (lng < minLng) minLng = lng;
+    if (lng > maxLng) maxLng = lng;
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+  }
+  const pad = 0.08, lngRange = (maxLng - minLng) || 0.001, latRange = (maxLat - minLat) || 0.001;
+  return sampled
+    .map(([lng, lat]) => {
+      const x = ((lng - minLng) / lngRange) * (1 - 2 * pad) + pad;
+      const y = (1 - (lat - minLat) / latRange) * (1 - 2 * pad) + pad;
+      return `${(x * width).toFixed(1)},${(y * height).toFixed(1)}`;
+    })
+    .join(' ');
+}
+
+function activityLabel(type: string | null): string {
+  if (type === 'ride') return 'Ride';
+  if (type === 'run') return 'Run';
+  if (type === 'walk') return 'Walk';
+  return '';
+}
+
 export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }: Props) {
   const deleteEvent = useCalendarStore((s) => s.deleteEvent);
+  const rsvp = useCalendarStore((s) => s.rsvp);
+  const removeRsvp = useCalendarStore((s) => s.removeRsvp);
+  const fetchRsvps = useCalendarStore((s) => s.fetchRsvps);
   const channels = useChannelsStore((s) => s.channels);
   const sendMessage = useMessagesStore((s) => s.sendMessage);
+  const user = useAuthStore((s) => s.user);
+
+  const cancelOccurrence = useCalendarStore((s) => s.cancelOccurrence);
+  const deleteSeries = useCalendarStore((s) => s.deleteSeries);
 
   const [showPost, setShowPost] = useState(false);
   const [postChannelId, setPostChannelId] = useState('');
   const [posting, setPosting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteMode, setDeleteMode] = useState<'single' | 'series' | null>(null);
+  const [rsvps, setRsvps] = useState<EventRsvp[]>([]);
+  const [showRsvpList, setShowRsvpList] = useState(false);
+  const [rsvpLoading, setRsvpLoading] = useState(false);
 
   const textChannels = channels.filter((c) => c.type === 'text' && !c.isAdmin && !c.isPortal);
 
   const d = new Date(event.eventDate + 'T00:00:00');
   const dateLabel = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+  const routePolyline = useMemo(() => {
+    if (!event.route?.geojson) return '';
+    return generateMiniMapPoints(event.route.geojson, 400, 120);
+  }, [event.route?.geojson]);
 
   const handleDelete = async () => {
     try {
@@ -35,11 +98,26 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
     } catch { /* ignore */ }
   };
 
+  const handleCancelOccurrence = async () => {
+    try {
+      await cancelOccurrence(spaceId, event.id);
+      onClose();
+    } catch { /* ignore */ }
+  };
+
+  const handleDeleteSeries = async () => {
+    if (!event.seriesId) return;
+    try {
+      await deleteSeries(spaceId, event.seriesId);
+      onClose();
+    } catch { /* ignore */ }
+  };
+
   const handlePost = async () => {
     if (!postChannelId) return;
     setPosting(true);
     try {
-      const embed = JSON.stringify({
+      const embedData: any = {
         id: event.id,
         spaceId,
         name: event.name,
@@ -48,11 +126,41 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
         description: event.description,
         categoryName: event.category?.name || null,
         categoryColor: event.category?.color || null,
-      });
-      await sendMessage(postChannelId, `[calendar-event:${embed}]`);
+        location: event.location || null,
+        activityType: event.activityType || null,
+      };
+      // Include route data in the embed
+      if (event.route) {
+        embedData.routeName = event.route.name;
+        embedData.routeDistanceKm = event.route.distanceKm;
+        embedData.routeElevationGainM = event.route.elevationGainM;
+        embedData.routeGeojson = event.route.geojson;
+      }
+      await sendMessage(postChannelId, `[calendar-event:${JSON.stringify(embedData)}]`);
       setShowPost(false);
     } catch { /* ignore */ }
     setPosting(false);
+  };
+
+  const handleRsvp = async (status: 'going' | 'maybe' | 'not_going') => {
+    try {
+      if (event.myRsvp === status) {
+        await removeRsvp(spaceId, event.id);
+      } else {
+        await rsvp(spaceId, event.id, status);
+      }
+    } catch { /* ignore */ }
+  };
+
+  const handleShowRsvps = async () => {
+    if (showRsvpList) { setShowRsvpList(false); return; }
+    setRsvpLoading(true);
+    try {
+      const data = await fetchRsvps(spaceId, event.id);
+      setRsvps(data);
+      setShowRsvpList(true);
+    } catch { /* ignore */ }
+    setRsvpLoading(false);
   };
 
   return (
@@ -61,11 +169,23 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
         <div style={styles.header}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{event.name}</h3>
-            {event.category && (
-              <span style={{ ...styles.categoryBadge, background: event.category.color }}>
-                {event.category.name}
-              </span>
-            )}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+              {event.category && (
+                <span style={{ ...styles.categoryBadge, background: event.category.color }}>
+                  {event.category.name}
+                </span>
+              )}
+              {event.seriesId && (
+                <span style={{ ...styles.categoryBadge, background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+                  <Repeat size={10} style={{ marginRight: 3 }} /> Series
+                </span>
+              )}
+              {event.activityType && (
+                <span style={{ ...styles.categoryBadge, background: 'var(--accent)' }}>
+                  {activityLabel(event.activityType)}
+                </span>
+              )}
+            </div>
           </div>
           <button onClick={onClose} style={styles.closeBtn}><X size={18} /></button>
         </div>
@@ -79,6 +199,14 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
             <div style={styles.detailRow}>
               <span style={styles.detailLabel}>Time</span>
               <span>{event.eventTime}</span>
+            </div>
+          )}
+          {event.location && (
+            <div style={styles.detailRow}>
+              <span style={styles.detailLabel}>Location</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <MapPin size={13} /> {event.location}
+              </span>
             </div>
           )}
           {event.creator && (
@@ -95,6 +223,81 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
               </p>
             </div>
           )}
+
+          {/* Route preview */}
+          {event.route && (
+            <div style={{ marginTop: 8, padding: 12, background: 'var(--bg-secondary)', borderRadius: 'var(--radius)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <MapPin size={14} style={{ color: 'var(--accent)' }} />
+                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{event.route.name}</span>
+              </div>
+              {routePolyline && (
+                <div style={{ height: 120, background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', overflow: 'hidden', marginBottom: 6 }}>
+                  <svg viewBox="0 0 400 120" style={{ width: '100%', height: '100%' }}>
+                    <polyline
+                      points={routePolyline}
+                      fill="none"
+                      stroke="var(--accent)"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 12, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                <span>{event.route.distanceKm.toFixed(1)} km</span>
+                {event.route.elevationGainM != null && <span>+{event.route.elevationGainM} m</span>}
+              </div>
+              {event.route.url && (
+                <a href={event.route.url} download style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: '0.78rem', color: 'var(--accent)', textDecoration: 'none' }}>
+                  Download GPX
+                </a>
+              )}
+            </div>
+          )}
+
+          {/* RSVP */}
+          <div style={{ marginTop: 12 }}>
+            <span style={styles.detailLabel}>RSVP</span>
+            <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+              <button
+                onClick={() => handleRsvp('going')}
+                style={{ ...styles.rsvpBtn, background: event.myRsvp === 'going' ? 'rgba(67,181,129,0.2)' : 'var(--bg-tertiary)', borderColor: event.myRsvp === 'going' ? '#43b581' : 'var(--border)', color: event.myRsvp === 'going' ? '#43b581' : 'var(--text-secondary)' }}
+              >
+                <Check size={14} /> Going{event.rsvpCounts?.going ? ` (${event.rsvpCounts.going})` : ''}
+              </button>
+              <button
+                onClick={() => handleRsvp('maybe')}
+                style={{ ...styles.rsvpBtn, background: event.myRsvp === 'maybe' ? 'rgba(250,176,5,0.2)' : 'var(--bg-tertiary)', borderColor: event.myRsvp === 'maybe' ? '#fab005' : 'var(--border)', color: event.myRsvp === 'maybe' ? '#fab005' : 'var(--text-secondary)' }}
+              >
+                <HelpCircle size={14} /> Maybe{event.rsvpCounts?.maybe ? ` (${event.rsvpCounts.maybe})` : ''}
+              </button>
+              <button
+                onClick={() => handleRsvp('not_going')}
+                style={{ ...styles.rsvpBtn, background: event.myRsvp === 'not_going' ? 'rgba(237,66,69,0.2)' : 'var(--bg-tertiary)', borderColor: event.myRsvp === 'not_going' ? 'var(--danger)' : 'var(--border)', color: event.myRsvp === 'not_going' ? 'var(--danger)' : 'var(--text-secondary)' }}
+              >
+                <XCircle size={14} /> No{event.rsvpCounts?.notGoing ? ` (${event.rsvpCounts.notGoing})` : ''}
+              </button>
+            </div>
+            {(event.rsvpCounts && (event.rsvpCounts.going + event.rsvpCounts.maybe + event.rsvpCounts.notGoing > 0)) && (
+              <button onClick={handleShowRsvps} style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '0.78rem', marginTop: 4, padding: 0 }}>
+                {rsvpLoading ? 'Loading...' : showRsvpList ? 'Hide responses' : 'Show responses'}
+              </button>
+            )}
+            {showRsvpList && rsvps.length > 0 && (
+              <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {rsvps.map((r) => (
+                  <div key={r.userId} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem' }}>
+                    <span style={{ color: r.status === 'going' ? '#43b581' : r.status === 'maybe' ? '#fab005' : 'var(--danger)', fontWeight: 600, minWidth: 60 }}>
+                      {r.status === 'going' ? 'Going' : r.status === 'maybe' ? 'Maybe' : 'No'}
+                    </span>
+                    <span style={{ color: 'var(--text-primary)' }}>{r.user?.displayName}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Post to Channel */}
           {!showPost ? (
@@ -136,7 +339,28 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
 
         {canManage && (
           <div style={styles.footer}>
-            {confirmDelete ? (
+            {deleteMode === 'single' ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={event.seriesId ? handleCancelOccurrence : handleDelete} style={styles.dangerBtn}>
+                  {event.seriesId ? 'Cancel This Event' : 'Confirm Delete'}
+                </button>
+                <button onClick={() => setDeleteMode(null)} style={styles.cancelBtn}>Back</button>
+              </div>
+            ) : deleteMode === 'series' ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={handleDeleteSeries} style={styles.dangerBtn}>Delete Entire Series</button>
+                <button onClick={() => setDeleteMode(null)} style={styles.cancelBtn}>Back</button>
+              </div>
+            ) : event.seriesId ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setDeleteMode('single')} style={styles.trashBtn}>
+                  <Trash2 size={14} /> Cancel This
+                </button>
+                <button onClick={() => setDeleteMode('series')} style={styles.trashBtn}>
+                  <Trash2 size={14} /> Delete Series
+                </button>
+              </div>
+            ) : confirmDelete ? (
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={handleDelete} style={styles.dangerBtn}>Confirm Delete</button>
                 <button onClick={() => setConfirmDelete(false)} style={styles.cancelBtn}>Cancel</button>
@@ -169,9 +393,9 @@ const styles: Record<string, React.CSSProperties> = {
   modal: {
     background: 'var(--bg-primary)',
     borderRadius: 'var(--radius)',
-    width: 480,
+    width: 520,
     maxWidth: '90vw',
-    maxHeight: '80vh',
+    maxHeight: '85vh',
     display: 'flex',
     flexDirection: 'column',
     boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
@@ -195,7 +419,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
   categoryBadge: {
     display: 'inline-block',
-    marginTop: 4,
     padding: '2px 8px',
     borderRadius: 10,
     fontSize: '0.7rem',
@@ -222,6 +445,18 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--text-muted)',
     letterSpacing: '0.05em',
     minWidth: 80,
+  },
+  rsvpBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    padding: '6px 12px',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius)',
+    cursor: 'pointer',
+    fontSize: '0.8rem',
+    fontWeight: 600,
+    transition: 'all 0.15s',
   },
   postBtn: {
     display: 'flex',

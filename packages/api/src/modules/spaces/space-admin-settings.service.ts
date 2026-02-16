@@ -14,8 +14,11 @@ export async function getSpaceAdminSettings(spaceId: string) {
       allowPublicBoards: false,
       allowPublicGalleries: false,
       allowPublicCalendar: false,
+      allowPublicRoutes: false,
       allowAnonymousBrowsing: false,
       calendarEnabled: false,
+      blogEnabled: false,
+      allowPublicBlog: false,
       isPublic: false,
       requireVerifiedEmail: false,
       isFeatured: false,
@@ -34,8 +37,11 @@ export async function updateSpaceAdminSettings(
     allowPublicBoards?: boolean;
     allowPublicGalleries?: boolean;
     allowPublicCalendar?: boolean;
+    allowPublicRoutes?: boolean;
+    allowPublicBlog?: boolean;
     allowAnonymousBrowsing?: boolean;
     calendarEnabled?: boolean;
+    blogEnabled?: boolean;
     isPublic?: boolean;
     requireVerifiedEmail?: boolean;
     baseColor?: string | null;
@@ -50,8 +56,11 @@ export async function updateSpaceAdminSettings(
     if (data.allowPublicBoards !== undefined) updates.allow_public_boards = data.allowPublicBoards;
     if (data.allowPublicGalleries !== undefined) updates.allow_public_galleries = data.allowPublicGalleries;
     if (data.allowPublicCalendar !== undefined) updates.allow_public_calendar = data.allowPublicCalendar;
+    if (data.allowPublicRoutes !== undefined) updates.allow_public_routes = data.allowPublicRoutes;
     if (data.allowAnonymousBrowsing !== undefined) updates.allow_anonymous_browsing = data.allowAnonymousBrowsing;
     if (data.calendarEnabled !== undefined) updates.calendar_enabled = data.calendarEnabled;
+    if (data.blogEnabled !== undefined) updates.blog_enabled = data.blogEnabled;
+    if (data.allowPublicBlog !== undefined) updates.allow_public_blog = data.allowPublicBlog;
     if (data.isPublic !== undefined) updates.is_public = data.isPublic;
     if (data.requireVerifiedEmail !== undefined) updates.require_verified_email = data.requireVerifiedEmail;
     if (data.baseColor !== undefined) updates.base_color = data.baseColor;
@@ -67,8 +76,11 @@ export async function updateSpaceAdminSettings(
       allow_public_boards: data.allowPublicBoards ?? false,
       allow_public_galleries: data.allowPublicGalleries ?? false,
       allow_public_calendar: data.allowPublicCalendar ?? false,
+      allow_public_routes: data.allowPublicRoutes ?? false,
       allow_anonymous_browsing: data.allowAnonymousBrowsing ?? false,
       calendar_enabled: data.calendarEnabled ?? false,
+      blog_enabled: data.blogEnabled ?? false,
+      allow_public_blog: data.allowPublicBlog ?? false,
       is_public: data.isPublic ?? false,
       require_verified_email: data.requireVerifiedEmail ?? false,
       base_color: data.baseColor ?? null,
@@ -130,8 +142,11 @@ function formatSettings(row: any) {
     allowPublicBoards: row.allow_public_boards,
     allowPublicGalleries: !!row.allow_public_galleries,
     allowPublicCalendar: !!row.allow_public_calendar,
+    allowPublicRoutes: !!row.allow_public_routes,
     allowAnonymousBrowsing: row.allow_anonymous_browsing,
     calendarEnabled: !!row.calendar_enabled,
+    blogEnabled: !!row.blog_enabled,
+    allowPublicBlog: !!row.allow_public_blog,
     isPublic: !!row.is_public,
     requireVerifiedEmail: !!row.require_verified_email,
     isFeatured: !!row.is_featured,

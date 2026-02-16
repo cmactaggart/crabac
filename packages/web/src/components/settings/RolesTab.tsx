@@ -29,6 +29,8 @@ const PERMISSION_LABELS: Record<PermissionKey, string> = {
   MANAGE_THREADS: 'Manage Threads',
   CREATE_THREADS: 'Create Threads',
   MANAGE_CALENDAR: 'Manage Calendar',
+  MANAGE_ROUTE_CATEGORIES: 'Manage Route Categories',
+  MANAGE_BLOG: 'Manage Blog',
 };
 
 export function RolesTab({ spaceId }: Props) {

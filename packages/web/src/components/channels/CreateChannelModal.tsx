@@ -88,6 +88,7 @@ export function CreateChannelModal({ spaceId, categories, onClose }: Props) {
               <option value="read_only">Read Only</option>
               <option value="forum">Forum</option>
               <option value="media_gallery">Media Gallery</option>
+              <option value="route_library">Route Library</option>
             </select>
           </div>
 

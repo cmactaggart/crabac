@@ -96,7 +96,7 @@ export function MediaGrid({ mediaAttachments, onMediaClick }: Props) {
 
 const gridStyles: Record<string, React.CSSProperties> = {
   container: {
-    maxWidth: 400,
+    maxWidth: 'min(400px, 100%)',
   },
   singleItem: {
     borderRadius: 'var(--radius)',
@@ -104,7 +104,7 @@ const gridStyles: Record<string, React.CSSProperties> = {
     position: 'relative',
   },
   singleMedia: {
-    maxWidth: 400,
+    maxWidth: '100%',
     maxHeight: 300,
     borderRadius: 'var(--radius)',
     display: 'block',

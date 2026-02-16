@@ -3,6 +3,8 @@ import { optionalAuthenticate, requirePublicBoard, requireBoardAuth, requireRead
 import * as boardsService from './boards.service.js';
 import * as forumsService from '../forums/forums.service.js';
 import * as calendarService from '../calendar/calendar.service.js';
+import * as routeLibraryService from '../route-library/route-library.service.js';
+import * as blogService from '../blog/blog.service.js';
 import { validate } from '../../middleware/validate.js';
 import { validation } from '@crabac/shared';
 
@@ -53,10 +55,56 @@ boardsRoutes.get(
       }
 
       const events = isMember
-        ? await calendarService.listEvents(String(data.space.id), from, to)
+        ? await calendarService.listEvents(String(data.space.id), from, to, req.user?.userId)
         : await calendarService.listPublicEvents(String(data.space.id), from, to);
 
       res.json(events);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ─── Public Blog ───
+
+boardsRoutes.get(
+  '/blog/:spaceSlug',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const space = await boardsService.getPublicSpace(req.params.spaceSlug);
+      const settings = await (await import('../../database/connection.js')).db('space_settings').where('space_id', space.id).first();
+      if (!settings?.allow_public_blog) {
+        return res.status(404).json({ error: { message: 'Blog not available' } });
+      }
+      if (!req.user && (!settings || !settings.allow_anonymous_browsing)) {
+        return res.status(401).json({ error: { message: 'Authentication required' } });
+      }
+      const { before, limit } = req.query as any;
+      const posts = await blogService.listPublicPosts(String(space.id), {
+        before,
+        limit: Math.min(parseInt(limit) || 20, 50),
+      });
+      res.json({ space, posts });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+boardsRoutes.get(
+  '/blog/:spaceSlug/:postId',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const space = await boardsService.getPublicSpace(req.params.spaceSlug);
+      const settings = await (await import('../../database/connection.js')).db('space_settings').where('space_id', space.id).first();
+      if (!settings?.allow_public_blog) {
+        return res.status(404).json({ error: { message: 'Blog not available' } });
+      }
+      if (!req.user && (!settings || !settings.allow_anonymous_browsing)) {
+        return res.status(401).json({ error: { message: 'Authentication required' } });
+      }
+      const post = await blogService.getPublicPost(req.params.postId);
+      res.json({ space, post });
     } catch (err) {
       next(err);
     }
@@ -105,6 +153,106 @@ boardsRoutes.get(
         limit: Math.min(parseInt(limit) || 30, 100),
       });
       res.json(items);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ─── Public Route Library ───
+
+// List ALL public routes across all route_library channels in a space
+boardsRoutes.get(
+  '/:spaceSlug/all-routes',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const space = await boardsService.getPublicSpace(req.params.spaceSlug);
+      // Check read access
+      const settings = await (await import('../../database/connection.js')).db('space_settings').where('space_id', space.id).first();
+      if (!req.user && (!settings || !settings.allow_anonymous_browsing)) {
+        return res.status(401).json({ error: { message: 'Authentication required' } });
+      }
+      const parsed = validation.routesQuerySchema.parse(req.query);
+      const channelId = req.query.channelId as string | undefined;
+      const data = await boardsService.listAllPublicRouteItems(String(space.id), {
+        ...parsed,
+        channelId,
+        userId: req.user?.userId,
+      });
+      res.json(data);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// List public route items
+boardsRoutes.get(
+  '/:spaceSlug/:channelName/routes',
+  requirePublicBoard,
+  requireReadAccess,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const channel = (req as any).boardChannel;
+      if (channel.type !== 'route_library') {
+        return res.status(404).json({ error: { message: 'Not a route library channel' } });
+      }
+      const parsed = validation.routesQuerySchema.parse(req.query);
+      const items = await boardsService.listPublicRouteItems(String(channel.id), {
+        ...parsed,
+        userId: req.user?.userId,
+      });
+      res.json(items);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Get public route categories for a space
+boardsRoutes.get(
+  '/:spaceSlug/:channelName/route-categories',
+  requirePublicBoard,
+  requireReadAccess,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const space = (req as any).boardSpace;
+      const categories = await boardsService.listPublicRouteCategories(String(space.id));
+      res.json(categories);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Star a public route (requires auth)
+boardsRoutes.post(
+  '/:spaceSlug/:channelName/routes/:routeId/star',
+  requirePublicBoard,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: { message: 'Authentication required to star routes' } });
+      }
+      await routeLibraryService.starRoute(req.user.userId, req.params.routeId);
+      res.json({ success: true });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Unstar a public route (requires auth)
+boardsRoutes.delete(
+  '/:spaceSlug/:channelName/routes/:routeId/star',
+  requirePublicBoard,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: { message: 'Authentication required' } });
+      }
+      await routeLibraryService.unstarRoute(req.user.userId, req.params.routeId);
+      res.json({ success: true });
     } catch (err) {
       next(err);
     }

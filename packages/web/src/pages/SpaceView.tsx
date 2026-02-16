@@ -13,13 +13,15 @@ import { MembersPanel } from '../components/layout/MembersPanel.js';
 import { MessageArea } from '../components/messages/MessageArea.js';
 import { ForumChannelView } from '../components/forums/ForumChannelView.js';
 import { GalleryChannelView } from '../components/galleries/GalleryChannelView.js';
+import { RoutesChannelView } from '../components/routes/RoutesChannelView.js';
 import { CalendarView } from '../components/calendar/CalendarView.js';
+import { BlogView } from '../components/blog/BlogView.js';
 
 export function SpaceView() {
   const { spaceId, channelId } = useParams();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { spaceSidebarOpen, channelSidebarOpen, membersSidebarOpen, calendarOpen, mobileView, setMobileView, setCalendarOpen, toggleSpaceSidebar, toggleChannelSidebar } = useLayoutStore();
+  const { spaceSidebarOpen, channelSidebarOpen, membersSidebarOpen, calendarOpen, blogOpen, mobileView, setMobileView, setCalendarOpen, setBlogOpen, toggleSpaceSidebar, toggleChannelSidebar } = useLayoutStore();
   const { spaces, fetchSpaces, setActiveSpace, members, fetchMembers, updateMemberStatus } = useSpacesStore();
   const { channels, categories, fetchChannels, fetchCategories, fetchUnreads, fetchMuted, setActiveChannel } = useChannelsStore();
 
@@ -43,8 +45,9 @@ export function SpaceView() {
     if (channelId) {
       setActiveChannel(channelId);
       setCalendarOpen(false);
+      setBlogOpen(false);
       if (isMobile) setMobileView('chat');
-    } else if (!isMobile && !useLayoutStore.getState().calendarOpen && channels.length > 0 && spaceId && channels[0].spaceId === spaceId) {
+    } else if (!isMobile && !useLayoutStore.getState().calendarOpen && !useLayoutStore.getState().blogOpen && channels.length > 0 && spaceId && channels[0].spaceId === spaceId) {
       const firstRegular = channels.find((c) => !c.isAdmin) || channels[0];
       navigate(`/space/${spaceId}/channel/${firstRegular.id}`, { replace: true });
     }
@@ -183,6 +186,14 @@ export function SpaceView() {
       );
     }
 
+    if (blogOpen && mobileView === 'chat' && spaceId) {
+      return (
+        <div style={mobileLayout}>
+          <BlogView spaceId={spaceId} />
+        </div>
+      );
+    }
+
     if (showChat && spaceId) {
       return (
         <div style={mobileLayout}>
@@ -199,6 +210,17 @@ export function SpaceView() {
             />
           ) : activeChannel?.type === 'media_gallery' ? (
             <GalleryChannelView
+              channelId={channelId}
+              channel={activeChannel}
+              spaceId={spaceId}
+              showBackButton
+              onBack={() => {
+                setMobileView('sidebar');
+                navigate(`/space/${spaceId}`, { replace: true });
+              }}
+            />
+          ) : activeChannel?.type === 'route_library' ? (
+            <RoutesChannelView
               channelId={channelId}
               channel={activeChannel}
               spaceId={spaceId}
@@ -274,6 +296,8 @@ export function SpaceView() {
         )}
         {calendarOpen && spaceId ? (
           <CalendarView spaceId={spaceId} />
+        ) : blogOpen && spaceId ? (
+          <BlogView spaceId={spaceId} />
         ) : channelId && spaceId ? (
           channels.find((c) => c.id === channelId)?.type === 'forum' ? (
             <ForumChannelView
@@ -283,6 +307,12 @@ export function SpaceView() {
             />
           ) : channels.find((c) => c.id === channelId)?.type === 'media_gallery' ? (
             <GalleryChannelView
+              channelId={channelId}
+              channel={channels.find((c) => c.id === channelId) || null}
+              spaceId={spaceId}
+            />
+          ) : channels.find((c) => c.id === channelId)?.type === 'route_library' ? (
+            <RoutesChannelView
               channelId={channelId}
               channel={channels.find((c) => c.id === channelId) || null}
               spaceId={spaceId}

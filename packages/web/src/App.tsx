@@ -31,6 +31,12 @@ import { PublicGalleryHome } from './pages/galleries/PublicGalleryHome.js';
 import { PublicGalleryView } from './pages/galleries/PublicGalleryView.js';
 import { CalendarLayout } from './pages/calendar/CalendarLayout.js';
 import { PublicCalendarView } from './pages/calendar/PublicCalendarView.js';
+import { RoutesLayout } from './pages/routes/RoutesLayout.js';
+import { PublicRoutesHome } from './pages/routes/PublicRoutesHome.js';
+import { PublicRoutesView } from './pages/routes/PublicRoutesView.js';
+import { BlogLayout } from './pages/blog/BlogLayout.js';
+import { PublicBlogHome } from './pages/blog/PublicBlogHome.js';
+import { PublicBlogPost } from './pages/blog/PublicBlogPost.js';
 
 export function App() {
   const { user, loading, restore } = useAuthStore();
@@ -91,9 +97,19 @@ export function App() {
           <Route index element={<PublicGalleryHome />} />
           <Route path=":channelName" element={<PublicGalleryView />} />
         </Route>
+        {/* Public route library (no auth guard) */}
+        <Route path="/routes/:spaceSlug" element={<RoutesLayout />}>
+          <Route index element={<PublicRoutesHome />} />
+          <Route path=":channelName" element={<PublicRoutesView />} />
+        </Route>
         {/* Public calendar routes (no auth guard) */}
         <Route path="/calendar/:spaceSlug" element={<CalendarLayout />}>
           <Route index element={<PublicCalendarView />} />
+        </Route>
+        {/* Public blog routes (no auth guard) */}
+        <Route path="/blog/:spaceSlug" element={<BlogLayout />}>
+          <Route index element={<PublicBlogHome />} />
+          <Route path=":postId" element={<PublicBlogPost />} />
         </Route>
       </Routes>
       {isMobile && user && <BottomTabBar />}

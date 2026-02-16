@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.1.0
+## API Version 0.2.0
 
 Base URL: `https://app.crab.ac/api`
 
@@ -50,9 +50,11 @@ Access control uses a bitfield RBAC system. Permissions are assigned to roles, a
 | `MANAGE_INVITES` | View/delete invites |
 | `ATTACH_FILES` | Upload file attachments |
 | `ADD_REACTIONS` | Add emoji reactions |
-| `MANAGE_CALENDAR` | Create/edit/delete calendar events and categories |
+| `MANAGE_CALENDAR` | Create/edit/delete calendar events, categories, and series |
 | `CREATE_THREADS` | Create forum threads |
 | `MANAGE_THREADS` | Pin/lock/delete threads |
+| `MANAGE_ROUTE_CATEGORIES` | Create/delete route library categories |
+| `MANAGE_BLOG` | Create/edit/delete blog posts and upload images |
 
 ---
 
@@ -304,8 +306,11 @@ Get space admin settings. Requires `MANAGE_SPACE`.
   "allowPublicBoards": false,
   "allowPublicGalleries": false,
   "allowPublicCalendar": false,
+  "allowPublicRoutes": false,
+  "allowPublicBlog": false,
   "allowAnonymousBrowsing": false,
   "calendarEnabled": false,
+  "blogEnabled": false,
   "isPublic": false,
   "requireVerifiedEmail": false,
   "isFeatured": false,
@@ -396,9 +401,9 @@ Create a channel. Requires `MANAGE_CHANNELS`.
 |-------|------|----------|-------------|
 | `name` | string | yes | Lowercase alphanumeric + hyphens |
 | `topic` | string | no | Max 1024 chars |
-| `type` | string | no | `text`, `announcement`, `read_only`, `forum`, `media_gallery` |
+| `type` | string | no | `text`, `announcement`, `read_only`, `forum`, `media_gallery`, `route_library` |
 | `isPrivate` | boolean | no | |
-| `isPublic` | boolean | no | For public board/gallery access |
+| `isPublic` | boolean | no | For public board/gallery/route access |
 | `categoryId` | string | no | |
 
 ### GET /spaces/:spaceId/channels
@@ -724,6 +729,8 @@ List events by date range. Requires membership.
 
 Get a single event. Requires membership.
 
+**Response:** CalendarEvent object including `rsvpCounts`, `myRsvp`, linked `route`, and `category`.
+
 #### POST /spaces/:spaceId/calendar/events
 
 Create an event. Requires `MANAGE_CALENDAR`.
@@ -737,6 +744,9 @@ Create an event. Requires `MANAGE_CALENDAR`.
 | `eventTime` | string \| null | no | `HH:mm` |
 | `categoryId` | string \| null | no | |
 | `isPublic` | boolean | no | Visible on public calendar |
+| `location` | string \| null | no | Max 500 chars |
+| `activityType` | string \| null | no | `ride`, `run`, or `walk` |
+| `routeId` | string \| null | no | Link to a route library item |
 
 #### PATCH /spaces/:spaceId/calendar/events/:id
 
@@ -747,6 +757,239 @@ Update an event. Requires `MANAGE_CALENDAR`.
 #### DELETE /spaces/:spaceId/calendar/events/:id
 
 Delete an event. Requires `MANAGE_CALENDAR`.
+
+### Event RSVP
+
+#### POST /spaces/:spaceId/calendar/events/:eventId/rsvp
+
+RSVP to an event. Requires membership.
+
+**Body:** `{ status: 'going' | 'maybe' | 'not_going' }`
+
+**Response:** Updated CalendarEvent object.
+
+#### DELETE /spaces/:spaceId/calendar/events/:eventId/rsvp
+
+Remove RSVP from an event. Requires membership.
+
+**Response:** Updated CalendarEvent object.
+
+#### GET /spaces/:spaceId/calendar/events/:eventId/rsvps
+
+List all RSVPs for an event. Requires membership.
+
+**Response:** Array of RSVP objects with user info.
+
+### Recurring Event Series
+
+#### POST /spaces/:spaceId/calendar/series
+
+Create a recurring event series. Generates individual calendar event rows for each occurrence. Requires `MANAGE_CALENDAR`.
+
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | yes | Max 200 chars |
+| `description` | string \| null | no | Max 4000 chars |
+| `eventTime` | string \| null | no | `HH:mm` |
+| `categoryId` | string \| null | no | |
+| `isPublic` | boolean | no | |
+| `location` | string \| null | no | Max 500 chars |
+| `activityType` | string \| null | no | `ride`, `run`, or `walk` |
+| `routeId` | string \| null | no | |
+| `recurrenceRule` | object | yes | See Recurrence Rule below |
+
+**Recurrence Rule:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `freq` | string | yes | `weekly` or `monthly` |
+| `interval` | number | yes | 1-52, repeat interval |
+| `byDay` | string[] | yes | Day codes: `SU`, `MO`, `TU`, `WE`, `TH`, `FR`, `SA` |
+| `bySetPos` | number | no | 1-5, for monthly (e.g. 3 = 3rd Friday) |
+| `dtstart` | string | yes | Start date `YYYY-MM-DD` |
+| `until` | string | yes | End date `YYYY-MM-DD` |
+
+**Examples:**
+- Every 3 weeks on Friday: `{ "freq": "weekly", "interval": 3, "byDay": ["FR"], "dtstart": "2026-03-01", "until": "2026-06-30" }`
+- 3rd Friday of each month: `{ "freq": "monthly", "interval": 1, "byDay": ["FR"], "bySetPos": 3, "dtstart": "2026-03-01", "until": "2026-12-31" }`
+
+**Response:** EventSeries object.
+
+#### GET /spaces/:spaceId/calendar/series
+
+List all recurring event series. Requires membership.
+
+**Response:** Array of EventSeries objects.
+
+#### PATCH /spaces/:spaceId/calendar/series/:seriesId
+
+Update a series. Requires `MANAGE_CALENDAR`.
+
+**Body:** Same fields as create (all optional), plus:
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `updateMode` | string | `all` | `all` updates all occurrences, `future` updates only future ones |
+
+#### DELETE /spaces/:spaceId/calendar/series/:seriesId
+
+Delete a series and all its occurrences. Requires `MANAGE_CALENDAR`.
+
+#### PATCH /spaces/:spaceId/calendar/events/:id/override
+
+Override a single occurrence in a series. Marks it as `isOverride: true` and applies changes only to that event. Requires `MANAGE_CALENDAR`.
+
+**Body:** Same as update event.
+
+#### POST /spaces/:spaceId/calendar/events/:id/cancel
+
+Cancel a single occurrence in a series. Sets `isCancelled: true` and notifies RSVP'd users. Requires `MANAGE_CALENDAR`.
+
+---
+
+## Route Library
+
+Route library channels (`type: 'route_library'`) store GPX routes with parsed metadata.
+
+### Route Items
+
+#### GET /channels/:channelId/routes
+
+List route items in a route library channel. Requires membership.
+
+**Query:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `before` | string | - | Cursor for pagination |
+| `limit` | number | 30 | Max 100 |
+| `search` | string | - | Search by name |
+| `category` | string | - | Filter by category ID |
+| `author` | string | - | Filter by author name |
+| `type` | string | - | `ride`, `run`, or `walk` |
+| `sort` | string | `newest` | `name`, `distance`, `elevation`, `flatness`, `newest` |
+| `order` | string | `desc` | `asc` or `desc` |
+| `starred` | boolean | - | Filter to starred routes only |
+
+**Response:** Array of RouteItem objects with author info, category, and `starred` boolean.
+
+#### POST /channels/:channelId/routes/upload
+
+Upload a GPX file and create a route item. Requires `SEND_MESSAGES` + `ATTACH_FILES`. Multipart form data.
+
+**Form fields:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `file` | file | yes | `.gpx` file, max 50MB |
+| `name` | string | no | Defaults to track name from GPX |
+| `description` | string | no | Max 4000 chars |
+| `categoryId` | string | no | |
+| `isPublic` | boolean | no | |
+| `activityType` | string | no | `ride`, `run`, or `walk` |
+
+**Response:** RouteItem object with parsed GPX metadata (distance, elevation, bounds, geojson).
+
+#### POST /channels/:channelId/routes/from-attachment
+
+Create a route from an existing GPX attachment URL (e.g. from a message). Requires `SEND_MESSAGES` + `ATTACH_FILES`.
+
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `attachmentUrl` | string | yes | URL of existing GPX file (e.g. `/uploads/...`) |
+| `name` | string | yes | Max 200 chars |
+| `description` | string | no | Max 4000 chars |
+| `categoryId` | string | no | |
+| `isPublic` | boolean | no | |
+| `activityType` | string | no | `ride`, `run`, or `walk` |
+
+**Response:** RouteItem object.
+
+#### DELETE /channels/:channelId/routes/:routeId
+
+Delete a route item. Author can delete own; `MANAGE_MESSAGES` can delete others'.
+
+#### POST /channels/:channelId/routes/:routeId/star
+
+Star a route. Requires membership.
+
+#### DELETE /channels/:channelId/routes/:routeId/star
+
+Unstar a route. Requires membership.
+
+### Route Categories
+
+#### GET /spaces/:spaceId/route-categories
+
+List route categories for a space. Requires membership.
+
+**Response:** Array of `{ id, spaceId, name, createdAt }`.
+
+#### POST /spaces/:spaceId/route-categories
+
+Create a route category. Requires `MANAGE_ROUTE_CATEGORIES`.
+
+**Body:** `{ name: string }` (max 100 chars)
+
+#### DELETE /spaces/:spaceId/route-categories/:categoryId
+
+Delete a route category. Requires `MANAGE_ROUTE_CATEGORIES`.
+
+---
+
+## Blog
+
+Community blog feature. Enable via admin settings (`blogEnabled`). Blog posts are authored by members with `MANAGE_BLOG` permission.
+
+### Blog Posts
+
+#### GET /spaces/:spaceId/blog/posts
+
+List blog posts. Requires membership. Returns published posts for all users; authors also see their own drafts.
+
+**Query:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `limit` | number | 20 | Max 50 |
+| `before` | string | - | Cursor for pagination |
+| `status` | string | - | `draft` or `published` |
+
+**Response:** Array of BlogPost objects with author info.
+
+#### GET /spaces/:spaceId/blog/posts/:id
+
+Get a single blog post. Requires membership.
+
+**Response:** BlogPost object.
+
+#### POST /spaces/:spaceId/blog/posts
+
+Create a blog post. Requires `MANAGE_BLOG`.
+
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `title` | string | yes | Max 500 chars |
+| `summary` | string \| null | no | Max 140 chars |
+| `content` | string | yes | Max 100,000 chars (Markdown) |
+| `status` | string | no | `draft` (default) or `published` |
+| `isPublic` | boolean | no | Visible on public blog |
+
+**Response:** BlogPost object.
+
+#### PATCH /spaces/:spaceId/blog/posts/:id
+
+Update a blog post. Author or `MANAGE_BLOG` required.
+
+**Body:** Same fields as create, all optional.
+
+#### DELETE /spaces/:spaceId/blog/posts/:id
+
+Delete a blog post. Requires `MANAGE_BLOG`.
+
+#### POST /spaces/:spaceId/blog/upload-image
+
+Upload an image for use in blog post content. Requires `MANAGE_BLOG`. Multipart form data with `image` field (max 5MB, images only).
+
+**Response:** `{ url: string }` — use in Markdown as `![alt](url)`.
 
 ---
 
@@ -920,6 +1163,8 @@ Get friendship status with a user.
 
 List notifications (paginated). Requires auth.
 
+Notification types: `mention`, `reply`, `dm`, `friend_request`, `portal_invite`, `event_cancelled`.
+
 ### GET /notifications/unread-count
 
 Get unread notification count.
@@ -950,9 +1195,9 @@ Dismiss announcements. Requires auth.
 
 ---
 
-## Public Boards & Galleries
+## Public Boards, Galleries, Routes & Blog
 
-These endpoints power the public-facing web views (`/boards/:slug`, `/gallery/:slug`). They use optional authentication - logged-in space members see full content, while anonymous users see public content only (if `allowAnonymousBrowsing` is enabled).
+These endpoints power the public-facing web views (`/boards/:slug`, `/gallery/:slug`, `/routes/:slug`, `/blog/:slug`). They use optional authentication - logged-in space members see full content, while anonymous users see public content only (if `allowAnonymousBrowsing` is enabled).
 
 ### Board Auth
 
@@ -972,7 +1217,7 @@ Log in as a board user.
 
 #### GET /boards/:spaceSlug
 
-List public channels (forums and galleries) for a space. Requires `allowPublicBoards` or `allowPublicGalleries`.
+List public channels (forums, galleries, and route libraries) for a space. Requires `allowPublicBoards`, `allowPublicGalleries`, or `allowPublicRoutes`.
 
 #### GET /boards/:spaceSlug/:channelName
 
@@ -994,6 +1239,34 @@ Create a post. Requires board auth.
 
 List items in a public gallery channel.
 
+### Public Route Library
+
+#### GET /boards/:spaceSlug/all-routes
+
+List all public routes across all route_library channels in a space. Supports the same query params as channel-specific route listing. Optionally filter by `channelId`.
+
+**Query:** Same as `GET /channels/:channelId/routes` plus optional `channelId` filter.
+
+**Response:** Array of RouteItem objects.
+
+#### GET /boards/:spaceSlug/:channelName/routes
+
+List public route items in a specific route library channel.
+
+**Query:** Same as `GET /channels/:channelId/routes`.
+
+#### GET /boards/:spaceSlug/:channelName/route-categories
+
+Get route categories for the space (via any public route library channel).
+
+#### POST /boards/:spaceSlug/:channelName/routes/:routeId/star
+
+Star a public route. Requires auth.
+
+#### DELETE /boards/:spaceSlug/:channelName/routes/:routeId/star
+
+Unstar a public route. Requires auth.
+
 ### Public Calendar
 
 #### GET /boards/calendar/:spaceSlug
@@ -1009,6 +1282,26 @@ Get public calendar events. Authenticated space members see all events; others s
 **Query:** `from=YYYY-MM-DD&to=YYYY-MM-DD`
 
 **Response:** `CalendarEvent[]`
+
+### Public Blog
+
+#### GET /boards/blog/:spaceSlug
+
+List public published blog posts. Requires `allowPublicBlog` in space settings. Anonymous access requires `allowAnonymousBrowsing`.
+
+**Query:**
+| Param | Type | Default |
+|-------|------|---------|
+| `before` | string | - |
+| `limit` | number | 20 |
+
+**Response:** `{ space, posts: BlogPost[] }`
+
+#### GET /boards/blog/:spaceSlug/:postId
+
+Get a single public blog post. Same access requirements as listing.
+
+**Response:** `{ space, post: BlogPost }`
 
 ---
 
@@ -1107,6 +1400,8 @@ The API uses Socket.io for real-time communication at `/socket.io/`. Clients aut
 | `dm:message` | Message object | New DM received |
 | `notification` | Notification object | New notification |
 | `space:guests_cleared` | `{ spaceId }` | Guest sessions cleared |
+| `route:create` | RouteItem object | New route added to library |
+| `route:delete` | `{ id, channelId }` | Route deleted from library |
 
 ---
 
@@ -1114,4 +1409,4 @@ The API uses Socket.io for real-time communication at `/socket.io/`. Clients aut
 
 ### GET /uploads/*
 
-Serves uploaded files (avatars, attachments, gallery items). Files are served with security headers including `X-Content-Type-Options: nosniff`.
+Serves uploaded files (avatars, attachments, gallery items, GPX files, blog images). Files are served with security headers including `X-Content-Type-Options: nosniff`. Non-image files are forced to download via `Content-Disposition: attachment`.

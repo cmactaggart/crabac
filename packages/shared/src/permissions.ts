@@ -18,7 +18,9 @@ export const Permissions = {
   VIEW_ROLES:           1n << 16n,
   MANAGE_THREADS:       1n << 17n,
   CREATE_THREADS:       1n << 18n,
-  MANAGE_CALENDAR:      1n << 19n,
+  MANAGE_CALENDAR:          1n << 19n,
+  MANAGE_ROUTE_CATEGORIES:  1n << 20n,
+  MANAGE_BLOG:              1n << 21n,
 } as const;
 
 export type PermissionKey = keyof typeof Permissions;

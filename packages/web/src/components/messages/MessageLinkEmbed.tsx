@@ -144,7 +144,7 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
     cursor: 'pointer',
     marginTop: 6,
-    maxWidth: 480,
+    maxWidth: 'min(480px, 100%)',
     textAlign: 'left',
     padding: 0,
     width: '100%',
@@ -186,7 +186,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   skeleton: {
     marginTop: 6,
-    maxWidth: 480,
+    maxWidth: 'min(480px, 100%)',
     padding: '12px',
     background: 'var(--bg-primary)',
     border: '1px solid var(--border)',

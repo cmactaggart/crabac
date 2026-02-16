@@ -13,6 +13,7 @@ import { MembersTab } from './MembersTab.js';
 import { InvitesTab } from './InvitesTab.js';
 import { BoardSettingsTab } from './BoardSettingsTab.js';
 import { CalendarSettingsTab } from './CalendarSettingsTab.js';
+import { BlogSettingsTab } from './BlogSettingsTab.js';
 import { VisibilityTab } from './VisibilityTab.js';
 
 interface Props {
@@ -35,6 +36,7 @@ const TABS: TabDef[] = [
   { key: 'invites', label: 'Invites', permission: Permissions.MANAGE_INVITES },
   { key: 'boards', label: 'Public Web', permission: Permissions.MANAGE_SPACE },
   { key: 'calendar', label: 'Calendar', permission: Permissions.MANAGE_SPACE },
+  { key: 'blog', label: 'Blog', permission: Permissions.MANAGE_SPACE },
 ];
 
 export function SpaceSettingsModal({ spaceId, onClose }: Props) {
@@ -99,6 +101,8 @@ export function SpaceSettingsModal({ spaceId, onClose }: Props) {
         return <BoardSettingsTab spaceId={spaceId} />;
       case 'calendar':
         return <CalendarSettingsTab spaceId={spaceId} />;
+      case 'blog':
+        return <BlogSettingsTab spaceId={spaceId} />;
       default:
         return null;
     }

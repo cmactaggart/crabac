@@ -517,6 +517,7 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     flex: 1,
     overflowY: 'auto',
+    overflowX: 'hidden',
     padding: '0 16px 16px',
     display: 'flex',
     flexDirection: 'column',
@@ -685,9 +686,11 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 8,
     paddingLeft: 48,
     marginTop: 6,
+    maxWidth: '100%',
+    overflow: 'hidden',
   },
   attachmentImage: {
-    maxWidth: 300,
+    maxWidth: '100%',
     maxHeight: 200,
     borderRadius: 'var(--radius)',
     cursor: 'pointer',
@@ -709,7 +712,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid var(--accent)',
     borderRadius: 'var(--radius)',
     padding: '12px 16px',
-    maxWidth: 400,
+    maxWidth: 'min(400px, 100%)',
   },
   portalAcceptBtn: {
     display: 'flex',

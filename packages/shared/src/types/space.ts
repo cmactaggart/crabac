@@ -8,6 +8,7 @@ export interface Space {
   createdAt: string;
   updatedAt: string;
   calendarEnabled?: boolean;
+  blogEnabled?: boolean;
   isPublic?: boolean;
   baseColor?: string | null;
   accentColor?: string | null;
@@ -53,8 +54,11 @@ export interface SpaceAdminSettings {
   allowPublicBoards: boolean;
   allowPublicGalleries: boolean;
   allowPublicCalendar: boolean;
+  allowPublicRoutes: boolean;
   allowAnonymousBrowsing: boolean;
   calendarEnabled: boolean;
+  blogEnabled: boolean;
+  allowPublicBlog: boolean;
   isPublic: boolean;
   requireVerifiedEmail: boolean;
   isFeatured: boolean;
