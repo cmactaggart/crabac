@@ -274,6 +274,8 @@ export function GalleryChannelView({ channelId, channel, spaceId, showBackButton
           canDelete={
             selectedItem.authorId === user?.id || canManage
           }
+          spaceId={spaceId}
+          channelId={channelId}
           onDelete={() => handleDelete(selectedItem.id)}
           onClose={() => setSelectedItem(null)}
         />

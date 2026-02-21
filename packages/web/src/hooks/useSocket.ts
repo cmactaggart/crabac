@@ -9,6 +9,7 @@ export function useChannelSocket(channelId: string | null) {
   const removeMessage = useMessagesStore((s) => s.removeMessage);
   const updateReactions = useMessagesStore((s) => s.updateReactions);
   const setTyping = useMessagesStore((s) => s.setTyping);
+  const catchUpMessages = useMessagesStore((s) => s.catchUpMessages);
 
   useEffect(() => {
     if (!channelId) return;
@@ -18,9 +19,10 @@ export function useChannelSocket(channelId: string | null) {
 
     socket.emit('channel:join', { channelId });
 
-    // Re-join channel on reconnect (e.g. after server restart)
+    // Re-join channel on reconnect and fetch any missed messages
     const onReconnect = () => {
       socket.emit('channel:join', { channelId });
+      catchUpMessages(channelId);
     };
 
     const onNew = (message: Message) => {
@@ -69,7 +71,7 @@ export function useChannelSocket(channelId: string | null) {
       socket.off('message:reactions_updated', onReactionsUpdated);
       socket.off('member:typing', onTyping);
     };
-  }, [channelId, addMessage, updateMessage, removeMessage, updateReactions, setTyping]);
+  }, [channelId, addMessage, updateMessage, removeMessage, updateReactions, setTyping, catchUpMessages]);
 }
 
 export function useTypingEmit(channelId: string | null) {

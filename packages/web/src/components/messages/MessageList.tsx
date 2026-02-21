@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Reply, SmilePlus, MessageSquare, Pin, Copy, Link2, Pencil, Trash2, FileText, Zap, Check, X } from 'lucide-react';
+import { Reply, SmilePlus, MessageSquare, Pin, Copy, Link2, Pencil, Trash2, FileText, Zap, Check, X, Flag } from 'lucide-react';
 import { useMessagesStore } from '../../stores/messages.js';
 import { usePortalsStore } from '../../stores/portals.js';
 import { useMutesStore } from '../../stores/mutes.js';
+import { useHasSpacePermission } from '../settings/SpaceSettingsModal.js';
+import { Permissions } from '@crabac/shared';
+import { ReportModal } from '../moderation/ReportModal.js';
 import { Avatar } from '../common/Avatar.js';
 import { Markdown } from '../common/Markdown.js';
 import { MessageLinkEmbed, extractMessageLinks } from './MessageLinkEmbed.js';
@@ -14,6 +17,7 @@ import { GpxPreviewCard } from './GpxPreviewCard.js';
 import { MediaGrid } from './MediaGrid.js';
 import { MediaCarousel } from './MediaCarousel.js';
 import { CalendarEventCard, extractCalendarEvent } from '../calendar/CalendarEventCard.js';
+import { InteractiveCard } from './InteractiveCard.js';
 
 interface Props {
   messages: Message[];
@@ -31,6 +35,8 @@ export function MessageList({ messages, loading, hasMore, currentUserId, channel
   const containerRef = useRef<HTMLDivElement>(null);
   const prevLengthRef = useRef(0);
   const fetchMessages = useMessagesStore((s) => s.fetchMessages);
+  const canManageMessages = useHasSpacePermission(spaceId, Permissions.MANAGE_MESSAGES);
+  const [reportTarget, setReportTarget] = useState<{ message: Message } | null>(null);
 
   useEffect(() => {
     if (messages.length > prevLengthRef.current) {
@@ -63,11 +69,17 @@ export function MessageList({ messages, loading, hasMore, currentUserId, channel
 
       {messages.map((msg, i) => {
         const prev = messages[i - 1];
-        const sameAuthor = prev?.authorId === msg.authorId && !msg.replyToId;
-        const gap = sameAuthor && prev ? snowflakeTime(msg.id) - snowflakeTime(prev.id) : Infinity;
+        // Workflow messages with a custom display name are a different "identity"
+        // even though they share the space owner's authorId
+        const prevWorkflowName = prev?.metadata?.workflowDisplayName;
+        const currWorkflowName = msg.metadata?.workflowDisplayName;
+        const sameIdentity = prev?.authorId === msg.authorId
+          && !msg.replyToId
+          && prevWorkflowName === currWorkflowName;
+        const gap = sameIdentity && prev ? snowflakeTime(msg.id) - snowflakeTime(prev.id) : Infinity;
         // <1min: compact, 1-15min: spaced (no header), >15min: full header
-        const compact = sameAuthor && gap < 60000;
-        const spacedSameAuthor = sameAuthor && gap >= 60000 && gap < 900000;
+        const compact = sameIdentity && gap < 60000;
+        const spacedSameAuthor = sameIdentity && gap >= 60000 && gap < 900000;
         return (
           <MessageItem
             key={msg.id}
@@ -78,13 +90,27 @@ export function MessageList({ messages, loading, hasMore, currentUserId, channel
             currentUserId={currentUserId}
             channelId={channelId}
             spaceId={spaceId}
+            canManageMessages={canManageMessages}
             onReply={onReply}
             onUserClick={onUserClick}
+            onReport={(m) => setReportTarget({ message: m })}
           />
         );
       })}
 
       <div ref={bottomRef} />
+
+      {reportTarget && (
+        <ReportModal
+          reportedUserId={reportTarget.message.authorId}
+          reportedUsername={reportTarget.message.author?.displayName || reportTarget.message.author?.username || 'Unknown'}
+          spaceId={spaceId}
+          channelId={channelId}
+          messageId={reportTarget.message.id}
+          messagePreview={reportTarget.message.content}
+          onClose={() => setReportTarget(null)}
+        />
+      )}
     </div>
   );
 }
@@ -100,8 +126,10 @@ function MessageItem({
   currentUserId,
   channelId,
   spaceId,
+  canManageMessages,
   onReply,
   onUserClick,
+  onReport,
 }: {
   message: Message;
   compact: boolean;
@@ -110,8 +138,10 @@ function MessageItem({
   currentUserId: string;
   channelId: string;
   spaceId: string;
+  canManageMessages: boolean;
   onReply: (msg: Message) => void;
   onUserClick: (userId: string, rect: DOMRect) => void;
+  onReport: (msg: Message) => void;
 }) {
   const [showActions, setShowActions] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -183,7 +213,8 @@ function MessageItem({
     { label: 'Copy Text', icon: <Copy size={16} />, onClick: () => navigator.clipboard.writeText(message.content) },
     { label: 'Copy Link', icon: <Link2 size={16} />, onClick: () => navigator.clipboard.writeText(`${window.location.origin}/space/${spaceId}/channel/${channelId}/message/${message.id}`) },
     ...(isOwn ? [{ label: 'Edit', icon: <Pencil size={16} />, onClick: handleEdit }] : []),
-    ...(isOwn ? [{ label: 'Delete', icon: <Trash2 size={16} />, danger: true, onClick: handleDelete }] : []),
+    ...(!isOwn ? [{ label: 'Report', icon: <Flag size={16} />, onClick: () => onReport(message) }] : []),
+    ...(isOwn || canManageMessages ? [{ label: 'Delete', icon: <Trash2 size={16} />, danger: true, onClick: handleDelete }] : []),
   ];
 
   const navigate = useNavigate();
@@ -270,17 +301,32 @@ function MessageItem({
         </div>
       )}
 
-      {(!isMuted || showMutedContent) && !compact && !spacedSameAuthor && (
-        <div style={styles.messageHeader}>
-          <Avatar src={message.author?.avatarUrl || null} name={message.author?.displayName || '?'} size={32} baseColor={message.author?.baseColor} accentColor={message.author?.accentColor} />
-          <button onClick={handleUsernameClick} style={styles.username}>
-            {message.author?.displayName || 'Unknown'}
-          </button>
-          {message.author?.isBot && <span style={styles.botBadge}>BOT</span>}
-          <span style={styles.timestamp}>{ts}</span>
-          {message.editedAt && <span style={styles.edited}>(edited)</span>}
-        </div>
-      )}
+      {(!isMuted || showMutedContent) && !compact && !spacedSameAuthor && (() => {
+        const workflowName = message.metadata?.workflowDisplayName;
+        const displayName = workflowName || message.author?.displayName || 'Unknown';
+        const isWorkflowIdentity = !!workflowName;
+        return (
+          <div style={styles.messageHeader}>
+            <Avatar
+              src={isWorkflowIdentity ? null : (message.author?.avatarUrl || null)}
+              name={displayName}
+              size={32}
+              baseColor={isWorkflowIdentity ? undefined : message.author?.baseColor}
+              accentColor={isWorkflowIdentity ? undefined : message.author?.accentColor}
+            />
+            {isWorkflowIdentity ? (
+              <span style={styles.username}>{displayName}</span>
+            ) : (
+              <button onClick={handleUsernameClick} style={styles.username}>
+                {displayName}
+              </button>
+            )}
+            {(isWorkflowIdentity || message.author?.isBot) && <span style={styles.botBadge}>BOT</span>}
+            <span style={styles.timestamp}>{ts}</span>
+            {message.editedAt && <span style={styles.edited}>(edited)</span>}
+          </div>
+        );
+      })()}
 
       {(!isMuted || showMutedContent) && (
         <>
@@ -288,10 +334,17 @@ function MessageItem({
             <div style={styles.replyIndicator}>Replying to a message</div>
           )}
 
+          {/* Interactive workflow card */}
+          {message.metadata?.cardInstanceId && (
+            <div style={{ paddingLeft: 48, marginTop: 4 }}>
+              <InteractiveCard cardInstanceId={message.metadata.cardInstanceId} spaceId={spaceId} />
+            </div>
+          )}
+
           {/* Portal invite card */}
           {message.messageType === 'portal_invite' && message.metadata ? (
             <PortalInviteCard message={message} spaceId={spaceId} />
-          ) : (
+          ) : !message.metadata?.cardInstanceId ? (
             /* Message content or inline edit */
             <div style={{ paddingLeft: 44, lineHeight: 1.3, marginTop: -6 }} onClick={handleContentClick}>
               {editing ? (
@@ -343,7 +396,7 @@ function MessageItem({
                 </>
               )}
             </div>
-          )}
+          ) : null}
 
           {/* Attachments */}
           {message.attachments && message.attachments.length > 0 && (() => {

@@ -3,6 +3,7 @@ import { ArrowLeft, Pin, Lock, Send } from 'lucide-react';
 import { useForumsStore } from '../../stores/forums.js';
 import { getSocket } from '../../lib/socket.js';
 import { ThreadPost } from './ThreadPost.js';
+import { ReportModal } from '../moderation/ReportModal.js';
 import type { ForumThread, Message } from '@crabac/shared';
 
 interface Props {
@@ -17,6 +18,7 @@ export function ThreadDetailView({ spaceId, channelId, thread, onBack, canModera
   const { threadPosts, postsLoading, fetchThreadPosts, createThreadPost, updateThread, addPost, updateThreadInList } = useForumsStore();
   const [replyContent, setReplyContent] = useState('');
   const [sending, setSending] = useState(false);
+  const [reportTarget, setReportTarget] = useState<Message | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -109,7 +111,7 @@ export function ThreadDetailView({ spaceId, channelId, thread, onBack, canModera
           <div style={styles.loadingState}>Loading posts...</div>
         ) : (
           threadPosts.map((post, i) => (
-            <ThreadPost key={post.id} post={post} channelId={channelId} isFirstPost={i === 0} canModerate={canModerate} />
+            <ThreadPost key={post.id} post={post} channelId={channelId} isFirstPost={i === 0} canModerate={canModerate} onReport={setReportTarget} />
           ))
         )}
         <div ref={bottomRef} />
@@ -149,6 +151,19 @@ export function ThreadDetailView({ spaceId, channelId, thread, onBack, canModera
           <Lock size={14} />
           <span>This thread is locked</span>
         </div>
+      )}
+
+      {reportTarget && reportTarget.author && (
+        <ReportModal
+          reportedUserId={reportTarget.authorId}
+          reportedUsername={reportTarget.author.displayName || reportTarget.author.username || 'Unknown'}
+          spaceId={spaceId}
+          channelId={channelId}
+          forumPostId={reportTarget.id}
+          messagePreview={reportTarget.content?.slice(0, 200)}
+          contentLabel="Forum Post"
+          onClose={() => setReportTarget(null)}
+        />
       )}
     </div>
   );

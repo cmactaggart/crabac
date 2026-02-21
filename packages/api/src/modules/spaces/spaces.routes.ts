@@ -14,6 +14,7 @@ import * as spacesService from './spaces.service.js';
 import * as messagesService from '../messages/messages.service.js';
 import * as spaceSettingsService from './space-settings.service.js';
 import * as spaceAdminSettingsService from './space-admin-settings.service.js';
+import * as reportsService from '../reports/reports.service.js';
 
 export const spacesRoutes = Router();
 
@@ -185,6 +186,56 @@ spacesRoutes.delete(
   },
 );
 
+// ─── Space Bans ───
+
+// Ban a member
+spacesRoutes.post(
+  '/:spaceId/bans/:userId',
+  requirePermission(Permissions.MANAGE_MEMBERS),
+  validate(validation.spaceBanSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await spacesService.banMember(
+        req.params.spaceId,
+        req.params.userId,
+        req.user!.userId,
+        req.body.reason,
+      );
+      res.status(201).json({ success: true });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Unban a member
+spacesRoutes.delete(
+  '/:spaceId/bans/:userId',
+  requirePermission(Permissions.MANAGE_MEMBERS),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await spacesService.unbanMember(req.params.spaceId, req.params.userId);
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// List bans
+spacesRoutes.get(
+  '/:spaceId/bans',
+  requirePermission(Permissions.MANAGE_MEMBERS),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const bans = await spacesService.listBans(req.params.spaceId);
+      res.json(bans);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // Leave space
 spacesRoutes.post(
   '/:spaceId/leave',
@@ -313,6 +364,20 @@ spacesRoutes.put(
   },
 );
 
+// Rotate webhook secret
+spacesRoutes.post(
+  '/:spaceId/admin-settings/rotate-webhook-secret',
+  requirePermission(Permissions.MANAGE_SPACE),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const settings = await spaceAdminSettingsService.rotateWebhookSecret(req.params.spaceId);
+      res.json(settings);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // Join a public space (auth required, no membership required)
 spacesRoutes.post(
   '/:spaceId/join-public',
@@ -334,6 +399,41 @@ spacesRoutes.get(
     try {
       const tags = await spacesService.getSpaceTags(req.params.spaceId);
       res.json(tags);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ─── Space Reports ───
+
+// List reports for a space
+spacesRoutes.get(
+  '/:spaceId/reports',
+  requirePermission(Permissions.MANAGE_MEMBERS),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const reports = await reportsService.listSpaceReports(req.params.spaceId);
+      res.json(reports);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Update report status (space admin)
+spacesRoutes.patch(
+  '/:spaceId/reports/:id',
+  requirePermission(Permissions.MANAGE_MEMBERS),
+  validate(validation.updateReportSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const report = await reportsService.updateReportStatus(
+        req.params.id,
+        req.body.status,
+        req.user!.userId,
+      );
+      res.json(report);
     } catch (err) {
       next(err);
     }

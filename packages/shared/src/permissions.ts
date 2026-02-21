@@ -21,6 +21,7 @@ export const Permissions = {
   MANAGE_CALENDAR:          1n << 19n,
   MANAGE_ROUTE_CATEGORIES:  1n << 20n,
   MANAGE_BLOG:              1n << 21n,
+  MANAGE_WORKFLOWS:         1n << 22n,
 } as const;
 
 export type PermissionKey = keyof typeof Permissions;

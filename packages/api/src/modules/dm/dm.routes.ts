@@ -3,6 +3,8 @@ import { authenticate } from '../auth/auth.middleware.js';
 import { validate } from '../../middleware/validate.js';
 import { validation } from '@crabac/shared';
 import * as dmService from './dm.service.js';
+import * as blocksService from '../users/blocks.service.js';
+import { config } from '../../config.js';
 import { ForbiddenError } from '../../lib/errors.js';
 
 export const dmRoutes = Router();
@@ -56,6 +58,10 @@ dmRoutes.post(
       const targetUserId = req.params.userId;
       if (targetUserId === req.user!.userId) {
         return next(new ForbiddenError('Cannot create a conversation with yourself'));
+      }
+      const blocked = await blocksService.isBlocked(req.user!.userId, targetUserId);
+      if (blocked) {
+        return next(new ForbiddenError('Cannot message this user'));
       }
       const conversation = await dmService.findOrCreateConversation(req.user!.userId, targetUserId);
       res.json(conversation);
@@ -176,7 +182,8 @@ dmRoutes.get(
       if (!isMember) return next(new ForbiddenError('Not a member of this conversation'));
 
       const { before, limit } = req.query as any;
-      const messages = await dmService.listMessages(req.params.conversationId, { before, limit });
+      const blockedUserIds = await blocksService.getBlockedUserIds(req.user!.userId);
+      const messages = await dmService.listMessages(req.params.conversationId, { before, limit, blockedUserIds });
       res.json(messages);
     } catch (err) {
       next(err);
@@ -192,6 +199,18 @@ dmRoutes.post(
     try {
       const isMember = await dmService.isConversationMember(req.params.conversationId, req.user!.userId);
       if (!isMember) return next(new ForbiddenError('Not a member of this conversation'));
+
+      // Check blocks for DM conversations
+      const conv = await dmService.getConversation(req.params.conversationId, req.user!.userId);
+      if (conv && conv.type === 'dm') {
+        const otherParticipant = conv.participants.find((p: any) => p.id !== req.user!.userId);
+        if (otherParticipant) {
+          const blocked = await blocksService.isBlocked(req.user!.userId, otherParticipant.id);
+          if (blocked) {
+            return next(new ForbiddenError('Cannot message this user'));
+          }
+        }
+      }
 
       const message = await dmService.sendMessage(
         req.params.conversationId,
@@ -235,10 +254,12 @@ dmRoutes.delete(
       const isMember = await dmService.isConversationMember(req.params.conversationId, req.user!.userId);
       if (!isMember) return next(new ForbiddenError('Not a member of this conversation'));
 
+      const isAdmin = config.adminEmails.includes(req.user!.email);
       await dmService.deleteMessage(
         req.params.conversationId,
         req.params.messageId,
         req.user!.userId,
+        isAdmin,
       );
       res.status(204).end();
     } catch (err) {

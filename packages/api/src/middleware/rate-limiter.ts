@@ -42,3 +42,21 @@ export const publicBoardPostLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: { code: 'RATE_LIMITED', message: 'Too many posts' } },
 });
+
+export const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => req.params.secret || req.ip || '0.0.0.0',
+  message: { error: { code: 'RATE_LIMITED', message: 'Too many webhook requests' } },
+});
+
+export const mobileUpdateCheckLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => req.headers['cf-connecting-ip'] as string || req.ip || '0.0.0.0',
+  message: { error: { code: 'RATE_LIMITED', message: 'Too many update checks' } },
+});

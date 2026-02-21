@@ -3,6 +3,7 @@ import { api, setTokens, clearTokens, getSavedRefreshToken } from '../lib/api.js
 import { connectSocket, disconnectSocket } from '../lib/socket.js';
 import { useNotificationsStore } from './notifications.js';
 import { useMutesStore } from './mutes.js';
+import { useBlocksStore } from './blocks.js';
 import { usePreferencesStore } from './preferences.js';
 import type { User, MfaChallengeResponse } from '@crabac/shared';
 
@@ -40,6 +41,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       // Initialize notification count, mutes, and preferences
       useNotificationsStore.getState().fetchUnreadCount();
       useMutesStore.getState().fetchMutes();
+      useBlocksStore.getState().fetchBlocks();
       usePreferencesStore.getState().fetchPreferences();
       return undefined;
     } catch (err: any) {
@@ -101,6 +103,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       // Initialize notification count, mutes, and preferences
       useNotificationsStore.getState().fetchUnreadCount();
       useMutesStore.getState().fetchMutes();
+      useBlocksStore.getState().fetchBlocks();
       usePreferencesStore.getState().fetchPreferences();
     } catch (err: any) {
       // Only clear tokens if the server explicitly rejected them

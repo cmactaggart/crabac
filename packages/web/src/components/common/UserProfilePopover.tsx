@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { UserPlus, UserMinus, Check, Clock } from 'lucide-react';
+import { UserPlus, UserMinus, Check, Clock, Ban, Shield, UserX } from 'lucide-react';
 import { api } from '../../lib/api.js';
 import { Avatar } from './Avatar.js';
 import { useMutesStore } from '../../stores/mutes.js';
+import { useBlocksStore } from '../../stores/blocks.js';
 import { useFriendsStore } from '../../stores/friends.js';
+import { useHasSpacePermission } from '../settings/SpaceSettingsModal.js';
+import { Permissions } from '@crabac/shared';
 import type { FriendshipStatus } from '@crabac/shared';
 
 interface UserProfile {
@@ -42,9 +45,13 @@ export function UserProfilePopover({ userId, anchorRect, onClose, onMessage, cur
   const isMuted = useMutesStore((s) => s.isMuted(userId));
   const muteUser = useMutesStore((s) => s.muteUser);
   const unmuteUser = useMutesStore((s) => s.unmuteUser);
+  const isBlockedByMe = useBlocksStore((s) => s.isBlockedByMe(userId));
+  const blockUser = useBlocksStore((s) => s.blockUser);
+  const unblockUser = useBlocksStore((s) => s.unblockUser);
   const sendFriendRequest = useFriendsStore((s) => s.sendFriendRequest);
   const acceptFriendRequest = useFriendsStore((s) => s.acceptFriendRequest);
   const removeFriend = useFriendsStore((s) => s.removeFriend);
+  const canManageMembers = useHasSpacePermission(spaceId || '', Permissions.MANAGE_MEMBERS);
 
   useEffect(() => {
     api<UserProfile>(`/users/${userId}`).then(setProfile).catch(() => {});
@@ -238,6 +245,61 @@ export function UserProfilePopover({ userId, anchorRect, onClose, onMessage, cur
                 {isMuted ? 'Unmute' : 'Mute'}
               </button>
             </div>
+            <button
+              onClick={async () => {
+                if (isBlockedByMe) {
+                  await unblockUser(userId);
+                } else if (confirm(`Block ${profile.displayName}? They won't be able to message you and their messages will be hidden.`)) {
+                  await blockUser(userId);
+                }
+              }}
+              style={{
+                ...styles.modBtn,
+                background: isBlockedByMe ? 'var(--bg-tertiary)' : 'transparent',
+                color: isBlockedByMe ? 'var(--text-secondary)' : 'var(--danger)',
+                border: `1px solid ${isBlockedByMe ? 'var(--border)' : 'var(--danger)'}`,
+              }}
+            >
+              <Ban size={14} /> {isBlockedByMe ? 'Unblock' : 'Block'}
+            </button>
+            {spaceId && canManageMembers && (
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  onClick={async () => {
+                    if (confirm(`Kick ${profile.displayName} from this space?`)) {
+                      try {
+                        await api(`/spaces/${spaceId}/members/${userId}`, { method: 'DELETE' });
+                        onClose();
+                      } catch (err: any) {
+                        alert(err.message || 'Failed to kick user');
+                      }
+                    }
+                  }}
+                  style={{ ...styles.modBtn, flex: 1, color: 'var(--warning, #faa61a)', borderColor: 'var(--warning, #faa61a)' }}
+                >
+                  <UserX size={14} /> Kick
+                </button>
+                <button
+                  onClick={async () => {
+                    const reason = prompt(`Ban ${profile.displayName} from this space? Enter a reason (optional):`);
+                    if (reason !== null) {
+                      try {
+                        await api(`/spaces/${spaceId}/bans/${userId}`, {
+                          method: 'POST',
+                          body: JSON.stringify({ reason: reason || undefined }),
+                        });
+                        onClose();
+                      } catch (err: any) {
+                        alert(err.message || 'Failed to ban user');
+                      }
+                    }
+                  }}
+                  style={{ ...styles.modBtn, flex: 1, color: 'var(--danger)', borderColor: 'var(--danger)' }}
+                >
+                  <Shield size={14} /> Ban
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -328,5 +390,20 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     fontSize: '0.85rem',
     cursor: 'pointer',
+  },
+  modBtn: {
+    width: '100%',
+    padding: '6px 8px',
+    marginTop: 6,
+    background: 'transparent',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius)',
+    fontWeight: 600,
+    fontSize: '0.8rem',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
 };

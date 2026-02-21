@@ -72,6 +72,7 @@ export const updateMessageSchema = z.object({
 
 export const messagesQuerySchema = z.object({
   before: z.string().optional(),
+  after: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
@@ -244,6 +245,7 @@ export const updateSpaceAdminSettingsSchema = z.object({
   baseColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
   accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
   textColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+  webhooksEnabled: z.boolean().optional(),
 });
 
 // Space Tags
@@ -409,4 +411,191 @@ export const createRouteFromAttachmentSchema = z.object({
   categoryId: z.string().optional(),
   activityType: z.enum(['ride', 'run', 'walk']).nullable().optional(),
   isPublic: z.boolean().optional(),
+});
+
+// Mobile Bundles (OTA Updates)
+export const uploadMobileBundleSchema = z.object({
+  platform: z.enum(['ios', 'android']),
+  nativeVersion: z.string().min(1).max(20).regex(/^\d+\.\d+\.\d+$/, 'Must be a valid semver (e.g. 1.0.0)'),
+  isRequired: z.coerce.boolean().optional().default(false),
+  releaseNotes: z.string().max(4000).optional(),
+});
+
+export const mobileBundleUpdateCheckSchema = z.object({
+  platform: z.enum(['ios', 'android']),
+  nativeVersion: z.string().min(1).max(20).regex(/^\d+\.\d+\.\d+$/, 'Must be a valid semver'),
+  currentBundleVersion: z.coerce.number().int().min(0),
+});
+
+export const mobileBundlesQuerySchema = z.object({
+  platform: z.enum(['ios', 'android']).optional(),
+  status: z.enum(['active', 'inactive']).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+// Moderation: Space Bans
+export const spaceBanSchema = z.object({
+  reason: z.string().max(1000).optional(),
+});
+
+// Moderation: Global App Bans
+export const appBanSchema = z.object({
+  reason: z.string().max(1000).optional(),
+});
+
+// Moderation: Reports
+export const createReportSchema = z.object({
+  reportedUserId: z.string().min(1),
+  spaceId: z.string().optional(),
+  channelId: z.string().optional(),
+  messageId: z.string().optional(),
+  dmMessageId: z.string().optional(),
+  conversationId: z.string().optional(),
+  galleryItemId: z.string().optional(),
+  routeId: z.string().optional(),
+  forumPostId: z.string().optional(),
+  reason: z.string().min(1).max(2000),
+});
+
+export const updateReportSchema = z.object({
+  status: z.enum(['resolved', 'dismissed']),
+});
+
+// Workflow Condition Tree (recursive AND/OR)
+const conditionRuleSchema = z.object({
+  type: z.enum([
+    'user_has_role', 'channel_is', 'message_contains', 'message_equals',
+    'command_arg_equals', 'card_field_equals', 'card_field_not_null', 'invite_code_is',
+    'button_is', 'webhook_payload_equals',
+  ]),
+  config: z.record(z.any()),
+  negate: z.boolean().optional(),
+});
+
+type ConditionGroupInput = {
+  operator: 'AND' | 'OR';
+  rules: Array<{ type: string; config: Record<string, any>; negate?: boolean } | ConditionGroupInput>;
+};
+
+const conditionGroupSchema: z.ZodType<ConditionGroupInput> = z.lazy(() =>
+  z.object({
+    operator: z.enum(['AND', 'OR']),
+    rules: z.array(z.union([conditionRuleSchema, conditionGroupSchema])).min(1).max(50),
+  }),
+);
+
+// Workflow action
+const workflowActionSchema = z.object({
+  type: z.enum([
+    'send_message', 'send_admin_message', 'add_role', 'remove_role',
+    'copy_images_to_gallery', 'copy_routes_to_library',
+    'show_card', 'update_card', 'dismiss_card', 'send_webhook',
+  ]),
+  config: z.record(z.any()),
+});
+
+// Workflows
+export const createWorkflowSchema = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().max(2000).nullable().optional(),
+  triggerType: z.enum([
+    'member_joined', 'message_created', 'image_uploaded',
+    'gpx_uploaded', 'slash_command', 'card_interaction', 'webhook',
+  ]),
+  triggerConfig: z.record(z.any()).nullable().optional(),
+  conditions: conditionGroupSchema.nullable().optional(),
+  actions: z.array(workflowActionSchema).min(1).max(20),
+  enabled: z.boolean().optional(),
+});
+
+export const updateWorkflowSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).nullable().optional(),
+  triggerType: z.enum([
+    'member_joined', 'message_created', 'image_uploaded',
+    'gpx_uploaded', 'slash_command', 'card_interaction', 'webhook',
+  ]).optional(),
+  triggerConfig: z.record(z.any()).nullable().optional(),
+  conditions: conditionGroupSchema.nullable().optional(),
+  actions: z.array(workflowActionSchema).min(1).max(20).optional(),
+  enabled: z.boolean().optional(),
+});
+
+// Custom Commands
+export const createCustomCommandSchema = z.object({
+  name: z.string().min(1).max(32).regex(/^[a-z0-9-]+$/, 'Command name must be lowercase alphanumeric with hyphens'),
+  description: z.string().min(1).max(200),
+  args: z.array(z.object({
+    name: z.string().min(1).max(32),
+    type: z.enum(['text', 'number', 'user', 'channel', 'role', 'boolean']),
+    required: z.boolean(),
+    description: z.string().max(200),
+  })).max(10).nullable().optional(),
+});
+
+export const updateCustomCommandSchema = z.object({
+  name: z.string().min(1).max(32).regex(/^[a-z0-9-]+$/).optional(),
+  description: z.string().min(1).max(200).optional(),
+  args: z.array(z.object({
+    name: z.string().min(1).max(32),
+    type: z.enum(['text', 'number', 'user', 'channel', 'role', 'boolean']),
+    required: z.boolean(),
+    description: z.string().max(200),
+  })).max(10).nullable().optional(),
+});
+
+export const invokeCommandSchema = z.object({
+  channelId: z.string().min(1),
+  args: z.record(z.any()).optional(),
+});
+
+// Card Templates
+export const createCardTemplateSchema = z.object({
+  name: z.string().min(1).max(200),
+  titleTemplate: z.string().min(1).max(500),
+  bodyTemplate: z.string().max(4000).nullable().optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+  fields: z.array(z.object({
+    key: z.string().min(1).max(50),
+    label: z.string().min(1).max(100),
+    type: z.enum(['text', 'select', 'role', 'user', 'channel']),
+    options: z.array(z.string().max(100)).max(20).optional(),
+  })).max(10).nullable().optional(),
+  buttons: z.array(z.object({
+    id: z.string().min(1).max(50),
+    label: z.string().min(1).max(50),
+    style: z.enum(['primary', 'secondary', 'danger']),
+  })).max(5).nullable().optional(),
+});
+
+export const updateCardTemplateSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  titleTemplate: z.string().min(1).max(500).optional(),
+  bodyTemplate: z.string().max(4000).nullable().optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+  fields: z.array(z.object({
+    key: z.string().min(1).max(50),
+    label: z.string().min(1).max(100),
+    type: z.enum(['text', 'select', 'role', 'user', 'channel']),
+    options: z.array(z.string().max(100)).max(20).optional(),
+  })).max(10).nullable().optional(),
+  buttons: z.array(z.object({
+    id: z.string().min(1).max(50),
+    label: z.string().min(1).max(50),
+    style: z.enum(['primary', 'secondary', 'danger']),
+  })).max(5).nullable().optional(),
+});
+
+// Card Interactions
+export const cardInteractionSchema = z.object({
+  buttonId: z.string().min(1).max(50).optional(),
+  fields: z.record(z.string().max(1000)).optional(),
+});
+
+// Workflow Execution Logs Query
+export const workflowExecutionsQuerySchema = z.object({
+  workflowId: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  before: z.string().optional(),
 });

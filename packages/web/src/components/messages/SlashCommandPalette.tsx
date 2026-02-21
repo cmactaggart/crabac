@@ -1,18 +1,31 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { SLASH_COMMANDS } from '../../lib/slashCommands.js';
+import { SLASH_COMMANDS, type SlashCommand } from '../../lib/slashCommands.js';
+
+export interface CustomCommandItem {
+  name: string;
+  description: string;
+  isCustom: true;
+}
+
+type PaletteItem = SlashCommand | CustomCommandItem;
 
 interface Props {
   query: string;
   onSelect: (command: string) => void;
   onClose: () => void;
+  customCommands?: CustomCommandItem[];
 }
 
-export function SlashCommandPalette({ query, onSelect, onClose }: Props) {
+export function SlashCommandPalette({ query, onSelect, onClose, customCommands = [] }: Props) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
   const lowerQuery = query.toLowerCase();
-  const filtered = SLASH_COMMANDS.filter((cmd) =>
+  const allCommands: PaletteItem[] = [
+    ...SLASH_COMMANDS,
+    ...customCommands,
+  ];
+  const filtered = allCommands.filter((cmd) =>
     cmd.name.startsWith(lowerQuery),
   );
 
@@ -64,6 +77,9 @@ export function SlashCommandPalette({ query, onSelect, onClose }: Props) {
         >
           <span style={styles.commandName}>/{cmd.name}</span>
           <span style={styles.commandDesc}>{cmd.description}</span>
+          {'isCustom' in cmd && cmd.isCustom && (
+            <span style={styles.customBadge}>custom</span>
+          )}
         </button>
       ))}
     </div>
@@ -108,5 +124,14 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+    flex: 1,
+  },
+  customBadge: {
+    fontSize: '0.65rem',
+    color: 'var(--text-muted)',
+    background: 'var(--bg-tertiary)',
+    padding: '1px 6px',
+    borderRadius: 'var(--radius)',
+    flexShrink: 0,
   },
 };

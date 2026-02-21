@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { authenticate } from '../auth/auth.middleware.js';
 import { requireAdmin } from './admin.middleware.js';
+import { validate } from '../../middleware/validate.js';
+import { validation } from '@crabac/shared';
 import * as adminService from './admin.service.js';
 
 export const adminRoutes = Router();
@@ -83,6 +85,32 @@ adminRoutes.post('/tags', async (req, res, next) => {
 adminRoutes.delete('/tags/:id', async (req, res, next) => {
   try {
     await adminService.deletePredefinedTag(req.params.id);
+    res.status(204).end();
+  } catch (err) { next(err); }
+});
+
+// ─── Global App Bans ───
+
+adminRoutes.get('/bans', async (_req, res, next) => {
+  try {
+    const bans = await adminService.listAppBans();
+    res.json(bans);
+  } catch (err) { next(err); }
+});
+
+adminRoutes.post('/bans/:userId',
+  validate(validation.appBanSchema),
+  async (req, res, next) => {
+    try {
+      await adminService.banUser(req.params.userId, req.user!.userId, req.body.reason);
+      res.status(201).json({ success: true });
+    } catch (err) { next(err); }
+  },
+);
+
+adminRoutes.delete('/bans/:userId', async (req, res, next) => {
+  try {
+    await adminService.unbanUser(req.params.userId);
     res.status(204).end();
   } catch (err) { next(err); }
 });

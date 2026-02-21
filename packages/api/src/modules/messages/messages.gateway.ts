@@ -5,6 +5,10 @@ export function registerMessageGateway() {
   eventBus.on('message.created', ({ message, channelId }) => {
     if (!io) return;
     const room = `channel:${channelId}`;
+    if (message.metadata?.workflowId) {
+      const roomSockets = io.sockets.adapter.rooms.get(room);
+      console.log(`[Gateway] Emitting workflow message ${message.id} to room ${room} (${roomSockets?.size ?? 0} sockets)`);
+    }
     io.to(room).emit('message:new', message);
   });
 

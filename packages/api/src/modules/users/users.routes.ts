@@ -7,6 +7,7 @@ import { validation } from '@crabac/shared';
 import { config } from '../../config.js';
 import * as usersService from './users.service.js';
 import * as mutesService from './mutes.service.js';
+import * as blocksService from './blocks.service.js';
 import * as preferencesService from './preferences.service.js';
 
 export const usersRoutes = Router();
@@ -123,6 +124,35 @@ usersRoutes.put('/mutes/:userId', async (req: Request, res: Response, next: Next
 usersRoutes.delete('/mutes/:userId', async (req: Request, res: Response, next: NextFunction) => {
   try {
     await mutesService.unmuteUser(req.user!.userId, req.params.userId);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Blocks ───
+
+usersRoutes.get('/blocks', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const blocks = await blocksService.getBlocks(req.user!.userId);
+    res.json(blocks);
+  } catch (err) {
+    next(err);
+  }
+});
+
+usersRoutes.put('/blocks/:userId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await blocksService.blockUser(req.user!.userId, req.params.userId);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+usersRoutes.delete('/blocks/:userId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await blocksService.unblockUser(req.user!.userId, req.params.userId);
     res.json({ success: true });
   } catch (err) {
     next(err);

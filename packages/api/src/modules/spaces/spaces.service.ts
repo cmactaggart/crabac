@@ -263,6 +263,11 @@ export async function joinViaInvite(userId: string, code: string) {
     throw new BadRequestError('Invite has reached maximum uses');
   }
 
+  // Check if banned
+  if (await isBanned(invite.space_id, userId)) {
+    throw new ForbiddenError('You are banned from this space');
+  }
+
   // If already a member, just return the space (idempotent)
   const existingMember = await db('space_members')
     .where({ space_id: invite.space_id, user_id: userId })
@@ -293,7 +298,7 @@ export async function joinViaInvite(userId: string, code: string) {
     await trx('invites').where('id', invite.id).increment('use_count', 1);
   });
 
-  eventBus.emit('space.member_joined', { spaceId: invite.space_id, userId });
+  eventBus.emit('space.member_joined', { spaceId: invite.space_id, userId, inviteCode: code });
 
   return getSpace(invite.space_id);
 }
@@ -311,6 +316,11 @@ export async function joinPublicSpace(userId: string, spaceId: string) {
 
   const settings = await db('space_settings').where('space_id', spaceId).first();
   if (!settings?.is_public) throw new ForbiddenError('This space is not public');
+
+  // Check if banned
+  if (await isBanned(spaceId, userId)) {
+    throw new ForbiddenError('You are banned from this space');
+  }
 
   if (settings.require_verified_email) {
     const user = await db('users').where('id', userId).select('email_verified').first();
@@ -346,7 +356,7 @@ export async function joinPublicSpace(userId: string, spaceId: string) {
     // ignore
   }
 
-  eventBus.emit('space.member_joined', { spaceId, userId });
+  eventBus.emit('space.member_joined', { spaceId, userId, inviteCode: null });
 
   return getSpace(spaceId);
 }
@@ -449,6 +459,94 @@ export async function listPublicSpaces(opts: { search?: string; tag?: string; li
 /** List featured public spaces */
 export async function listFeaturedSpaces() {
   return listPublicSpaces({ limit: 10, offset: 0 });
+}
+
+// ─── Space Bans ───
+
+export async function banMember(spaceId: string, targetUserId: string, bannedBy: string, reason?: string) {
+  const space = await db('spaces').where('id', spaceId).first();
+  if (!space) throw new NotFoundError('Space');
+  if (targetUserId === space.owner_id) throw new ForbiddenError('Cannot ban the space owner');
+
+  // Check if already banned
+  const existing = await db('space_bans').where({ space_id: spaceId, user_id: targetUserId }).first();
+  if (existing) throw new ConflictError('User is already banned from this space');
+
+  await db.transaction(async (trx) => {
+    // Remove from members
+    await trx('space_members').where({ space_id: spaceId, user_id: targetUserId }).delete();
+
+    // Add to bans
+    await trx('space_bans').insert({
+      space_id: spaceId,
+      user_id: targetUserId,
+      banned_by: bannedBy,
+      reason: reason || null,
+    });
+  });
+
+  // Post system message to admin channel
+  try {
+    const adminChannel = await db('channels')
+      .where({ space_id: spaceId, is_admin: true })
+      .first();
+    const bannedUser = await db('users').where('id', targetUserId).select('username').first();
+    const moderator = await db('users').where('id', bannedBy).select('username').first();
+    if (adminChannel && bannedUser && moderator) {
+      const content = `**${bannedUser.username}** was banned by **${moderator.username}**${reason ? ` — ${reason}` : ''}`;
+      await db('messages').insert({
+        id: snowflake.generate(),
+        channel_id: adminChannel.id,
+        author_id: bannedBy,
+        content,
+        message_type: 'system',
+      });
+    }
+  } catch {
+    // non-critical
+  }
+
+  eventBus.emit('space.member_banned', { spaceId, userId: targetUserId });
+  eventBus.emit('space.member_left', { spaceId, userId: targetUserId });
+}
+
+export async function unbanMember(spaceId: string, targetUserId: string) {
+  const deleted = await db('space_bans')
+    .where({ space_id: spaceId, user_id: targetUserId })
+    .delete();
+  if (!deleted) throw new NotFoundError('Ban');
+}
+
+export async function listBans(spaceId: string) {
+  const bans = await db('space_bans')
+    .join('users', 'space_bans.user_id', 'users.id')
+    .where('space_bans.space_id', spaceId)
+    .select(
+      'space_bans.*',
+      'users.username',
+      'users.display_name',
+      'users.avatar_url',
+    )
+    .orderBy('space_bans.created_at', 'desc');
+
+  return bans.map((b: any) => ({
+    spaceId: b.space_id,
+    userId: b.user_id,
+    bannedBy: b.banned_by,
+    reason: b.reason,
+    createdAt: b.created_at,
+    user: {
+      id: b.user_id,
+      username: b.username,
+      displayName: b.display_name,
+      avatarUrl: b.avatar_url,
+    },
+  }));
+}
+
+export async function isBanned(spaceId: string, userId: string): Promise<boolean> {
+  const row = await db('space_bans').where({ space_id: spaceId, user_id: userId }).first();
+  return !!row;
 }
 
 function formatSpace(row: any) {

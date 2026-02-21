@@ -1,18 +1,25 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Trash2, Flag } from 'lucide-react';
 import type { GalleryItem } from '@crabac/shared';
+import { useAuthStore } from '../../stores/auth.js';
+import { ReportModal } from '../moderation/ReportModal.js';
 
 interface Props {
   item: GalleryItem;
   initialIndex?: number;
   canDelete: boolean;
+  spaceId?: string;
+  channelId?: string;
   onDelete: () => void;
   onClose: () => void;
 }
 
-export function GalleryItemDetail({ item, initialIndex = 0, canDelete, onDelete, onClose }: Props) {
+export function GalleryItemDetail({ item, initialIndex = 0, canDelete, spaceId, channelId, onDelete, onClose }: Props) {
   const [index, setIndex] = useState(initialIndex);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+  const currentUser = useAuthStore((s) => s.user);
+  const isOwnItem = currentUser?.id === item.authorId;
   const touchStartX = useRef<number | null>(null);
   const count = item.attachments.length;
   const att = item.attachments[index];
@@ -104,21 +111,28 @@ export function GalleryItemDetail({ item, initialIndex = 0, canDelete, onDelete,
             </span>
             <span style={styles.date}>{timeAgo}</span>
           </div>
-          {canDelete && (
-            <div style={styles.actions}>
-              {confirmDelete ? (
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--danger, #ed4245)' }}>Delete this item?</span>
-                  <button onClick={onDelete} style={styles.confirmBtn}>Yes, delete</button>
-                  <button onClick={() => setConfirmDelete(false)} style={styles.cancelDeleteBtn}>Cancel</button>
-                </div>
-              ) : (
-                <button onClick={() => setConfirmDelete(true)} style={styles.deleteBtn}>
-                  <Trash2 size={14} /> Delete
-                </button>
-              )}
-            </div>
-          )}
+          <div style={styles.actions}>
+            {canDelete && (
+              <>
+                {confirmDelete ? (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--danger, #ed4245)' }}>Delete this item?</span>
+                    <button onClick={onDelete} style={styles.confirmBtn}>Yes, delete</button>
+                    <button onClick={() => setConfirmDelete(false)} style={styles.cancelDeleteBtn}>Cancel</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setConfirmDelete(true)} style={styles.deleteBtn}>
+                    <Trash2 size={14} /> Delete
+                  </button>
+                )}
+              </>
+            )}
+            {!isOwnItem && (
+              <button onClick={() => setShowReport(true)} style={styles.reportBtn}>
+                <Flag size={14} /> Report
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -135,6 +149,19 @@ export function GalleryItemDetail({ item, initialIndex = 0, canDelete, onDelete,
         <div style={styles.counter}>
           {index + 1} / {count}
         </div>
+      )}
+
+      {showReport && item.author && (
+        <ReportModal
+          reportedUserId={item.authorId}
+          reportedUsername={item.author.displayName || item.author.username || 'Unknown'}
+          spaceId={spaceId}
+          channelId={channelId}
+          galleryItemId={item.id}
+          messagePreview={item.caption || '(photo)'}
+          contentLabel="Photo"
+          onClose={() => setShowReport(false)}
+        />
       )}
     </div>
   );
@@ -272,6 +299,18 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'rgba(255,255,255,0.1)',
     border: 'none',
     color: 'rgba(255,255,255,0.7)',
+    borderRadius: 'var(--radius, 6px)',
+    cursor: 'pointer',
+    fontSize: '0.8rem',
+  },
+  reportBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    padding: '4px 10px',
+    background: 'rgba(255, 165, 0, 0.2)',
+    border: '1px solid rgba(255, 165, 0, 0.4)',
+    color: '#ffa500',
     borderRadius: 'var(--radius, 6px)',
     cursor: 'pointer',
     fontSize: '0.8rem',

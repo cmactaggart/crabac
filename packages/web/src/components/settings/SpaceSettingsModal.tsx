@@ -15,6 +15,8 @@ import { BoardSettingsTab } from './BoardSettingsTab.js';
 import { CalendarSettingsTab } from './CalendarSettingsTab.js';
 import { BlogSettingsTab } from './BlogSettingsTab.js';
 import { VisibilityTab } from './VisibilityTab.js';
+import { ReportsTab } from './ReportsTab.js';
+import { WorkflowsTab } from './WorkflowsTab.js';
 
 interface Props {
   spaceId: string;
@@ -37,6 +39,8 @@ const TABS: TabDef[] = [
   { key: 'boards', label: 'Public Web', permission: Permissions.MANAGE_SPACE },
   { key: 'calendar', label: 'Calendar', permission: Permissions.MANAGE_SPACE },
   { key: 'blog', label: 'Blog', permission: Permissions.MANAGE_SPACE },
+  { key: 'reports', label: 'Reports', permission: Permissions.MANAGE_MEMBERS },
+  { key: 'workflows', label: 'Workflows', permission: Permissions.MANAGE_WORKFLOWS },
 ];
 
 export function SpaceSettingsModal({ spaceId, onClose }: Props) {
@@ -103,6 +107,10 @@ export function SpaceSettingsModal({ spaceId, onClose }: Props) {
         return <CalendarSettingsTab spaceId={spaceId} />;
       case 'blog':
         return <BlogSettingsTab spaceId={spaceId} />;
+      case 'reports':
+        return <ReportsTab spaceId={spaceId} />;
+      case 'workflows':
+        return <WorkflowsTab spaceId={spaceId} />;
       default:
         return null;
     }

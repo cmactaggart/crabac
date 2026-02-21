@@ -189,7 +189,14 @@ export function SpaceView() {
     if (blogOpen && mobileView === 'chat' && spaceId) {
       return (
         <div style={mobileLayout}>
-          <BlogView spaceId={spaceId} />
+          <BlogView
+            spaceId={spaceId}
+            showBackButton
+            onBack={() => {
+              setBlogOpen(false);
+              setMobileView('sidebar');
+            }}
+          />
         </div>
       );
     }

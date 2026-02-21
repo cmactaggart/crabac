@@ -9,6 +9,7 @@ import { getChannelSpaceId } from '../channels/channels.service.js';
 import * as spacesService from '../spaces/spaces.service.js';
 import { db } from '../../database/connection.js';
 import * as messagesService from './messages.service.js';
+import * as blocksService from '../users/blocks.service.js';
 import { parseGpxFile } from './gpx.service.js';
 import { ForbiddenError, BadRequestError } from '../../lib/errors.js';
 import { config } from '../../config.js';
@@ -99,8 +100,9 @@ messagesRoutes.get(
   validate(validation.messagesQuerySchema, 'query'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { before, limit } = req.query as any;
-      const messages = await messagesService.listMessages(req.params.channelId, { before, limit });
+      const { before, after, limit } = req.query as any;
+      const blockedUserIds = await blocksService.getBlockedUserIds(req.user!.userId);
+      const messages = await messagesService.listMessages(req.params.channelId, { before, after, limit, blockedUserIds });
       res.json(messages);
     } catch (err) {
       next(err);

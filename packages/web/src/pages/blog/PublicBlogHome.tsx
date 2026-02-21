@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { boardApi } from '../../lib/boardApi.js';
 import type { BlogPost } from '@crabac/shared';
 
@@ -76,15 +78,12 @@ export function PublicBlogHome() {
       ) : (
         <div style={styles.postList}>
           {posts.map((post) => (
-            <Link
-              key={post.id}
-              to={`/blog/${spaceSlug}/${post.id}`}
-              style={styles.postCard}
-            >
-              <h2 style={styles.postTitle}>{post.title}</h2>
-              {post.summary && <p style={styles.postSummary}>{post.summary}</p>}
+            <article key={post.id} style={styles.postCard}>
+              <Link to={`/blog/${spaceSlug}/${post.id}`} style={styles.titleLink}>
+                <h2 style={styles.postTitle}>{post.title}</h2>
+              </Link>
               <div style={styles.postMeta}>
-                <span>{post.author?.displayName}</span>
+                <span style={{ fontWeight: 600 }}>{post.author?.displayName}</span>
                 <span style={{ color: '#bbb' }}>&middot;</span>
                 <span>
                   {post.publishedAt
@@ -92,7 +91,15 @@ export function PublicBlogHome() {
                     : 'Draft'}
                 </span>
               </div>
-            </Link>
+              {post.summary && (
+                <p style={styles.postSummary}>{post.summary}</p>
+              )}
+              <div style={styles.postBody}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {post.content}
+                </ReactMarkdown>
+              </div>
+            </article>
           ))}
           {hasMore && (
             <button onClick={loadMore} style={styles.loadMore}>
@@ -110,10 +117,12 @@ const styles: Record<string, React.CSSProperties> = {
   spaceIcon: { width: 48, height: 48, borderRadius: 12, objectFit: 'cover' },
   spaceName: { margin: 0, fontSize: '1.5rem', fontWeight: 700, color: '#111' },
   spaceDesc: { margin: '4px 0 0', fontSize: '0.9rem', color: '#666' },
-  postList: { display: 'flex', flexDirection: 'column', gap: 12 },
-  postCard: { display: 'block', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '20px 24px', textDecoration: 'none', color: 'inherit', transition: 'border-color 0.15s' },
-  postTitle: { margin: 0, fontSize: '1.15rem', fontWeight: 600, color: '#111' },
-  postSummary: { margin: '6px 0 0', fontSize: '0.9rem', color: '#666', lineHeight: 1.5 },
-  postMeta: { display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', color: '#999', marginTop: 10 },
+  postList: { display: 'flex', flexDirection: 'column', gap: 32 },
+  postCard: { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '32px 36px' },
+  titleLink: { textDecoration: 'none', color: 'inherit' },
+  postTitle: { margin: 0, fontSize: '1.5rem', fontWeight: 700, color: '#111', lineHeight: 1.3 },
+  postMeta: { display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', color: '#999', marginTop: 8 },
+  postSummary: { margin: '16px 0 0', fontSize: '1.05rem', color: '#666', lineHeight: 1.6, fontStyle: 'italic', borderLeft: '3px solid #e5e7eb', paddingLeft: 16 },
+  postBody: { marginTop: 20, fontSize: '1rem', lineHeight: 1.8, color: '#333' },
   loadMore: { background: 'none', border: 'none', color: '#5865f2', cursor: 'pointer', fontSize: '0.85rem', padding: 12, textAlign: 'center' },
 };

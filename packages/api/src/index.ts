@@ -40,6 +40,12 @@ import { blogRoutes } from './modules/blog/blog.routes.js';
 import { boardsRoutes } from './modules/boards/boards.routes.js';
 import { boardAuthRoutes } from './modules/boards/board-auth.routes.js';
 import { publicSpacesRoutes } from './modules/spaces/public-spaces.routes.js';
+import { mobileRoutes } from './modules/mobile/mobile.routes.js';
+import { reportsRoutes } from './modules/reports/reports.routes.js';
+import { workflowRoutes } from './modules/workflows/workflows.routes.js';
+import { webhookRoutes } from './modules/webhooks/webhooks.routes.js';
+import { registerWorkflowGateway } from './modules/workflows/workflows.gateway.js';
+import { registerWorkflowListener } from './modules/workflows/workflows.listener.js';
 import { publicBoardLimiter, publicBoardPostLimiter } from './middleware/rate-limiter.js';
 import { redis } from './lib/redis.js';
 import { loadPlugins, getLoadedPlugins } from './plugins/loader.js';
@@ -99,6 +105,10 @@ app.use('/api/spaces', routeCategoriesRoutes);
 app.use('/api/spaces', blogRoutes);
 app.use('/api/boards', publicBoardLimiter, boardsRoutes);
 app.use('/api/boards/auth', boardAuthRoutes);
+app.use('/api/mobile', mobileRoutes);
+app.use('/api/reports', reportsRoutes);
+app.use('/api/spaces', workflowRoutes);
+app.use('/api/webhooks', webhookRoutes);
 
 // Unified message lookup (for embeds)
 app.get('/api/messages/:messageId', authenticate, async (req, res, next) => {
@@ -147,6 +157,8 @@ registerFriendsGateway();
 registerForumGateway();
 registerGalleryGateway();
 registerRouteLibraryGateway();
+registerWorkflowGateway();
+registerWorkflowListener();
 
 // Load plugins, connect Redis, and start server
 async function start() {

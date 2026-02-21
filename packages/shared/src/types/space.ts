@@ -65,6 +65,8 @@ export interface SpaceAdminSettings {
   baseColor: string | null;
   accentColor: string | null;
   textColor: string | null;
+  webhooksEnabled: boolean;
+  webhookSecret: string | null;
 }
 
 export interface PublicSpaceCard {

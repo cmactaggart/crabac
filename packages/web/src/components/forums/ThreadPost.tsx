@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Flag } from 'lucide-react';
 import { Avatar } from '../common/Avatar.js';
 import { Markdown } from '../common/Markdown.js';
 import { useAuthStore } from '../../stores/auth.js';
@@ -12,9 +12,10 @@ interface Props {
   channelId: string;
   isFirstPost?: boolean;
   canModerate?: boolean;
+  onReport?: (post: Message) => void;
 }
 
-export function ThreadPost({ post, channelId, isFirstPost, canModerate }: Props) {
+export function ThreadPost({ post, channelId, isFirstPost, canModerate, onReport }: Props) {
   const date = new Date(post.id ? snowflakeToDate(post.id) : Date.now());
   const currentUser = useAuthStore((s) => s.user);
   const deleteMessage = useMessagesStore((s) => s.deleteMessage);
@@ -60,6 +61,11 @@ export function ThreadPost({ post, channelId, isFirstPost, canModerate }: Props)
           {canDelete && hovering && (
             <button onClick={handleDelete} style={styles.deleteBtn} title="Delete post">
               <Trash2 size={14} />
+            </button>
+          )}
+          {!isOwnPost && hovering && onReport && (
+            <button onClick={() => onReport(post)} style={styles.reportBtn} title="Report post">
+              <Flag size={14} />
             </button>
           )}
         </div>
@@ -152,6 +158,17 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     marginLeft: 'auto',
+    opacity: 0.7,
+  },
+  reportBtn: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--warning, #faa61a)',
+    cursor: 'pointer',
+    padding: 2,
+    borderRadius: 'var(--radius)',
+    display: 'flex',
+    alignItems: 'center',
     opacity: 0.7,
   },
   content: {

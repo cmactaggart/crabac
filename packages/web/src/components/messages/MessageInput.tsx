@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect, type FormEvent, type KeyboardEvent } from 'react';
 import { Plus, Paperclip, Calendar, X, ImagePlus } from 'lucide-react';
 import { Permissions } from '@crabac/shared';
+import type { Message, CustomCommand, CommandArg } from '@crabac/shared';
 import { getSocket } from '../../lib/socket.js';
 import { api } from '../../lib/api.js';
 import { useMessagesStore } from '../../stores/messages.js';
@@ -8,11 +9,40 @@ import { useSpacesStore } from '../../stores/spaces.js';
 import { useHasSpacePermission } from '../settings/SpaceSettingsModal.js';
 import { MentionAutocomplete } from './MentionAutocomplete.js';
 import { ChannelAutocomplete } from './ChannelAutocomplete.js';
-import { SlashCommandPalette } from './SlashCommandPalette.js';
+import { SlashCommandPalette, type CustomCommandItem } from './SlashCommandPalette.js';
 import { CreateEventModal } from '../calendar/CreateEventModal.js';
 import { MediaUploadModal } from './MediaUploadModal.js';
 import { parseSlashCommand } from '../../lib/slashCommands.js';
-import type { Message } from '@crabac/shared';
+
+/** Parse space-separated tokens, respecting "quoted strings" as single tokens */
+function parseArgTokens(text: string): string[] {
+  const tokens: string[] = [];
+  let current = '';
+  let inQuote = false;
+  let quoteChar = '';
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuote) {
+      if (ch === quoteChar) {
+        inQuote = false;
+      } else {
+        current += ch;
+      }
+    } else if (ch === '"' || ch === "'") {
+      inQuote = true;
+      quoteChar = ch;
+    } else if (ch === ' ') {
+      if (current) {
+        tokens.push(current);
+        current = '';
+      }
+    } else {
+      current += ch;
+    }
+  }
+  if (current) tokens.push(current);
+  return tokens;
+}
 
 interface Props {
   channelId: string;
@@ -39,6 +69,22 @@ export function MessageInput({ channelId, spaceId, onSend, replyingTo, onCancelR
   const plusMenuRef = useRef<HTMLDivElement>(null);
   const space = useSpacesStore((s) => s.spaces.find((sp) => sp.id === spaceId));
   const canManageCalendar = useHasSpacePermission(spaceId, Permissions.MANAGE_CALENDAR);
+  const [customCommands, setCustomCommands] = useState<CustomCommandItem[]>([]);
+  const [fullCustomCommands, setFullCustomCommands] = useState<CustomCommand[]>([]);
+
+  // Fetch custom commands for this space
+  useEffect(() => {
+    api<CustomCommand[]>(`/spaces/${spaceId}/workflows/commands`)
+      .then((cmds) => {
+        setFullCustomCommands(cmds);
+        setCustomCommands(cmds.map((c) => ({
+          name: c.name,
+          description: c.description,
+          isCustom: true as const,
+        })));
+      })
+      .catch(() => {});
+  }, [spaceId]);
 
   // Focus the textarea when replying
   useEffect(() => {
@@ -169,6 +215,42 @@ export function MessageInput({ channelId, spaceId, onSend, replyingTo, onCancelR
       const result = parseSlashCommand(trimmed);
       if (result) {
         trimmed = result.output;
+      } else {
+        // Check for custom command
+        const match = trimmed.match(/^\/([a-z0-9-]+)(?:\s+(.*))?$/);
+        if (match) {
+          const cmdName = match[1];
+          const cmdDef = fullCustomCommands.find((c) => c.name === cmdName);
+          if (cmdDef) {
+            // Parse positional args from remaining text
+            const rawText = (match[2] || '').trim();
+            const args: Record<string, string> = {};
+            if (rawText && cmdDef.args?.length) {
+              const tokens = parseArgTokens(rawText);
+              for (let i = 0; i < cmdDef.args.length; i++) {
+                if (i < tokens.length) {
+                  args[cmdDef.args[i].name] = tokens[i];
+                }
+              }
+            }
+
+            setSending(true);
+            try {
+              await api(`/spaces/${spaceId}/workflows/commands/${cmdName}/invoke`, {
+                method: 'POST',
+                body: JSON.stringify({ channelId, args }),
+              });
+              setContent('');
+              // Fetch any messages created by the workflow
+              useMessagesStore.getState().catchUpMessages(channelId);
+            } catch (err: any) {
+              setUploadError(err?.message || 'Command failed');
+            } finally {
+              setSending(false);
+            }
+            return;
+          }
+        }
       }
     }
 
@@ -332,6 +414,7 @@ export function MessageInput({ channelId, spaceId, onSend, replyingTo, onCancelR
             query={slashQuery}
             onSelect={handleSlashSelect}
             onClose={() => setSlashQuery(null)}
+            customCommands={customCommands}
           />
         )}
 

@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { db } from '../../database/connection.js';
 import { snowflake } from '../_shared.js';
 import { GUEST_PERMISSIONS } from '@crabac/shared';
@@ -25,6 +26,8 @@ export async function getSpaceAdminSettings(spaceId: string) {
       baseColor: null,
       accentColor: null,
       textColor: null,
+      webhooksEnabled: false,
+      webhookSecret: null,
     };
   }
 
@@ -47,6 +50,7 @@ export async function updateSpaceAdminSettings(
     baseColor?: string | null;
     accentColor?: string | null;
     textColor?: string | null;
+    webhooksEnabled?: boolean;
   },
 ) {
   const existing = await db('space_settings').where('space_id', spaceId).first();
@@ -66,11 +70,19 @@ export async function updateSpaceAdminSettings(
     if (data.baseColor !== undefined) updates.base_color = data.baseColor;
     if (data.accentColor !== undefined) updates.accent_color = data.accentColor;
     if (data.textColor !== undefined) updates.text_color = data.textColor;
+    if (data.webhooksEnabled !== undefined) {
+      updates.webhooks_enabled = data.webhooksEnabled;
+      // Auto-generate secret when webhooks are first enabled and no secret exists
+      if (data.webhooksEnabled && !existing.webhook_secret) {
+        updates.webhook_secret = crypto.randomBytes(32).toString('hex');
+      }
+    }
 
     if (Object.keys(updates).length > 0) {
       await db('space_settings').where('space_id', spaceId).update(updates);
     }
   } else {
+    const webhookSecret = data.webhooksEnabled ? crypto.randomBytes(32).toString('hex') : null;
     await db('space_settings').insert({
       space_id: spaceId,
       allow_public_boards: data.allowPublicBoards ?? false,
@@ -86,6 +98,8 @@ export async function updateSpaceAdminSettings(
       base_color: data.baseColor ?? null,
       accent_color: data.accentColor ?? null,
       text_color: data.textColor ?? null,
+      webhooks_enabled: data.webhooksEnabled ?? false,
+      webhook_secret: webhookSecret,
     });
   }
 
@@ -136,6 +150,20 @@ async function clearGuestSessions(spaceId: string) {
   }
 }
 
+export async function rotateWebhookSecret(spaceId: string) {
+  const newSecret = crypto.randomBytes(32).toString('hex');
+  const existing = await db('space_settings').where('space_id', spaceId).first();
+  if (existing) {
+    await db('space_settings').where('space_id', spaceId).update({ webhook_secret: newSecret });
+  } else {
+    await db('space_settings').insert({
+      space_id: spaceId,
+      webhook_secret: newSecret,
+    });
+  }
+  return getSpaceAdminSettings(spaceId);
+}
+
 function formatSettings(row: any) {
   return {
     spaceId: row.space_id,
@@ -153,5 +181,7 @@ function formatSettings(row: any) {
     baseColor: row.base_color || null,
     accentColor: row.accent_color || null,
     textColor: row.text_color || null,
+    webhooksEnabled: !!row.webhooks_enabled,
+    webhookSecret: row.webhook_secret || null,
   };
 }

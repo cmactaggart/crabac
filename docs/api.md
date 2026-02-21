@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.2.0
+## API Version 0.3.0
 
 Base URL: `https://app.crab.ac/api`
 
@@ -44,7 +44,7 @@ Access control uses a bitfield RBAC system. Permissions are assigned to roles, a
 | `MANAGE_MESSAGES` | Delete/pin others' messages |
 | `MANAGE_CHANNELS` | Create, edit, delete channels |
 | `MANAGE_ROLES` | Create, edit, delete roles |
-| `MANAGE_MEMBERS` | Kick members, assign roles |
+| `MANAGE_MEMBERS` | Kick/ban members, assign roles |
 | `MANAGE_SPACE` | Edit space settings |
 | `CREATE_INVITES` | Create invite links |
 | `MANAGE_INVITES` | View/delete invites |
@@ -55,6 +55,15 @@ Access control uses a bitfield RBAC system. Permissions are assigned to roles, a
 | `MANAGE_THREADS` | Pin/lock/delete threads |
 | `MANAGE_ROUTE_CATEGORIES` | Create/delete route library categories |
 | `MANAGE_BLOG` | Create/edit/delete blog posts and upload images |
+| `MANAGE_WORKFLOWS` | Create/edit/delete workflows, commands, and card templates |
+
+### Ban Enforcement
+
+Globally banned users (`user_bans`) receive `403 "Your account has been suspended"` on all authenticated endpoints. Space-banned users are prevented from joining the space via invite or public join.
+
+### Block Filtering
+
+When a user blocks another user, messages from blocked users are filtered out of both channel and DM message listings. Blocked users cannot initiate DMs.
 
 ---
 
@@ -224,6 +233,26 @@ Get public profile for a user. Requires auth.
 
 ---
 
+## User Blocks
+
+All endpoints require auth.
+
+### GET /users/blocks
+
+List blocked users (both directions).
+
+**Response:** `{ blockedByMe: string[], blockedMe: string[] }`
+
+### PUT /users/blocks/:userId
+
+Block a user. Also removes any friendship and declines pending DM requests between the two users. Idempotent.
+
+### DELETE /users/blocks/:userId
+
+Unblock a user.
+
+---
+
 ## Spaces
 
 ### POST /spaces
@@ -316,7 +345,9 @@ Get space admin settings. Requires `MANAGE_SPACE`.
   "isFeatured": false,
   "baseColor": null,
   "accentColor": null,
-  "textColor": null
+  "textColor": null,
+  "webhooksEnabled": false,
+  "webhookSecret": null
 }
 ```
 
@@ -324,7 +355,92 @@ Get space admin settings. Requires `MANAGE_SPACE`.
 
 Update space admin settings. Requires `MANAGE_SPACE`.
 
-**Body:** Any subset of the settings fields above.
+**Body:** Any subset of the settings fields above (including `webhooksEnabled`). When enabling webhooks for the first time, a webhook secret is auto-generated.
+
+### POST /spaces/:spaceId/admin-settings/rotate-webhook-secret
+
+Rotate the webhook secret. Requires `MANAGE_SPACE`.
+
+**Response:** Updated `SpaceAdminSettings` with new `webhookSecret`.
+
+---
+
+## Space Bans
+
+### POST /spaces/:spaceId/bans/:userId
+
+Ban a member from a space. Requires `MANAGE_MEMBERS`. Removes the user from the space, posts a system message to the admin channel.
+
+**Body:**
+| Field | Type | Required |
+|-------|------|----------|
+| `reason` | string | no |
+
+**Response:** `201 { success: true }`
+
+Returns `403` if targeting the space owner, `409` if already banned.
+
+### DELETE /spaces/:spaceId/bans/:userId
+
+Unban a user from a space. Requires `MANAGE_MEMBERS`.
+
+### GET /spaces/:spaceId/bans
+
+List all bans for a space. Requires `MANAGE_MEMBERS`.
+
+**Response:** Array of `{ spaceId, userId, bannedBy, reason, createdAt, user: { id, username, displayName, avatarUrl } }`
+
+---
+
+## Space Reports
+
+### POST /reports
+
+Create a report. Requires auth. Cannot report yourself. Prevents duplicate active reports for the same content. If `spaceId` is set, posts a system message to the space's admin channel.
+
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `reportedUserId` | string | yes | |
+| `spaceId` | string | no | |
+| `channelId` | string | no | |
+| `messageId` | string | no | Channel message ID |
+| `dmMessageId` | string | no | DM message ID |
+| `conversationId` | string | no | DM conversation ID |
+| `galleryItemId` | string | no | Gallery photo ID |
+| `routeId` | string | no | Route item ID |
+| `forumPostId` | string | no | Forum post (message) ID |
+| `reason` | string | yes | 1-2000 chars |
+
+The `contentType` field is auto-set based on which ID is present: `'gallery'`, `'route'`, `'forum_post'`, or `null` for messages/DMs.
+
+**Response:** `201` Report object.
+
+### GET /spaces/:spaceId/reports
+
+List reports for a space. Requires `MANAGE_MEMBERS`.
+
+**Query:** `status?` (filter by `pending`, `resolved`, `dismissed`)
+
+**Response:** Array of Report objects with `messagePreview` (content preview for the reported item).
+
+### PATCH /spaces/:spaceId/reports/:id
+
+Resolve or dismiss a report. Requires `MANAGE_MEMBERS`.
+
+**Body:** `{ status: 'resolved' | 'dismissed' }`
+
+### GET /reports (Admin)
+
+List all reports globally. Requires global admin.
+
+**Query:** `status?`
+
+### PATCH /reports/:id (Admin)
+
+Resolve or dismiss a report. Requires global admin.
+
+**Body:** `{ status: 'resolved' | 'dismissed' }`
 
 ---
 
@@ -524,13 +640,14 @@ Delete category. Requires `MANAGE_CHANNELS`.
 
 ### GET /channels/:channelId/messages
 
-Get messages with cursor pagination.
+Get messages with cursor pagination. Messages from blocked users are filtered out.
 
 **Query:**
-| Param | Type | Default |
-|-------|------|---------|
-| `before` | string | - |
-| `limit` | number | 50 |
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `before` | string | - | Cursor for backward pagination |
+| `after` | string | - | Cursor for forward pagination (returns ascending order) |
+| `limit` | number | 50 | Max 100 |
 
 ### POST /channels/:channelId/messages
 
@@ -1069,7 +1186,7 @@ Get DM unread counts. Requires auth.
 
 ### POST /conversations/with/:userId
 
-Create or get a 1:1 conversation. Requires auth.
+Create or get a 1:1 conversation. Requires auth. Returns `403` if either user has blocked the other.
 
 ### POST /conversations/groups
 
@@ -1101,11 +1218,13 @@ Mark conversation as read.
 
 ### GET /conversations/:conversationId/messages
 
-Get messages. Query: `before`, `limit`.
+Get messages. Messages from blocked users are filtered out.
+
+**Query:** `before`, `limit`
 
 ### POST /conversations/:conversationId/messages
 
-Send a DM.
+Send a DM. Returns `403` if the other participant has blocked you or vice versa.
 
 **Body:** `{ content: string }`
 
@@ -1115,7 +1234,7 @@ Edit a DM.
 
 ### DELETE /conversations/:conversationId/messages/:messageId
 
-Delete a DM.
+Delete a DM. Author can delete own; global admins can delete any DM.
 
 ---
 
@@ -1317,6 +1436,24 @@ List all spaces.
 
 List all users.
 
+### Global App Bans
+
+#### GET /admin/bans
+
+List all globally banned users.
+
+**Response:** Array of `{ userId, bannedBy, reason, createdAt, user: { id, username, displayName, email } }`
+
+#### POST /admin/bans/:userId
+
+Ban a user globally. Returns `409` if already banned.
+
+**Body:** `{ reason?: string }`
+
+#### DELETE /admin/bans/:userId
+
+Unban a user globally.
+
 ### GET /admin/announcements
 
 List announcements.
@@ -1351,6 +1488,261 @@ Delete a predefined tag.
 
 ---
 
+## Webhooks (Incoming)
+
+Incoming webhook endpoints use secret-based authorization rather than Bearer tokens. The secret is generated per-space via admin settings.
+
+### POST /webhooks/:secret/:slug
+
+Receive an incoming webhook. Rate limited to 60/min per secret.
+
+**Auth:** None (secret validated against `space_settings.webhook_secret` where `webhooks_enabled = true`)
+
+**Body:** JSON payload (max 64KB)
+
+**Response:** `{ ok: true }`
+
+Fires a `webhook` trigger into the workflow engine with context `{ spaceId, webhookSlug, webhookMethod: 'POST', webhookPayload }`. Returns `404` for invalid/missing secrets.
+
+### GET /webhooks/:secret/:slug
+
+Same as POST but payload comes from query parameters, `webhookMethod: 'GET'`.
+
+---
+
+## Workflows
+
+Workflows are space-scoped automations that respond to triggers (member joins, messages, commands, webhooks) by executing actions (send messages, manage roles, create cards). All management endpoints require `MANAGE_WORKFLOWS` permission unless noted.
+
+### Workflow CRUD
+
+#### GET /spaces/:spaceId/workflows
+
+List all workflows for a space.
+
+#### POST /spaces/:spaceId/workflows
+
+Create a workflow.
+
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | yes | Max 200 chars |
+| `description` | string \| null | no | Max 2000 chars |
+| `triggerType` | string | yes | See trigger types below |
+| `triggerConfig` | object \| null | no | Trigger-specific config |
+| `conditions` | object \| null | no | Condition tree (AND/OR) |
+| `actions` | array | yes | 1-20 actions |
+| `enabled` | boolean | no | Default `true` |
+
+**Trigger types:** `member_joined`, `message_created`, `image_uploaded`, `gpx_uploaded`, `slash_command`, `card_interaction`, `webhook`
+
+**Action types:** `send_message`, `send_admin_message`, `add_role`, `remove_role`, `copy_images_to_gallery`, `copy_routes_to_library`, `show_card`, `update_card`, `dismiss_card`, `send_webhook`
+
+**Condition types (nested AND/OR tree, each rule supports `negate`):** `user_has_role`, `channel_is`, `message_contains`, `message_equals`, `command_arg_equals`, `card_field_equals`, `card_field_not_null`, `invite_code_is`, `button_is`, `webhook_payload_equals`
+
+#### GET /spaces/:spaceId/workflows/details/:id
+
+Get a single workflow.
+
+#### PUT /spaces/:spaceId/workflows/details/:id
+
+Update a workflow.
+
+**Body:** Same fields as create, all optional.
+
+#### DELETE /spaces/:spaceId/workflows/details/:id
+
+Delete a workflow.
+
+#### PATCH /spaces/:spaceId/workflows/details/:id/toggle
+
+Toggle a workflow's enabled/disabled state.
+
+### Execution Logs
+
+#### GET /spaces/:spaceId/workflows/executions
+
+List workflow execution logs.
+
+**Query:**
+| Param | Type | Default |
+|-------|------|---------|
+| `workflowId` | string | - |
+| `limit` | number | 50 |
+| `before` | string | - |
+
+**Response:** Array of execution objects with `workflowName`, `status` (`success`, `partial`, `error`, `skipped`), `actionsRun`, `actionsTotal`, `errorMessage`, `durationMs`.
+
+### Custom Commands
+
+Custom slash commands that trigger workflows. Command listing is available to all space members; management requires `MANAGE_WORKFLOWS`.
+
+#### GET /spaces/:spaceId/workflows/commands
+
+List custom commands. Requires **space membership** (any member).
+
+**Response:** Array of `{ id, spaceId, name, description, args, createdBy, createdAt }`
+
+#### POST /spaces/:spaceId/workflows/commands
+
+Create a custom command. Requires `MANAGE_WORKFLOWS`.
+
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | yes | 1-32 chars, lowercase alphanumeric + hyphens |
+| `description` | string | yes | 1-200 chars |
+| `args` | array \| null | no | Max 10 typed arguments |
+
+**Argument types:** `text`, `number`, `user`, `channel`, `role`, `boolean`
+
+#### PUT /spaces/:spaceId/workflows/commands/:id
+
+Update a custom command. Requires `MANAGE_WORKFLOWS`.
+
+#### DELETE /spaces/:spaceId/workflows/commands/:id
+
+Delete a custom command. Requires `MANAGE_WORKFLOWS`.
+
+#### POST /spaces/:spaceId/workflows/commands/:name/invoke
+
+Invoke a custom command. Requires **space membership** (any member). Fires the `slash_command` workflow trigger synchronously.
+
+**Body:** `{ channelId: string, args?: Record<string, any> }`
+
+### Card Templates
+
+Interactive cards displayed in channels via workflows. Cards can have fields for user input and buttons for interaction.
+
+#### GET /spaces/:spaceId/workflows/card-templates
+
+List card templates.
+
+#### POST /spaces/:spaceId/workflows/card-templates
+
+Create a card template.
+
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | yes | Max 200 chars |
+| `titleTemplate` | string | yes | Max 500 chars, supports `{{variables}}` |
+| `bodyTemplate` | string \| null | no | Max 4000 chars |
+| `color` | string \| null | no | `#RRGGBB` |
+| `fields` | array \| null | no | Max 10 fields |
+| `buttons` | array \| null | no | Max 5 buttons |
+
+**Field types:** `text`, `select`, `role`, `user`, `channel`
+
+**Button styles:** `primary`, `secondary`, `danger`
+
+#### PUT /spaces/:spaceId/workflows/card-templates/:id
+
+Update a card template.
+
+#### DELETE /spaces/:spaceId/workflows/card-templates/:id
+
+Delete a card template.
+
+### Card Instances
+
+#### GET /spaces/:spaceId/workflows/cards/:instanceId
+
+Get a card instance with its template. Requires **space membership**.
+
+#### POST /spaces/:spaceId/workflows/cards/:instanceId/interact
+
+Interact with an active card (button click or field submission). Requires **space membership**. Returns `400` if card is not active. Fires the `card_interaction` workflow trigger synchronously.
+
+**Body:** `{ buttonId?: string, fields?: Record<string, string> }`
+
+### Template Variables
+
+Action templates use `{{varName}}` syntax. Available variables depend on trigger:
+
+| Variable | Triggers | Description |
+|----------|----------|-------------|
+| `spaceName` | all | Space name |
+| `userId`, `username`, `displayName` | all | Triggering user |
+| `channelId`, `channelName` | message, image, gpx, command, card | Channel context |
+| `messageId`, `messageContent` | message, image, gpx | Message context |
+| `imageCount` | image | Number of images |
+| `gpxCount` | gpx | Number of GPX files |
+| `inviteCode` | member_joined | Invite code used |
+| `commandName`, `args.*` | slash_command | Command and arguments |
+| `cardInstanceId`, `buttonId`, `fields.*`, `card.*` | card_interaction | Card context |
+| `webhookSlug`, `webhookMethod`, `payload.*` | webhook | Webhook context |
+
+---
+
+## Mobile OTA Bundles
+
+Over-the-air update system for mobile apps. Public endpoints require no auth; management requires global admin.
+
+### GET /mobile/update-check (Public)
+
+Check for available OTA updates. Rate limited to 30/min per IP.
+
+**Query:**
+| Param | Type | Required |
+|-------|------|----------|
+| `platform` | string | yes | `ios` or `android` |
+| `nativeVersion` | string | yes | Semver (e.g. `1.0.0`) |
+| `currentBundleVersion` | number | yes | Current bundle version (int >= 0) |
+
+**Response:** `204 No Content` if no update available, or:
+```json
+{
+  "id": "...",
+  "bundleVersion": 5,
+  "nativeVersion": "1.0.0",
+  "checksum": "sha256...",
+  "fileSize": 1234567,
+  "downloadUrl": "/api/mobile/bundles/:id/download",
+  "isRequired": false,
+  "releaseNotes": "..."
+}
+```
+
+If any intermediate bundle was marked `isRequired`, the update is flagged as required.
+
+### GET /mobile/bundles/:id/download (Public)
+
+Download a bundle file. Returns binary stream with `X-Bundle-Checksum` header.
+
+### POST /mobile/bundles (Admin)
+
+Upload a new OTA bundle. Multipart form data with `bundle` field (max 200MB).
+
+**Form fields:**
+| Field | Type | Required |
+|-------|------|----------|
+| `platform` | string | yes | `ios` or `android` |
+| `nativeVersion` | string | yes | Semver |
+| `isRequired` | boolean | no | Default `false` |
+| `releaseNotes` | string | no | Max 4000 chars |
+
+**Response:** `201` MobileBundle object. Bundle version auto-increments per platform.
+
+### GET /mobile/bundles (Admin)
+
+List bundles with pagination.
+
+**Query:** `platform?`, `status?` (`active`/`inactive`), `limit` (default 50), `offset`
+
+**Response:** `{ bundles: MobileBundle[], total: number }`
+
+### DELETE /mobile/bundles/:id (Admin)
+
+Deactivate a bundle (sets status to `inactive`).
+
+### POST /mobile/bundles/:id/activate (Admin)
+
+Reactivate an inactive bundle.
+
+---
+
 ## System
 
 ### GET /health
@@ -1377,8 +1769,10 @@ The API uses Socket.io for real-time communication at `/socket.io/`. Clients aut
 |-------|---------|-------------|
 | `join_space` | `{ spaceId }` | Join a space room |
 | `leave_space` | `{ spaceId }` | Leave a space room |
-| `join_channel` | `{ channelId }` | Join a channel room |
-| `leave_channel` | `{ channelId }` | Leave a channel room |
+| `channel:join` | `{ channelId }` | Join a channel room |
+| `channel:leave` | `{ channelId }` | Leave a channel room |
+| `thread:join` | `{ threadId }` | Join a forum thread room |
+| `thread:leave` | `{ threadId }` | Leave a forum thread room |
 | `typing_start` | `{ channelId }` | Begin typing indicator |
 | `typing_stop` | `{ channelId }` | Stop typing indicator |
 
@@ -1396,12 +1790,15 @@ The API uses Socket.io for real-time communication at `/socket.io/`. Clients aut
 | `channel:update` | Channel object | Channel updated |
 | `channel:delete` | `{ id }` | Channel deleted |
 | `member:join` | Member object | New member joined |
-| `member:leave` | `{ userId, spaceId }` | Member left/kicked |
+| `member:leave` | `{ userId, spaceId }` | Member left/kicked/banned |
 | `dm:message` | Message object | New DM received |
 | `notification` | Notification object | New notification |
 | `space:guests_cleared` | `{ spaceId }` | Guest sessions cleared |
 | `route:create` | RouteItem object | New route added to library |
 | `route:delete` | `{ id, channelId }` | Route deleted from library |
+| `workflow:card_created` | CardInstance object | New card instance created by workflow |
+| `workflow:card_updated` | CardInstance object | Card instance state updated |
+| `workflow:card_dismissed` | CardInstance object | Card instance dismissed |
 
 ---
 

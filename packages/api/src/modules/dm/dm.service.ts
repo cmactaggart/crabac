@@ -244,7 +244,7 @@ export async function isConversationMember(conversationId: string, userId: strin
 
 // ─── Direct Messages ───
 
-export async function listMessages(conversationId: string, options: { before?: string; limit: number }) {
+export async function listMessages(conversationId: string, options: { before?: string; limit: number; blockedUserIds?: string[] }) {
   let query = db('direct_messages')
     .join('users', 'direct_messages.author_id', 'users.id')
     .where('direct_messages.conversation_id', conversationId)
@@ -261,6 +261,10 @@ export async function listMessages(conversationId: string, options: { before?: s
 
   if (options.before) {
     query = query.where('direct_messages.id', '<', options.before);
+  }
+
+  if (options.blockedUserIds && options.blockedUserIds.length > 0) {
+    query = query.whereNotIn('direct_messages.author_id', options.blockedUserIds);
   }
 
   const rows = await query;
@@ -301,10 +305,10 @@ export async function editMessage(conversationId: string, messageId: string, use
   return message;
 }
 
-export async function deleteMessage(conversationId: string, messageId: string, userId: string) {
+export async function deleteMessage(conversationId: string, messageId: string, userId: string, isAdmin = false) {
   const msg = await db('direct_messages').where({ id: messageId, conversation_id: conversationId }).first();
   if (!msg) throw new NotFoundError('Message');
-  if (msg.author_id !== userId) throw new ForbiddenError('You can only delete your own messages');
+  if (msg.author_id !== userId && !isAdmin) throw new ForbiddenError('You can only delete your own messages');
 
   await db('direct_messages').where({ id: messageId }).delete();
   eventBus.emit('dm.deleted', { conversationId, messageId });

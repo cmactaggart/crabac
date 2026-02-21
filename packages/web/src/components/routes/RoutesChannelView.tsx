@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense } from 'react';
-import { MapPinned, Plus, Star, Download, Search, X, List, LayoutGrid, ChevronDown, Trash2, MapPin, Mountain, TrendingUp, Copy, CalendarPlus } from 'lucide-react';
+import { MapPinned, Plus, Star, Download, Search, X, List, LayoutGrid, ChevronDown, Trash2, MapPin, Mountain, TrendingUp, Copy, CalendarPlus, Flag } from 'lucide-react';
 import { getSocket } from '../../lib/socket.js';
 import { api } from '../../lib/api.js';
 import { Permissions, hasPermission, combinePermissions } from '@crabac/shared';
@@ -11,6 +11,8 @@ import { useChannelsStore } from '../../stores/channels.js';
 import { RouteUploadModal } from './RouteUploadModal.js';
 import { CreateEventModal } from '../calendar/CreateEventModal.js';
 import { RouteCategoryManager } from './RouteCategoryManager.js';
+import { ReportModal } from '../moderation/ReportModal.js';
+import { useIsMobile } from '../../hooks/useIsMobile.js';
 import type { DistanceUnits } from '@crabac/shared';
 
 const LazyGpxMapModal = React.lazy(() => import('../messages/GpxMapModal.js'));
@@ -92,6 +94,7 @@ interface Props {
 }
 
 export function RoutesChannelView({ channelId, channel, spaceId, showBackButton, onBack }: Props) {
+  const isMobile = useIsMobile();
   const [items, setItems] = useState<RouteItem[]>([]);
   const [categories, setCategories] = useState<RouteCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -108,6 +111,7 @@ export function RoutesChannelView({ channelId, channel, spaceId, showBackButton,
   const [filterType, setFilterType] = useState('');
   const [showCreateEvent, setShowCreateEvent] = useState(false);
   const [prefillRouteId, setPrefillRouteId] = useState('');
+  const [reportTarget, setReportTarget] = useState<RouteItem | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const user = useAuthStore((s) => s.user);
@@ -273,18 +277,20 @@ export function RoutesChannelView({ channelId, channel, spaceId, showBackButton,
           <h3 style={styles.channelName}>{channel?.name || 'Routes'}</h3>
           {channel?.topic && <span style={styles.topic}>{channel.topic}</span>}
         </div>
-        <div style={styles.viewToggle}>
-          <button
-            onClick={() => setViewMode('card')}
-            style={{ ...styles.toggleBtn, background: viewMode === 'card' ? 'var(--hover)' : 'transparent', color: viewMode === 'card' ? 'var(--text-primary)' : 'var(--text-muted)' }}
-            title="Card view"
-          ><LayoutGrid size={15} /></button>
-          <button
-            onClick={() => setViewMode('table')}
-            style={{ ...styles.toggleBtn, background: viewMode === 'table' ? 'var(--hover)' : 'transparent', color: viewMode === 'table' ? 'var(--text-primary)' : 'var(--text-muted)' }}
-            title="Table view"
-          ><List size={15} /></button>
-        </div>
+        {!isMobile && (
+          <div style={styles.viewToggle}>
+            <button
+              onClick={() => setViewMode('card')}
+              style={{ ...styles.toggleBtn, background: viewMode === 'card' ? 'var(--hover)' : 'transparent', color: viewMode === 'card' ? 'var(--text-primary)' : 'var(--text-muted)' }}
+              title="Card view"
+            ><LayoutGrid size={15} /></button>
+            <button
+              onClick={() => setViewMode('table')}
+              style={{ ...styles.toggleBtn, background: viewMode === 'table' ? 'var(--hover)' : 'transparent', color: viewMode === 'table' ? 'var(--text-primary)' : 'var(--text-muted)' }}
+              title="Table view"
+            ><List size={15} /></button>
+          </div>
+        )}
         {canUpload && (
           <button onClick={() => setShowUpload(true)} style={styles.uploadBtn}>
             <Plus size={16} /> Add Route
@@ -365,7 +371,7 @@ export function RoutesChannelView({ channelId, channel, spaceId, showBackButton,
               No routes yet. {canUpload ? 'Click "Add Route" to upload a GPX file.' : ''}
             </p>
           </div>
-        ) : viewMode === 'card' ? (
+        ) : viewMode === 'card' || isMobile ? (
           <div style={styles.cardGrid}>
             {items.map((item) => (
               <RouteCard
@@ -373,12 +379,14 @@ export function RoutesChannelView({ channelId, channel, spaceId, showBackButton,
                 item={item}
                 units={units}
                 canDelete={item.authorId === user?.id || canManage}
+                isOwn={item.authorId === user?.id}
                 onStar={() => handleStar(item.id, !!item.starred)}
                 onDelete={() => handleDelete(item.id)}
                 onClick={() => setSelectedRoute(item)}
                 onDownload={() => {}}
                 onCopyLink={() => handleCopyLink(item)}
                 onCreateEvent={() => handleCreateEvent(item)}
+                onReport={() => setReportTarget(item)}
               />
             ))}
           </div>
@@ -481,22 +489,37 @@ export function RoutesChannelView({ channelId, channel, spaceId, showBackButton,
           onClose={() => { setShowCreateEvent(false); setPrefillRouteId(''); }}
         />
       )}
+
+      {reportTarget && reportTarget.author && (
+        <ReportModal
+          reportedUserId={reportTarget.authorId}
+          reportedUsername={reportTarget.author.displayName || 'Unknown'}
+          spaceId={spaceId}
+          channelId={channelId}
+          routeId={reportTarget.id}
+          messagePreview={reportTarget.name}
+          contentLabel="Route"
+          onClose={() => setReportTarget(null)}
+        />
+      )}
     </div>
   );
 }
 
 // ─── Route Card ───
 
-function RouteCard({ item, units, canDelete, onStar, onDelete, onClick, onDownload, onCopyLink, onCreateEvent }: {
+function RouteCard({ item, units, canDelete, isOwn, onStar, onDelete, onClick, onDownload, onCopyLink, onCreateEvent, onReport }: {
   item: RouteItem;
   units: DistanceUnits;
   canDelete: boolean;
+  isOwn?: boolean;
   onStar: () => void;
   onDelete: () => void;
   onClick: () => void;
   onDownload: () => void;
   onCopyLink: () => void;
   onCreateEvent: () => void;
+  onReport?: () => void;
 }) {
   const polyline = useMemo(() => generateMiniMapPoints(item.geojson, 200, 120), [item.geojson]);
 
@@ -554,6 +577,11 @@ function RouteCard({ item, units, canDelete, onStar, onDelete, onClick, onDownlo
           {canDelete && (
             <button onClick={(e) => { e.stopPropagation(); onDelete(); }} style={styles.deleteBtn}>
               <Trash2 size={13} />
+            </button>
+          )}
+          {!isOwn && onReport && (
+            <button onClick={(e) => { e.stopPropagation(); onReport(); }} style={styles.reportBtn} title="Report">
+              <Flag size={13} />
             </button>
           )}
         </div>
@@ -646,7 +674,7 @@ const styles: Record<string, React.CSSProperties> = {
   filterSelect: { padding: '5px 10px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', color: 'var(--text-primary)', fontSize: '0.85rem', outline: 'none' },
   starFilterBtn: { background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', padding: '5px 8px', display: 'flex', alignItems: 'center' },
   categoryMgrBtn: { background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)', fontSize: '0.8rem' },
-  content: { flex: 1, overflowY: 'auto', padding: 12 },
+  content: { flex: 1, overflow: 'auto', padding: 12 },
   placeholder: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' },
 
   // Card view
@@ -662,6 +690,7 @@ const styles: Record<string, React.CSSProperties> = {
   cardActions: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 },
   downloadLink: { display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.78rem', color: 'var(--accent)', textDecoration: 'none' },
   deleteBtn: { background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, display: 'flex' },
+  reportBtn: { background: 'none', border: 'none', color: 'var(--warning, #faa61a)', cursor: 'pointer', padding: 2, display: 'flex', opacity: 0.7 },
   starBtn: { background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex' },
 
   // Table view

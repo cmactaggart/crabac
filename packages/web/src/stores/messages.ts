@@ -27,6 +27,7 @@ interface MessagesState {
 
   // Actions
   fetchMessages: (channelId: string, before?: string) => Promise<void>;
+  catchUpMessages: (channelId: string) => Promise<void>;
   clearMessages: () => void;
   sendMessage: (channelId: string, content: string, replyToId?: string) => Promise<void>;
   addMessage: (message: Message) => void;
@@ -90,6 +91,24 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
       }));
     } catch {
       set({ loading: false });
+    }
+  },
+
+  catchUpMessages: async (channelId) => {
+    const { messages } = get();
+    if (messages.length === 0) return;
+    const lastId = messages[messages.length - 1].id;
+    try {
+      const newer = await api<Message[]>(`/channels/${channelId}/messages?after=${lastId}&limit=50`);
+      if (newer.length > 0) {
+        set((s) => {
+          const existingIds = new Set(s.messages.map((m) => m.id));
+          const newMsgs = newer.filter((m) => !existingIds.has(m.id));
+          return newMsgs.length > 0 ? { messages: [...s.messages, ...newMsgs] } : s;
+        });
+      }
+    } catch {
+      // ignore — non-critical
     }
   },
 

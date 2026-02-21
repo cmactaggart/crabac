@@ -7,7 +7,7 @@ import * as notificationsService from '../notifications/notifications.service.js
 
 // ─── Messages CRUD ───
 
-export async function listMessages(channelId: string, options: { before?: string; limit: number }) {
+export async function listMessages(channelId: string, options: { before?: string; after?: string; limit: number; blockedUserIds?: string[] }) {
   let query = db('messages')
     .join('users', 'messages.author_id', 'users.id')
     .where('messages.channel_id', channelId)
@@ -20,11 +20,19 @@ export async function listMessages(channelId: string, options: { before?: string
       'users.base_color as author_base_color',
       'users.accent_color as author_accent_color',
     )
-    .orderBy('messages.id', 'desc')
+    .orderBy('messages.id', options.after ? 'asc' : 'desc')
     .limit(options.limit);
 
   if (options.before) {
     query = query.where('messages.id', '<', options.before);
+  }
+
+  if (options.after) {
+    query = query.where('messages.id', '>', options.after);
+  }
+
+  if (options.blockedUserIds && options.blockedUserIds.length > 0) {
+    query = query.whereNotIn('messages.author_id', options.blockedUserIds);
   }
 
   const rows = await query;
@@ -33,7 +41,8 @@ export async function listMessages(channelId: string, options: { before?: string
   const replyCounts = await getReplyCountsForMessages(messageIds);
   const attachments = await getAttachmentsForMessages(messageIds);
 
-  return rows.map((r: any) => formatMessage(r, reactions.get(r.id) || [], replyCounts.get(r.id) || 0, attachments.get(r.id) || [])).reverse();
+  const formatted = rows.map((r: any) => formatMessage(r, reactions.get(r.id) || [], replyCounts.get(r.id) || 0, attachments.get(r.id) || []));
+  return options.after ? formatted : formatted.reverse();
 }
 
 export async function createMessage(

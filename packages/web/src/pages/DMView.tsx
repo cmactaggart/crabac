@@ -1,11 +1,13 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LogOut, Copy, Link2, Pencil, Trash2, PanelLeftClose, ChevronsRight, PanelLeft, UserPlus, Users, LogOut as LeaveIcon, Check, X, Clock, UserMinus, ArrowLeft } from 'lucide-react';
+import { LogOut, Copy, Link2, Pencil, Trash2, PanelLeftClose, ChevronsRight, PanelLeft, UserPlus, Users, LogOut as LeaveIcon, Check, X, Clock, UserMinus, ArrowLeft, Flag, Ban } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { useDMStore } from '../stores/dm.js';
 import { useFriendsStore } from '../stores/friends.js';
+import { useBlocksStore } from '../stores/blocks.js';
 import { useLayoutStore } from '../stores/layout.js';
+import { ReportModal } from '../components/moderation/ReportModal.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 import { useDMSocket, useDMTypingEmit } from '../hooks/useDMSocket.js';
 import { useFriendsSocket } from '../hooks/useFriendsSocket.js';
@@ -748,6 +750,7 @@ function DMMessageList({
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const prevLengthRef = useRef(0);
+  const [reportTarget, setReportTarget] = useState<{ message: DirectMessage } | null>(null);
 
   useEffect(() => {
     if (messages.length > prevLengthRef.current) {
@@ -790,11 +793,23 @@ function DMMessageList({
             spacedSameAuthor={spacedSameAuthor}
             isOwn={msg.authorId === currentUserId}
             conversationId={conversationId}
+            onReport={(m) => setReportTarget({ message: m })}
           />
         );
       })}
 
       <div ref={bottomRef} />
+
+      {reportTarget && (
+        <ReportModal
+          reportedUserId={reportTarget.message.authorId}
+          reportedUsername={reportTarget.message.author?.displayName || 'Unknown'}
+          dmMessageId={reportTarget.message.id}
+          conversationId={conversationId}
+          messagePreview={reportTarget.message.content}
+          onClose={() => setReportTarget(null)}
+        />
+      )}
     </div>
   );
 }
@@ -807,12 +822,14 @@ function DMMessageItem({
   spacedSameAuthor,
   isOwn,
   conversationId,
+  onReport,
 }: {
   message: DirectMessage;
   compact: boolean;
   spacedSameAuthor?: boolean;
   isOwn: boolean;
   conversationId: string;
+  onReport: (msg: DirectMessage) => void;
 }) {
   const [showActions, setShowActions] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -820,6 +837,9 @@ function DMMessageItem({
   const [editContent, setEditContent] = useState('');
   const editMessage = useDMStore((s) => s.editMessage);
   const deleteMessage = useDMStore((s) => s.deleteMessage);
+  const blockUser = useBlocksStore((s) => s.blockUser);
+  const isBlockedByMe = useBlocksStore((s) => s.isBlockedByMe);
+  const unblockUser = useBlocksStore((s) => s.unblockUser);
   const ts = formatTimestamp(message.id);
 
   const handleEdit = () => {
@@ -876,10 +896,22 @@ function DMMessageItem({
     }
   }, [navigate]);
 
+  const blocked = !isOwn && isBlockedByMe(message.authorId);
+
+  const handleBlock = async () => {
+    if (blocked) {
+      await unblockUser(message.authorId);
+    } else if (confirm(`Block ${message.author?.displayName || 'this user'}? They won't be able to message you.`)) {
+      await blockUser(message.authorId);
+    }
+  };
+
   const contextMenuItems: ContextMenuItem[] = [
     { label: 'Copy Text', icon: <Copy size={16} />, onClick: () => navigator.clipboard.writeText(message.content) },
     { label: 'Copy Link', icon: <Link2 size={16} />, onClick: () => navigator.clipboard.writeText(`${window.location.origin}/dm/${conversationId}/message/${message.id}`) },
     ...(isOwn ? [{ label: 'Edit', icon: <Pencil size={16} />, onClick: handleEdit }] : []),
+    ...(!isOwn ? [{ label: 'Report', icon: <Flag size={16} />, onClick: () => onReport(message) }] : []),
+    ...(!isOwn ? [{ label: blocked ? 'Unblock' : 'Block', icon: <Ban size={16} />, danger: !blocked, onClick: handleBlock }] : []),
     ...(isOwn ? [{ label: 'Delete', icon: <Trash2 size={16} />, danger: true, onClick: handleDelete }] : []),
   ];
 

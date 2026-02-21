@@ -1,6 +1,7 @@
 import { db } from '../../database/connection.js';
 import { snowflake } from '../../modules/_shared.js';
-import { NotFoundError } from '../../lib/errors.js';
+import { NotFoundError, ConflictError, BadRequestError } from '../../lib/errors.js';
+import { eventBus } from '../../lib/event-bus.js';
 
 export async function listAllSpaces() {
   const spaces = await db('spaces')
@@ -165,4 +166,57 @@ function formatAnnouncement(row: any) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+// ─── Global App Bans ───
+
+export async function banUser(userId: string, bannedBy: string, reason?: string) {
+  const user = await db('users').where('id', userId).first();
+  if (!user) throw new NotFoundError('User');
+
+  const existing = await db('user_bans').where('user_id', userId).first();
+  if (existing) throw new ConflictError('User is already banned');
+
+  await db('user_bans').insert({
+    user_id: userId,
+    banned_by: bannedBy,
+    reason: reason || null,
+  });
+
+  eventBus.emit('user.app_banned', { userId });
+}
+
+export async function unbanUser(userId: string) {
+  const deleted = await db('user_bans').where('user_id', userId).delete();
+  if (!deleted) throw new NotFoundError('Ban');
+}
+
+export async function listAppBans() {
+  const bans = await db('user_bans')
+    .join('users', 'user_bans.user_id', 'users.id')
+    .select(
+      'user_bans.*',
+      'users.username',
+      'users.display_name',
+      'users.email',
+    )
+    .orderBy('user_bans.created_at', 'desc');
+
+  return bans.map((b: any) => ({
+    userId: b.user_id,
+    bannedBy: b.banned_by,
+    reason: b.reason,
+    createdAt: b.created_at,
+    user: {
+      id: b.user_id,
+      username: b.username,
+      displayName: b.display_name,
+      email: b.email,
+    },
+  }));
+}
+
+export async function isAppBanned(userId: string): Promise<boolean> {
+  const row = await db('user_bans').where('user_id', userId).first();
+  return !!row;
 }

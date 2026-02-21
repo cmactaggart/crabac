@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Check, X, AlertTriangle, Shield } from 'lucide-react';
 import { api } from '../lib/api.js';
+import type { Report, UserBan } from '@crabac/shared';
 
-type Tab = 'spaces' | 'users' | 'announcements' | 'tags';
+type Tab = 'spaces' | 'users' | 'announcements' | 'tags' | 'reports' | 'bans';
 
 interface AdminSpace {
   id: string;
@@ -54,7 +55,7 @@ export function AdminPanel() {
         </div>
 
         <div style={styles.tabs}>
-          {(['announcements', 'spaces', 'users', 'tags'] as Tab[]).map((t) => (
+          {(['announcements', 'spaces', 'users', 'reports', 'bans', 'tags'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -68,6 +69,8 @@ export function AdminPanel() {
         {tab === 'spaces' && <SpacesTab />}
         {tab === 'users' && <UsersTab />}
         {tab === 'announcements' && <AnnouncementsTab />}
+        {tab === 'reports' && <AdminReportsTab />}
+        {tab === 'bans' && <AdminBansTab />}
         {tab === 'tags' && <TagsTab />}
       </div>
     </div>
@@ -413,6 +416,202 @@ function TagsTab() {
                     style={{ ...styles.smallBtn, color: 'var(--danger)' }}
                   >
                     Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function AdminReportsTab() {
+  const [reports, setReports] = useState<Report[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<'pending' | 'resolved' | 'dismissed' | 'all'>('pending');
+
+  const fetchReports = () => {
+    setLoading(true);
+    const params = filter !== 'all' ? `?status=${filter}` : '';
+    api<Report[]>(`/reports${params}`)
+      .then(setReports)
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchReports(); }, [filter]);
+
+  const handleUpdateStatus = async (reportId: string, status: 'resolved' | 'dismissed') => {
+    try {
+      await api(`/reports/${reportId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      });
+      fetchReports();
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleBanUser = async (userId: string, displayName: string) => {
+    const reason = prompt(`Ban ${displayName} from the entire app? Enter a reason (optional):`);
+    if (reason !== null) {
+      try {
+        await api(`/admin/bans/${userId}`, {
+          method: 'POST',
+          body: JSON.stringify({ reason: reason || undefined }),
+        });
+        alert(`${displayName} has been banned from the app.`);
+      } catch (err: any) {
+        alert(err.message || 'Failed to ban user');
+      }
+    }
+  };
+
+  if (loading) return <p style={styles.muted}>Loading...</p>;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+        {(['pending', 'resolved', 'dismissed', 'all'] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            style={{
+              ...styles.smallBtn,
+              background: filter === f ? 'var(--accent)' : 'transparent',
+              color: filter === f ? 'white' : 'var(--text-secondary)',
+              border: filter === f ? 'none' : '1px solid var(--border)',
+            }}
+          >
+            {f.charAt(0).toUpperCase() + f.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      <p style={styles.muted}>{reports.length} report{reports.length !== 1 ? 's' : ''}</p>
+
+      {reports.length === 0 ? (
+        <p style={styles.muted}>No {filter !== 'all' ? filter : ''} reports.</p>
+      ) : (
+        reports.map((r) => (
+          <div key={r.id} style={styles.announcementItem}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <AlertTriangle size={14} style={{ color: '#faa61a', flexShrink: 0 }} />
+                <strong>{r.reportedUser?.displayName || 'Unknown'}</strong>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  reported by {r.reporter?.displayName || 'Unknown'}
+                </span>
+                {r.spaceName && (
+                  <span style={{ fontSize: '0.7rem', color: 'var(--accent)', background: 'rgba(88,101,242,0.15)', padding: '1px 6px', borderRadius: 4 }}>
+                    {r.spaceName}
+                  </span>
+                )}
+                <span style={{
+                  fontSize: '0.65rem',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  padding: '2px 8px',
+                  borderRadius: 10,
+                  color: 'white',
+                  background: r.status === 'pending' ? '#faa61a' :
+                             r.status === 'resolved' ? 'var(--success)' : 'var(--text-muted)',
+                }}>
+                  {r.status}
+                </span>
+              </div>
+
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 4 }}>{r.reason}</div>
+
+              {r.messagePreview && (
+                <div style={{ background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', padding: '6px 8px', marginBottom: 6, fontSize: '0.8rem', color: 'var(--text-muted)', maxHeight: 50, overflow: 'hidden' }}>
+                  {r.messagePreview}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                  {new Date(r.createdAt).toLocaleString()}
+                </span>
+                {r.status === 'pending' && (
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button onClick={() => handleUpdateStatus(r.id, 'resolved')} style={{ ...styles.smallBtn, color: 'var(--success)' }}>
+                      <Check size={12} /> Resolve
+                    </button>
+                    <button onClick={() => handleUpdateStatus(r.id, 'dismissed')} style={styles.smallBtn}>
+                      <X size={12} /> Dismiss
+                    </button>
+                    <button onClick={() => handleBanUser(r.reportedUserId, r.reportedUser?.displayName || 'User')} style={{ ...styles.smallBtn, color: 'var(--danger)' }}>
+                      <Shield size={12} /> Ban User
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+function AdminBansTab() {
+  const [bans, setBans] = useState<UserBan[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchBans = () => {
+    setLoading(true);
+    api<UserBan[]>('/admin/bans')
+      .then(setBans)
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchBans(); }, []);
+
+  const handleUnban = async (userId: string) => {
+    if (!confirm('Unban this user?')) return;
+    try {
+      await api(`/admin/bans/${userId}`, { method: 'DELETE' });
+      fetchBans();
+    } catch (err: any) {
+      alert(err.message || 'Failed to unban user');
+    }
+  };
+
+  if (loading) return <p style={styles.muted}>Loading...</p>;
+
+  return (
+    <div>
+      <p style={styles.muted}>{bans.length} banned user{bans.length !== 1 ? 's' : ''}</p>
+
+      {bans.length === 0 ? (
+        <p style={styles.muted}>No banned users.</p>
+      ) : (
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th style={styles.th}>User</th>
+              <th style={styles.th}>Reason</th>
+              <th style={styles.th}>Banned At</th>
+              <th style={styles.th}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {bans.map((ban) => (
+              <tr key={ban.userId}>
+                <td style={styles.td}>
+                  <div>
+                    <div style={{ fontWeight: 600 }}>{ban.user?.displayName || 'Unknown'}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{ban.user?.email || ban.userId}</div>
+                  </div>
+                </td>
+                <td style={styles.td}>{ban.reason || '—'}</td>
+                <td style={styles.td}>{new Date(ban.createdAt).toLocaleDateString()}</td>
+                <td style={styles.td}>
+                  <button onClick={() => handleUnban(ban.userId)} style={{ ...styles.smallBtn, color: 'var(--success)' }}>
+                    Unban
                   </button>
                 </td>
               </tr>

@@ -12,5 +12,8 @@ export * from './types/gallery.js';
 export * from './types/calendar.js';
 export * from './types/route.js';
 export * from './types/blog.js';
+export * from './types/mobile-bundle.js';
+export * from './types/moderation.js';
+export * from './types/workflow.js';
 export * from './permissions.js';
 export * as validation from './validation/index.js';

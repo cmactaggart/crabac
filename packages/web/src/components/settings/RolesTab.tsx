@@ -31,6 +31,7 @@ const PERMISSION_LABELS: Record<PermissionKey, string> = {
   MANAGE_CALENDAR: 'Manage Calendar',
   MANAGE_ROUTE_CATEGORIES: 'Manage Route Categories',
   MANAGE_BLOG: 'Manage Blog',
+  MANAGE_WORKFLOWS: 'Manage Workflows',
 };
 
 export function RolesTab({ spaceId }: Props) {

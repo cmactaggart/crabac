@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, RotateCw } from 'lucide-react';
 import { api } from '../../lib/api.js';
 import { useSpacesStore } from '../../stores/spaces.js';
 import type { SpaceAdminSettings } from '@crabac/shared';
@@ -20,7 +20,25 @@ export function BoardSettingsTab({ spaceId }: Props) {
       .catch((err) => { setError(err.message); setLoading(false); });
   }, [spaceId]);
 
-  const handleToggle = async (key: 'allowPublicBoards' | 'allowPublicGalleries' | 'allowPublicCalendar' | 'allowPublicRoutes' | 'allowPublicBlog' | 'allowAnonymousBrowsing') => {
+  const [rotatingSecret, setRotatingSecret] = useState(false);
+
+  const handleRotateSecret = async () => {
+    if (!confirm('Are you sure? Rotating the secret will invalidate all existing webhook URLs.')) return;
+    setRotatingSecret(true);
+    setError('');
+    try {
+      const updated = await api<SpaceAdminSettings>(`/spaces/${spaceId}/admin-settings/rotate-webhook-secret`, {
+        method: 'POST',
+      });
+      setSettings(updated);
+    } catch (err: any) {
+      setError(err.message || 'Failed to rotate secret');
+    } finally {
+      setRotatingSecret(false);
+    }
+  };
+
+  const handleToggle = async (key: 'allowPublicBoards' | 'allowPublicGalleries' | 'allowPublicCalendar' | 'allowPublicRoutes' | 'allowPublicBlog' | 'allowAnonymousBrowsing' | 'webhooksEnabled') => {
     if (!settings) return;
     setSaving(true);
     setError('');
@@ -182,6 +200,61 @@ export function BoardSettingsTab({ spaceId }: Props) {
           }} />
         </button>
       </div>
+
+      <div style={styles.settingRow}>
+        <div style={styles.settingInfo}>
+          <span style={styles.settingLabel}>Enable Webhooks</span>
+          <span style={styles.settingDesc}>
+            Allow external services to trigger workflows via HTTP requests, and workflows to call external URLs.
+          </span>
+        </div>
+        <button
+          onClick={() => handleToggle('webhooksEnabled')}
+          disabled={saving}
+          style={{
+            ...styles.toggle,
+            background: settings?.webhooksEnabled ? 'var(--accent)' : 'var(--bg-tertiary)',
+          }}
+        >
+          <div style={{
+            ...styles.toggleKnob,
+            transform: settings?.webhooksEnabled ? 'translateX(18px)' : 'translateX(0)',
+          }} />
+        </button>
+      </div>
+
+      {settings?.webhooksEnabled && settings?.webhookSecret && (
+        <div style={styles.urlBox}>
+          <span style={styles.settingLabel}>Webhook Base URL</span>
+          <code style={styles.urlCode}>
+            {window.location.origin}/api/webhooks/{settings.webhookSecret}/
+          </code>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+            <button
+              onClick={handleRotateSecret}
+              disabled={rotatingSecret}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '5px 10px',
+                background: 'none',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)',
+                color: 'var(--text-secondary)',
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+              }}
+            >
+              <RotateCw size={12} />
+              {rotatingSecret ? 'Rotating...' : 'Rotate Secret'}
+            </button>
+          </div>
+          <span style={styles.settingDesc}>
+            Append your webhook slug to this URL. Configure slugs in Workflow trigger settings.
+          </span>
+        </div>
+      )}
 
       {settings?.allowPublicBoards && (
         <div style={styles.urlBox}>

@@ -6,6 +6,7 @@ import { marked } from 'marked';
 const PORT = parseInt(process.env.SITE_PORT || '3002', 10);
 const ROOT = join(import.meta.dirname, '..');
 const SCREENSHOTS = join(ROOT, 'docs', 'screenshots');
+const BLOG_API = 'http://localhost:3001/api/boards/blog/crabac-hq';
 
 const MIME = {
   '.html': 'text/html',
@@ -16,6 +17,10 @@ const MIME = {
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
 };
+
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 
 // Markdown file paths — both re-read from disk on each request
 const README_PATH = join(ROOT, 'README.md');
@@ -283,6 +288,10 @@ function buildPage(body) {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
         Open App
       </a>
+      <a href="/blog">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+        Blog
+      </a>
       <a href="https://bsky.app/profile/crabac.bsky.social" target="_blank" rel="noopener">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 10.8c-1.087-2.114-4.046-6.053-6.798-7.995C2.566.944 1.561 1.266.902 1.565.139 1.908 0 3.08 0 3.768c0 .69.378 5.65.624 6.479.785 2.627 3.59 3.513 6.182 3.268-4.533.86-6.15 3.726-3.455 6.58C6.752 23.743 10.514 20.2 12 16.89c1.486 3.31 5.248 6.853 8.649 3.205 2.695-2.854 1.078-5.72-3.455-6.58 2.593.245 5.397-.641 6.182-3.268.246-.828.624-5.79.624-6.479 0-.688-.139-1.86-.902-2.203-.659-.3-1.664-.62-4.3 1.24C16.046 4.748 13.087 8.687 12 10.8z"/></svg>
         Bluesky
@@ -351,6 +360,52 @@ const server = createServer((req, res) => {
     const apiHtml = buildPage(marked.parse(apiDoc, { async: false }));
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(apiHtml);
+    return;
+  }
+
+  // Serve blog (fetches from public API, renders server-side)
+  if (path === '/blog') {
+    fetch(BLOG_API)
+      .then((r) => {
+        if (!r.ok) throw new Error(`API ${r.status}`);
+        return r.json();
+      })
+      .then((data) => {
+        const { posts } = data;
+        let body = '<h1>Blog</h1>\n';
+        if (!posts || posts.length === 0) {
+          body += '<p style="color: var(--text-muted);">No blog posts yet.</p>';
+        } else {
+          for (const post of posts) {
+            const date = post.publishedAt
+              ? new Date(post.publishedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+              : '';
+            const author = post.author?.displayName || '';
+            body += `<article style="margin-bottom: 2.5rem;">`;
+            body += `<div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px 8px 0 0; padding: 1.25rem 1.5rem;">`;
+            body += `<h2 style="border: none; padding-bottom: 0; margin: 0 0 0.25rem; font-size: 1.4rem;">${escapeHtml(post.title)}</h2>`;
+            body += `<p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">${escapeHtml(author)}${author && date ? ' &middot; ' : ''}${date}</p>`;
+            if (post.summary) {
+              body += `<p style="font-style: italic; color: var(--text-muted); margin: 0.75rem 0 0; line-height: 1.5;">${escapeHtml(post.summary)}</p>`;
+            }
+            body += `</div>`;
+            // Rewrite /uploads/ URLs to absolute app.crab.ac URLs
+            const content = post.content.replace(/(!\[[^\]]*\]\()\/uploads\//g, '$1https://app.crab.ac/uploads/');
+            body += `<div style="border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; padding: 1.25rem 1.5rem;">`;
+            body += marked.parse(content, { async: false });
+            body += `</div>`;
+            body += `</article>`;
+          }
+        }
+        const html = buildPage(body);
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(html);
+      })
+      .catch((err) => {
+        const html = buildPage('<h1>Blog</h1><p style="color: var(--text-muted);">Unable to load blog posts right now.</p>');
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(html);
+      });
     return;
   }
 

@@ -10,9 +10,11 @@ import { BlogPostEditor } from './BlogPostEditor.js';
 
 interface Props {
   spaceId: string;
+  showBackButton?: boolean;
+  onBack?: () => void;
 }
 
-export function BlogView({ spaceId }: Props) {
+export function BlogView({ spaceId, showBackButton, onBack }: Props) {
   const { posts, loading, hasMore, fetchPosts, loadMore, selectedPost, setSelectedPost } = useBlogStore();
   const user = useAuthStore((s) => s.user);
   const canManage = useHasSpacePermission(spaceId, Permissions.MANAGE_BLOG);
@@ -39,6 +41,9 @@ export function BlogView({ spaceId }: Props) {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
+        {showBackButton && onBack && (
+          <button onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px 8px', borderRadius: 'var(--radius)', fontSize: '0.85rem' }}>Back</button>
+        )}
         <h2 style={{ margin: 0, fontSize: '1.1rem' }}>Blog</h2>
         {canManage && (
           <button onClick={() => { setEditingPost(null); setShowEditor(true); }} style={styles.newBtn}>
