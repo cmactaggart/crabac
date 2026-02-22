@@ -7,6 +7,7 @@ export interface Role {
   permissions: string; // bigint serialized as string
   isSystem: boolean;
   isDefault: boolean;
+  isGuest: boolean;
   createdAt: string;
 }
 

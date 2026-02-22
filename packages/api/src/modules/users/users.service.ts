@@ -28,6 +28,12 @@ export async function getPublicUser(userId: string) {
   return formatPublicUser(user);
 }
 
+export async function getUserByUsername(username: string) {
+  const user = await db('users').where('username', username).first();
+  if (!user) return null;
+  return formatPublicUser(user);
+}
+
 function formatUser(row: any) {
   return {
     id: row.id,

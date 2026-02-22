@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCheck, AtSign, Reply, Zap } from 'lucide-react';
+import { CheckCheck, AtSign, Reply, Zap, Tag } from 'lucide-react';
 import { useNotificationsStore } from '../../stores/notifications.js';
 import type { Notification, MentionNotificationData, ReplyNotificationData } from '@crabac/shared';
 
@@ -75,13 +75,14 @@ export function NotificationDropdown({ onClose }: Props) {
               {n.type === 'mention' && <AtSign size={16} style={{ color: 'var(--accent)' }} />}
               {n.type === 'reply' && <Reply size={16} style={{ color: 'var(--accent)' }} />}
               {n.type === 'portal_invite' && <Zap size={16} style={{ color: 'var(--accent)' }} />}
+              {n.type === 'post_tag' && <Tag size={16} style={{ color: 'var(--accent)' }} />}
             </div>
             <div style={styles.itemBody}>
               <div style={styles.itemTitle}>
                 {formatTitle(n)}
               </div>
               <div style={styles.itemPreview}>
-                {(n.data as any).messagePreview || ''}
+                {(n.data as any).messagePreview || (n.data as any).postPreview || ''}
               </div>
               <div style={styles.itemTime}>{formatTime(n.createdAt)}</div>
             </div>
@@ -114,6 +115,14 @@ function formatTitle(n: Notification): string {
     }
     case 'portal_invite':
       return `Portal invite from ${data.sourceSpaceName}`;
+    case 'friend_request':
+      return `${data.fromDisplayName} sent you a friend request`;
+    case 'dm_request':
+      return `${data.fromDisplayName} sent you a message`;
+    case 'event_cancelled':
+      return `${data.eventName} was cancelled`;
+    case 'post_tag':
+      return `${data.taggedByDisplayName} tagged you in a post`;
     default:
       return 'Notification';
   }

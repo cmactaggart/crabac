@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { UserPlus, UserMinus, Check, Clock, Ban, Shield, UserX } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { UserPlus, UserMinus, Check, Clock, Ban, Shield, UserX, ExternalLink } from 'lucide-react';
 import { api } from '../../lib/api.js';
 import { Avatar } from './Avatar.js';
 import { useMutesStore } from '../../stores/mutes.js';
@@ -34,9 +35,11 @@ interface Props {
   onMessage: (userId: string) => void;
   currentUserId: string;
   spaceId?: string;
+  onOpenSettings?: () => void;
 }
 
-export function UserProfilePopover({ userId, anchorRect, onClose, onMessage, currentUserId, spaceId }: Props) {
+export function UserProfilePopover({ userId, anchorRect, onClose, onMessage, currentUserId, spaceId, onOpenSettings }: Props) {
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [roles, setRoles] = useState<MemberRole[]>([]);
   const [friendStatus, setFriendStatus] = useState<FriendshipStatus | null | undefined>(undefined);
@@ -175,6 +178,15 @@ export function UserProfilePopover({ userId, anchorRect, onClose, onMessage, cur
       <div style={styles.body}>
         <div style={styles.displayName}>{profile.displayName}</div>
         <div style={styles.username}>{profile.username}</div>
+        <button
+          onClick={() => {
+            navigate(userId === currentUserId ? '/you' : `/p/${profile.username}`);
+            onClose();
+          }}
+          style={styles.viewProfileBtn}
+        >
+          <ExternalLink size={12} /> View Profile
+        </button>
 
         <div style={styles.divider} />
 
@@ -219,6 +231,15 @@ export function UserProfilePopover({ userId, anchorRect, onClose, onMessage, cur
               ))}
             </div>
           </div>
+        )}
+
+        {userId === currentUserId && onOpenSettings && (
+          <button
+            onClick={() => { onOpenSettings(); onClose(); }}
+            style={styles.messageBtn}
+          >
+            Edit Profile
+          </button>
         )}
 
         {userId !== currentUserId && (
@@ -342,6 +363,20 @@ const styles: Record<string, React.CSSProperties> = {
   username: {
     fontSize: '0.8rem',
     color: 'var(--text-muted)',
+  },
+  viewProfileBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+    padding: '3px 8px',
+    borderRadius: 'var(--radius)',
+    border: 'none',
+    background: 'var(--bg-tertiary)',
+    color: 'var(--accent)',
+    fontSize: '0.72rem',
+    fontWeight: 600,
+    cursor: 'pointer',
   },
   divider: {
     height: 1,

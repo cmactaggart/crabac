@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Hash, Pin, Search, Users, ArrowLeft } from 'lucide-react';
+import { Hash, Pin, Search, Users, ArrowLeft, Mail } from 'lucide-react';
 import { NotificationBell } from '../notifications/NotificationBell.js';
 import { useMessagesStore } from '../../stores/messages.js';
 import { useAuthStore } from '../../stores/auth.js';
@@ -36,6 +36,8 @@ export function MessageArea({ channelId, channel, spaceId, showBackButton, onBac
   const { membersSidebarOpen, toggleMembersSidebar } = useLayoutStore();
   const markRead = useChannelsStore((s) => s.markRead);
   const createConversation = useDMStore((s) => s.createConversation);
+  const dmUnreads = useDMStore((s) => s.dmUnreads);
+  const totalDMUnreads = Object.values(dmUnreads).reduce((sum, n) => sum + n, 0);
   const navigate = useNavigate();
 
   const [profilePopover, setProfilePopover] = useState<{ userId: string; rect: DOMRect } | null>(null);
@@ -118,6 +120,31 @@ export function MessageArea({ channelId, channel, spaceId, showBackButton, onBac
             )}
           </div>
           <div style={styles.headerActions}>
+            <button
+              onClick={() => navigate('/dm')}
+              style={{ ...styles.headerBtn, color: 'var(--text-secondary)', position: 'relative' }}
+              title="Messages"
+            >
+              <Mail size={18} />
+              {totalDMUnreads > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: 0,
+                  right: 2,
+                  background: 'var(--danger)',
+                  color: 'white',
+                  fontSize: '0.6rem',
+                  fontWeight: 700,
+                  padding: '1px 4px',
+                  borderRadius: 8,
+                  minWidth: 14,
+                  textAlign: 'center' as const,
+                  lineHeight: '14px',
+                }}>
+                  {totalDMUnreads > 99 ? '99+' : totalDMUnreads}
+                </span>
+              )}
+            </button>
             <NotificationBell />
             <button
               onClick={togglePins}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useIsMobile } from '../../hooks/useIsMobile.js';
 
 interface Props {
   onSelect: (emoji: string) => void;
@@ -106,6 +107,7 @@ export function EmojiPicker({ onSelect, onClose }: Props) {
   const [activeCategory, setActiveCategory] = useState('Smileys');
   const pickerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
 
   const recentEmojis = useMemo(getRecentEmojis, []);
 
@@ -144,6 +146,75 @@ export function EmojiPicker({ onSelect, onClose }: Props) {
   const categoryNames = Object.keys(CATEGORIES).filter((c) =>
     c === 'Recently Used' ? recentEmojis.length > 0 : true,
   );
+
+  if (isMobile) {
+    return (
+      <>
+        <div style={mobileStyles.overlay} onClick={onClose} />
+        <div ref={pickerRef} style={mobileStyles.picker}>
+          <div style={styles.searchRow}>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search emoji..."
+              style={styles.searchInput}
+              autoFocus
+            />
+          </div>
+          {!search && (
+            <div style={styles.tabs}>
+              {categoryNames.map((cat) => (
+                <button
+                  key={cat}
+                  style={{
+                    ...styles.tab,
+                    color: cat === activeCategory ? 'var(--accent)' : 'var(--text-muted)',
+                    borderBottom: cat === activeCategory ? '2px solid var(--accent)' : '2px solid transparent',
+                  }}
+                  onClick={() => {
+                    setActiveCategory(cat);
+                    const el = document.getElementById(`emoji-cat-${cat}`);
+                    el?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                >
+                  {cat.slice(0, 3)}
+                </button>
+              ))}
+            </div>
+          )}
+          <div ref={scrollRef} style={styles.grid}>
+            {search ? (
+              <div style={styles.emojiRow}>
+                {allEmojis.map((emoji, i) => (
+                  <button key={i} style={styles.emojiBtn} onClick={() => handleSelect(emoji)}>
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              categoryNames.map((cat) => {
+                const emojis = cat === 'Recently Used' ? recentEmojis : CATEGORIES[cat];
+                if (emojis.length === 0) return null;
+                return (
+                  <div key={cat} id={`emoji-cat-${cat}`}>
+                    <div style={styles.catLabel}>{cat}</div>
+                    <div style={styles.emojiRow}>
+                      {emojis.map((emoji, i) => (
+                        <button key={i} style={styles.emojiBtn} onClick={() => handleSelect(emoji)}>
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <div ref={pickerRef} style={styles.picker}>
@@ -292,5 +363,29 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+};
+
+const mobileStyles: Record<string, React.CSSProperties> = {
+  overlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.4)',
+    zIndex: 199,
+  },
+  picker: {
+    position: 'fixed',
+    left: 8,
+    right: 8,
+    bottom: 64,
+    maxHeight: '50vh',
+    background: 'var(--bg-primary)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius)',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+    zIndex: 200,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
   },
 };

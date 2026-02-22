@@ -10,6 +10,8 @@ import { EventDetailModal } from './EventDetailModal.js';
 import { CreateEventModal } from './CreateEventModal.js';
 import { CreateCategoryModal } from './CreateCategoryModal.js';
 import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu.js';
+import { PersonalCollectionPicker } from '../common/PersonalCollectionPicker.js';
+import { api } from '../../lib/api.js';
 
 interface Props {
   spaceId: string;
@@ -57,6 +59,7 @@ export function CalendarView({ spaceId, showBackButton, onBack }: Props) {
 
   const [showCreateEvent, setShowCreateEvent] = useState(false);
   const [showCreateCategory, setShowCreateCategory] = useState(false);
+  const [showPersonalPicker, setShowPersonalPicker] = useState(false);
   const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
   const [prefillDate, setPrefillDate] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -108,6 +111,11 @@ export function CalendarView({ spaceId, showBackButton, onBack }: Props) {
         setEditEvent(null);
         setShowCreateEvent(true);
       },
+    },
+    {
+      label: 'Add from My Events',
+      icon: undefined,
+      onClick: () => setShowPersonalPicker(true),
     },
     {
       label: 'Add Category',
@@ -239,6 +247,26 @@ export function CalendarView({ spaceId, showBackButton, onBack }: Props) {
         <CreateCategoryModal
           spaceId={spaceId}
           onClose={() => setShowCreateCategory(false)}
+        />
+      )}
+
+      {showPersonalPicker && (
+        <PersonalCollectionPicker
+          type="events"
+          onClose={() => setShowPersonalPicker(false)}
+          onSelect={async (itemIds) => {
+            setShowPersonalPicker(false);
+            for (const id of itemIds) {
+              try {
+                await api(`/users/me/collections/events/${id}/copy`, {
+                  method: 'POST',
+                  body: JSON.stringify({ spaceId }),
+                });
+              } catch {}
+            }
+            // Refresh calendar
+            fetchEvents(spaceId);
+          }}
         />
       )}
     </div>

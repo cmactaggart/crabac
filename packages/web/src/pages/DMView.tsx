@@ -200,6 +200,7 @@ export function DMView() {
 // ─── DM Header Content (1:1) ───
 
 function DMHeaderContent({ otherParticipant, currentUserId }: { otherParticipant: any; currentUserId: string }) {
+  const navigate = useNavigate();
   const [friendStatus, setFriendStatus] = useState<FriendshipStatus | null | undefined>(undefined);
   const [friendLoading, setFriendLoading] = useState(false);
   const sendFriendRequest = useFriendsStore((s) => s.sendFriendRequest);
@@ -231,7 +232,11 @@ function DMHeaderContent({ otherParticipant, currentUserId }: { otherParticipant
         name={otherParticipant?.displayName || '?'}
         size={28}
       />
-      <span style={styles.headerName}>{otherParticipant?.displayName}</span>
+      <span
+        style={{ ...styles.headerName, cursor: 'pointer' }}
+        onClick={() => otherParticipant?.username && navigate(`/p/${otherParticipant.username}`)}
+        title="View profile"
+      >{otherParticipant?.displayName}</span>
       <span style={styles.headerStatus}>
         <span style={{
           width: 8, height: 8, borderRadius: '50%',

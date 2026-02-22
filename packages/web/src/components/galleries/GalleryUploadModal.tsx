@@ -1,12 +1,15 @@
-import { useState, useRef, useCallback } from 'react';
-import { X, Upload, ImagePlus } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { X, Upload, ImagePlus, Check, FolderHeart } from 'lucide-react';
 import { api } from '../../lib/api.js';
-import type { GalleryItem } from '@crabac/shared';
+import type { GalleryItem, PersonalGalleryItem } from '@crabac/shared';
+
+type Tab = 'upload' | 'my-photos';
 
 interface Props {
   channelId: string;
   onClose: () => void;
   onComplete: () => void;
+  initialTab?: Tab;
 }
 
 const MAX_FILES = 20;
@@ -14,7 +17,8 @@ const MAX_NON_VIDEO_SIZE = 10 * 1024 * 1024;
 const MAX_VIDEO_SIZE = 100 * 1024 * 1024;
 const BATCH_SIZE = 4;
 
-export function GalleryUploadModal({ channelId, onClose, onComplete }: Props) {
+export function GalleryUploadModal({ channelId, onClose, onComplete, initialTab = 'upload' }: Props) {
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [files, setFiles] = useState<File[]>([]);
   const [caption, setCaption] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -22,6 +26,49 @@ export function GalleryUploadModal({ channelId, onClose, onComplete }: Props) {
   const [error, setError] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // My Photos state
+  const [personalItems, setPersonalItems] = useState<PersonalGalleryItem[]>([]);
+  const [selectedPersonal, setSelectedPersonal] = useState<Set<string>>(new Set());
+  const [loadingPersonal, setLoadingPersonal] = useState(false);
+  const [copying, setCopying] = useState(false);
+
+  useEffect(() => {
+    if (tab === 'my-photos' && personalItems.length === 0 && !loadingPersonal) {
+      setLoadingPersonal(true);
+      api<PersonalGalleryItem[]>('/users/me/collections/gallery?limit=50')
+        .then(setPersonalItems)
+        .catch(() => setPersonalItems([]))
+        .finally(() => setLoadingPersonal(false));
+    }
+  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const togglePersonalItem = (id: string) => {
+    setSelectedPersonal((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleCopyPersonal = async () => {
+    if (selectedPersonal.size === 0) return;
+    setCopying(true);
+    setError('');
+    try {
+      for (const id of selectedPersonal) {
+        await api(`/users/me/collections/gallery/${id}/copy`, {
+          method: 'POST',
+          body: JSON.stringify({ channelId }),
+        });
+      }
+      onComplete();
+    } catch (err: any) {
+      setError(err.message || 'Failed to add photos');
+      setCopying(false);
+    }
+  };
 
   const isVideo = (file: File) =>
     file.type.startsWith('video/') || /\.(mp4|mov|webm|ogg|ogv|avi|mkv)$/i.test(file.name);
@@ -122,98 +169,174 @@ export function GalleryUploadModal({ channelId, onClose, onComplete }: Props) {
     <div style={styles.overlay} onClick={onClose}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div style={styles.header}>
-          <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Upload Media</h3>
+          <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Add Media</h3>
           <button onClick={onClose} style={styles.closeBtn}><X size={18} /></button>
         </div>
 
-        <div style={styles.body}>
-          {error && <div style={styles.error}>{error}</div>}
-
-          <div
-            style={{
-              ...styles.dropZone,
-              borderColor: dragOver ? 'var(--accent)' : 'var(--border)',
-              background: dragOver ? 'rgba(88, 101, 242, 0.08)' : 'var(--bg-secondary)',
-            }}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept="image/*,video/*"
-              onChange={handleFileSelect}
-              style={{ display: 'none' }}
-            />
-            <ImagePlus size={32} style={{ color: 'var(--text-muted)' }} />
-            <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-              Drop images or videos here, or click to browse
-            </span>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-              Max 10MB per image, 100MB per video, up to {MAX_FILES} files
-            </span>
-          </div>
-
-          {files.length > 0 && (
-            <div style={styles.previewGrid}>
-              {files.map((file, idx) => (
-                <div key={idx} style={styles.previewItem}>
-                  {file.type.startsWith('video/') ? (
-                    <video
-                      src={URL.createObjectURL(file)}
-                      style={styles.previewThumb}
-                      muted
-                    />
-                  ) : (
-                    <img
-                      src={URL.createObjectURL(file)}
-                      alt={file.name}
-                      style={styles.previewThumb}
-                    />
-                  )}
-                  <button
-                    onClick={() => removeFile(idx)}
-                    style={styles.removeBtn}
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div style={styles.field}>
-            <label style={styles.label}>Caption (optional)</label>
-            <textarea
-              value={caption}
-              onChange={(e) => setCaption(e.target.value)}
-              placeholder="Add a caption..."
-              style={styles.textarea}
-              maxLength={2000}
-              rows={2}
-            />
-          </div>
-        </div>
-
-        <div style={styles.footer}>
-          {progress && <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{progress}</span>}
-          <div style={{ flex: 1 }} />
-          <button onClick={onClose} style={styles.cancelBtn}>Cancel</button>
+        {/* Tabs */}
+        <div style={styles.tabBar}>
           <button
-            onClick={handleUpload}
-            disabled={files.length === 0 || uploading}
+            onClick={() => setTab('upload')}
             style={{
-              ...styles.uploadBtn,
-              opacity: files.length === 0 || uploading ? 0.5 : 1,
+              ...styles.tab,
+              borderBottomColor: tab === 'upload' ? 'var(--accent)' : 'transparent',
+              color: tab === 'upload' ? 'var(--text-primary)' : 'var(--text-muted)',
             }}
           >
-            <Upload size={14} />
-            {uploading ? 'Uploading...' : `Upload ${files.length} file${files.length !== 1 ? 's' : ''}`}
+            <ImagePlus size={15} /> Upload
+          </button>
+          <button
+            onClick={() => setTab('my-photos')}
+            style={{
+              ...styles.tab,
+              borderBottomColor: tab === 'my-photos' ? 'var(--accent)' : 'transparent',
+              color: tab === 'my-photos' ? 'var(--text-primary)' : 'var(--text-muted)',
+            }}
+          >
+            <FolderHeart size={15} /> My Photos
           </button>
         </div>
+
+        {tab === 'upload' ? (
+          <>
+            <div style={styles.body}>
+              {error && <div style={styles.error}>{error}</div>}
+
+              <div
+                style={{
+                  ...styles.dropZone,
+                  borderColor: dragOver ? 'var(--accent)' : 'var(--border)',
+                  background: dragOver ? 'rgba(88, 101, 242, 0.08)' : 'var(--bg-secondary)',
+                }}
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,video/*"
+                  onChange={handleFileSelect}
+                  style={{ display: 'none' }}
+                />
+                <ImagePlus size={32} style={{ color: 'var(--text-muted)' }} />
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                  Drop images or videos here, or click to browse
+                </span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                  Max 10MB per image, 100MB per video, up to {MAX_FILES} files
+                </span>
+              </div>
+
+              {files.length > 0 && (
+                <div style={styles.previewGrid}>
+                  {files.map((file, idx) => (
+                    <div key={idx} style={styles.previewItem}>
+                      {file.type.startsWith('video/') ? (
+                        <video
+                          src={URL.createObjectURL(file)}
+                          style={styles.previewThumb}
+                          muted
+                        />
+                      ) : (
+                        <img
+                          src={URL.createObjectURL(file)}
+                          alt={file.name}
+                          style={styles.previewThumb}
+                        />
+                      )}
+                      <button
+                        onClick={() => removeFile(idx)}
+                        style={styles.removeBtn}
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={styles.field}>
+                <label style={styles.label}>Caption (optional)</label>
+                <textarea
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                  placeholder="Add a caption..."
+                  style={styles.textarea}
+                  maxLength={2000}
+                  rows={2}
+                />
+              </div>
+            </div>
+
+            <div style={styles.footer}>
+              {progress && <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{progress}</span>}
+              <div style={{ flex: 1 }} />
+              <button onClick={onClose} style={styles.cancelBtn}>Cancel</button>
+              <button
+                onClick={handleUpload}
+                disabled={files.length === 0 || uploading}
+                style={{
+                  ...styles.uploadBtn,
+                  opacity: files.length === 0 || uploading ? 0.5 : 1,
+                }}
+              >
+                <Upload size={14} />
+                {uploading ? 'Uploading...' : `Upload ${files.length} file${files.length !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={styles.body}>
+              {error && <div style={styles.error}>{error}</div>}
+              {loadingPersonal && <div style={styles.emptyState}>Loading...</div>}
+              {!loadingPersonal && personalItems.length === 0 && (
+                <div style={styles.emptyState}>
+                  No photos in your personal collection yet.
+                </div>
+              )}
+              <div style={styles.personalGrid}>
+                {personalItems.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => togglePersonalItem(item.id)}
+                    style={{
+                      ...styles.personalItem,
+                      outline: selectedPersonal.has(item.id) ? '3px solid var(--accent)' : 'none',
+                    }}
+                  >
+                    {item.attachments[0] && (
+                      <img src={item.attachments[0].url} alt="" style={styles.personalThumb} />
+                    )}
+                    {selectedPersonal.has(item.id) && (
+                      <div style={styles.checkOverlay}>
+                        <Check size={20} />
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={styles.footer}>
+              <div style={{ flex: 1 }} />
+              <button onClick={onClose} style={styles.cancelBtn}>Cancel</button>
+              <button
+                onClick={handleCopyPersonal}
+                disabled={selectedPersonal.size === 0 || copying}
+                style={{
+                  ...styles.uploadBtn,
+                  opacity: selectedPersonal.size === 0 || copying ? 0.5 : 1,
+                }}
+              >
+                {copying ? 'Adding...' : `Add Selected (${selectedPersonal.size})`}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -244,8 +367,26 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '16px 20px',
+    padding: '16px 20px 0',
+  },
+  tabBar: {
+    display: 'flex',
+    gap: 0,
+    padding: '0 20px',
     borderBottom: '1px solid var(--border)',
+  },
+  tab: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '10px 16px',
+    background: 'none',
+    border: 'none',
+    borderBottom: '2px solid transparent',
+    fontSize: '0.85rem',
+    fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'color 0.15s',
   },
   closeBtn: {
     background: 'none',
@@ -366,5 +507,40 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '8px 12px',
     borderRadius: 'var(--radius)',
     fontSize: '0.85rem',
+  },
+  emptyState: {
+    padding: '2rem',
+    textAlign: 'center',
+    color: 'var(--text-muted)',
+    fontSize: '0.85rem',
+  },
+  personalGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+    gap: 6,
+  },
+  personalItem: {
+    position: 'relative',
+    border: 'none',
+    borderRadius: 'var(--radius)',
+    overflow: 'hidden',
+    cursor: 'pointer',
+    padding: 0,
+    background: 'var(--bg-tertiary)',
+  },
+  personalThumb: {
+    width: '100%',
+    aspectRatio: '1',
+    objectFit: 'cover',
+    display: 'block',
+  },
+  checkOverlay: {
+    position: 'absolute',
+    inset: 0,
+    background: 'rgba(88, 101, 242, 0.3)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: 'white',
   },
 };

@@ -1,14 +1,17 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, ArrowLeft, ChevronDown } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Image, Map, CalendarDays, ChevronRight } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
-import { MfaSetup, MfaDisable } from './MfaSetup.js';
 import { Markdown } from '../components/common/Markdown.js';
 import { PublicSpaceDirectory } from '../components/spaces/PublicSpaceDirectory.js';
 import { SpaceBrandedCard } from '../components/spaces/SpaceBrandedCard.js';
+import { Avatar } from '../components/common/Avatar.js';
+import { CrabIcon } from '../components/icons/CrabIcon.js';
+import { NewSpaceOnboardingModal } from '../components/common/NewSpaceOnboardingModal.js';
 import { api } from '../lib/api.js';
+import type { UserCollectionsSummary } from '@crabac/shared';
 
 interface Announcement {
   id: string;
@@ -27,8 +30,8 @@ export function Home() {
 
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
-  const [showMfa, setShowMfa] = useState(false);
-  const [showAccount, setShowAccount] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
+  const [collectionsSummary, setCollectionsSummary] = useState<UserCollectionsSummary | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [unseenAnnouncements, setUnseenAnnouncements] = useState<Announcement[]>([]);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
@@ -39,6 +42,7 @@ export function Home() {
   }, [fetchSpaces]);
 
   useEffect(() => {
+    api<UserCollectionsSummary>('/users/me/collections/summary').then(setCollectionsSummary).catch(() => {});
     api<Announcement[]>('/announcements/active').then(setAnnouncements).catch(() => {});
     api<Announcement[]>('/announcements/unseen').then((data) => {
       setUnseenAnnouncements(data);
@@ -70,27 +74,37 @@ export function Home() {
         maxWidth: isMobile ? '100%' : '460px',
       }}>
         {/* Header */}
-        <div style={styles.header}>
-          <div>
-            <h1 style={styles.title}>crab.ac</h1>
-            <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-              <a href="https://github.com/cmactaggart/crabac" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)' }}>GitHub</a>
-              <a href="https://bsky.app/profile/crabac.bsky.social" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)' }}>Bluesky</a>
-              <a href="mailto:bingo@crab.ac" style={{ color: 'var(--text-muted)' }}>bingo@crab.ac</a>
-            </div>
-          </div>
-          <div style={styles.userInfo}>
-            {user?.isAdmin && (
-              <button onClick={() => navigate('/admin')} style={styles.adminBtn}>Admin</button>
-            )}
-            <button
-              onClick={() => setShowAccount(true)}
-              style={styles.usernameBtn}
-            >
-              {user?.displayName}
-            </button>
-          </div>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <button
+            onClick={() => setShowAbout(true)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.25rem', color: 'var(--text-primary)' }}
+          >
+            <CrabIcon size={36} />
+          </button>
         </div>
+
+        {/* You Card */}
+        <section>
+          <button
+            onClick={() => navigate('/you')}
+            style={styles.youCard}
+          >
+            <Avatar src={user?.avatarUrl ?? null} name={user?.displayName || '?'} size={40} baseColor={user?.baseColor ?? null} accentColor={user?.accentColor ?? null} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{user?.displayName}</div>
+              <div style={{ display: 'flex', gap: 12, fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                {collectionsSummary && (
+                  <>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><Image size={12} /> {collectionsSummary.galleryCount}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><Map size={12} /> {collectionsSummary.routeCount}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><CalendarDays size={12} /> {collectionsSummary.eventCount}</span>
+                  </>
+                )}
+              </div>
+            </div>
+            <ChevronRight size={18} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+          </button>
+        </section>
 
         {/* Your Spaces */}
         <section>
@@ -168,16 +182,22 @@ export function Home() {
         <PublicSpaceDirectory lightTheme />
       </div>
 
-      {showCreate && <CreateSpaceModal onClose={() => setShowCreate(false)} />}
+      {showCreate && <NewSpaceOnboardingModal onClose={() => setShowCreate(false)} />}
       {showJoin && <JoinSpaceModal onClose={() => setShowJoin(false)} />}
-      {showMfa && <MfaModal user={user} onClose={() => { setShowMfa(false); }} />}
-      {showAccount && (
-        <AccountModal
-          user={user}
-          onClose={() => setShowAccount(false)}
-          onMfa={() => { setShowAccount(false); setShowMfa(true); }}
-          onLogout={logout}
-        />
+      {showAbout && (
+        <div style={styles.overlay} onClick={() => setShowAbout(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ ...styles.modal, alignItems: 'center', textAlign: 'center' as const }}>
+            <CrabIcon size={48} />
+            <div style={{ display: 'flex', gap: '1rem', fontSize: '0.85rem' }}>
+              <a href="https://github.com/cmactaggart/crabac" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)' }}>GitHub</a>
+              <a href="https://bsky.app/profile/crabac.bsky.social" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)' }}>Bluesky</a>
+              <a href="mailto:bingo@crab.ac" style={{ color: 'var(--text-muted)' }}>bingo@crab.ac</a>
+            </div>
+            {user?.isAdmin && (
+              <button onClick={() => navigate('/admin')} style={styles.adminBtn}>Admin</button>
+            )}
+          </div>
+        </div>
       )}
       {showAnnouncementModal && unseenAnnouncements.length > 0 && (
         <AnnouncementModal
@@ -212,48 +232,6 @@ function truncateContent(content: string, maxLen = 150): { text: string; truncat
   return { text: content.slice(0, maxLen).trimEnd() + '...', truncated: true };
 }
 
-function AccountModal({ user, onClose, onMfa, onLogout }: { user: any; onClose: () => void; onMfa: () => void; onLogout: () => void }) {
-  return (
-    <div style={styles.overlay} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={styles.modal}>
-        <button onClick={onClose} style={styles.closeBtn}><X size={20} /></button>
-        <h2 style={{ margin: '0 0 0.5rem' }}>Account & Security</h2>
-
-        <div style={styles.settingsRow}>
-          <div>
-            <div style={{ fontWeight: 600 }}>{user?.displayName}</div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>@{user?.username}</div>
-          </div>
-        </div>
-
-        <div style={styles.settingsRow}>
-          <div>
-            <div style={{ fontWeight: 600 }}>{user?.email}</div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              {user?.emailVerified ? 'Verified' : 'Not verified'}
-            </div>
-          </div>
-        </div>
-
-        <div style={styles.settingsRow}>
-          <div>
-            <div style={{ fontWeight: 600 }}>Two-Factor Authentication</div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              {user?.totpEnabled ? 'Enabled' : 'Not enabled'}
-            </div>
-          </div>
-          <button onClick={onMfa} style={styles.smallBtn}>
-            {user?.totpEnabled ? 'Manage' : 'Set up'}
-          </button>
-        </div>
-
-        <button onClick={onLogout} style={{ ...styles.secondaryBtn, marginTop: '0.5rem', color: 'var(--danger)', borderColor: 'var(--danger)' }}>
-          Sign Out
-        </button>
-      </div>
-    </div>
-  );
-}
 
 function AnnouncementModal({ announcements, onDismiss }: { announcements: Announcement[]; onDismiss: () => void }) {
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -380,71 +358,6 @@ const announcementStyles: Record<string, React.CSSProperties> = {
   },
 };
 
-function MfaModal({ user, onClose }: { user: any; onClose: () => void }) {
-  const [done, setDone] = useState(false);
-
-  const handleComplete = () => {
-    setDone(true);
-    api('/users/me').then((u) => useAuthStore.setState({ user: u }));
-  };
-
-  return (
-    <div style={styles.overlay} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={styles.modal}>
-        {user?.totpEnabled ? (
-          done ? (
-            <div style={{ textAlign: 'center' }}>
-              <h3>MFA Disabled</h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Two-factor authentication has been removed.</p>
-              <button onClick={onClose} style={styles.primaryBtn}>Close</button>
-            </div>
-          ) : (
-            <MfaDisable onComplete={handleComplete} />
-          )
-        ) : (
-          <MfaSetup onComplete={handleComplete} />
-        )}
-        <button onClick={onClose} style={styles.closeBtn}><X size={20} /></button>
-      </div>
-    </div>
-  );
-}
-
-function CreateSpaceModal({ onClose }: { onClose: () => void }) {
-  const [name, setName] = useState('');
-  const [error, setError] = useState('');
-  const createSpace = useSpacesStore((s) => s.createSpace);
-  const navigate = useNavigate();
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    try {
-      const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-      const space = await createSpace(name, slug);
-      navigate(`/space/${space.id}`);
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
-
-  return (
-    <div style={styles.overlay} onClick={onClose}>
-      <form onClick={(e) => e.stopPropagation()} onSubmit={handleSubmit} style={styles.modal}>
-        <h2>Create a Space</h2>
-        {error && <div style={styles.error}>{error}</div>}
-        <label style={styles.label}>
-          Name
-          <input value={name} onChange={(e) => setName(e.target.value)} required style={styles.input} />
-        </label>
-        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-          <button type="button" onClick={onClose} style={styles.secondaryBtn}>Cancel</button>
-          <button type="submit" style={styles.primaryBtn}>Create</button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
 function JoinSpaceModal({ onClose }: { onClose: () => void }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
@@ -514,29 +427,6 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '1rem',
     color: '#2e1a1a',
   },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  title: { fontSize: '1.5rem', fontWeight: 800 },
-  userInfo: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem',
-    fontSize: '0.9rem',
-    color: 'var(--text-secondary)',
-  },
-  usernameBtn: {
-    background: 'none',
-    border: '1px solid var(--border)',
-    color: 'var(--text-primary)',
-    padding: '0.3rem 0.7rem',
-    borderRadius: 'var(--radius)',
-    fontSize: '0.85rem',
-    fontWeight: 600,
-    cursor: 'pointer',
-  },
   adminBtn: {
     background: 'none',
     border: '1px solid var(--accent)',
@@ -570,6 +460,19 @@ const styles: Record<string, React.CSSProperties> = {
     border: 'none',
     padding: 0,
     cursor: 'pointer',
+  },
+  youCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem',
+    width: '100%',
+    padding: '0.75rem',
+    borderRadius: 'var(--radius)',
+    background: 'var(--bg-input)',
+    border: 'none',
+    cursor: 'pointer',
+    textAlign: 'left' as const,
+    color: 'var(--text-primary)',
   },
   muted: {
     color: 'var(--text-secondary)',

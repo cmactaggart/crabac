@@ -27,6 +27,7 @@ import { registerMessageGateway } from './modules/messages/messages.gateway.js';
 import { registerDMGateway } from './modules/dm/dm.gateway.js';
 import { registerNotificationGateway } from './modules/notifications/notifications.gateway.js';
 import { friendsRoutes } from './modules/friends/friends.routes.js';
+import { followsRoutes } from './modules/follows/follows.routes.js';
 import { registerFriendsGateway } from './modules/friends/friends.gateway.js';
 import { forumsRoutes } from './modules/forums/forums.routes.js';
 import { calendarRoutes } from './modules/calendar/calendar.routes.js';
@@ -47,6 +48,7 @@ import { webhookRoutes } from './modules/webhooks/webhooks.routes.js';
 import { registerWorkflowGateway } from './modules/workflows/workflows.gateway.js';
 import { registerWorkflowListener } from './modules/workflows/workflows.listener.js';
 import { publicBoardLimiter, publicBoardPostLimiter } from './middleware/rate-limiter.js';
+import { personalCollectionsRoutes } from './modules/personal-collections/personal-collections.routes.js';
 import { redis } from './lib/redis.js';
 import { loadPlugins, getLoadedPlugins } from './plugins/loader.js';
 import { db } from './database/connection.js';
@@ -81,6 +83,7 @@ app.use('/uploads', (req, res, next) => {
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/users', personalCollectionsRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/spaces', publicSpacesRoutes);
 app.use('/api/spaces', spacesRoutes);
@@ -97,6 +100,7 @@ app.use('/api/spaces', portalsRoutes);
 app.use('/api/portals', portalsRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/friends', friendsRoutes);
+app.use('/api/follows', followsRoutes);
 app.use('/api/spaces', forumsRoutes);
 app.use('/api/spaces', calendarRoutes);
 app.use('/api/channels', galleriesRoutes);

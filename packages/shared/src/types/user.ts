@@ -82,8 +82,25 @@ export interface FriendshipStatus {
   direction: 'sent' | 'received';
 }
 
+export interface FollowUser {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  baseColor?: string | null;
+  accentColor?: string | null;
+}
+
+export interface FollowCounts {
+  followingCount: number;
+  followerCount: number;
+}
+
 export type DistanceUnits = 'metric' | 'imperial';
 
 export interface UserPreferences {
   distanceUnits: DistanceUnits;
+  defaultVisibility: import('./personal-collection.js').PersonalVisibility;
+  profileVisibility: import('./personal-collection.js').PersonalVisibility;
+  onboardingCompleted: boolean;
 }

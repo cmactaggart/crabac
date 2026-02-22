@@ -1,9 +1,11 @@
-import { useState, useMemo } from 'react';
-import { X, Upload, MapPin, Mountain, TrendingUp } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { X, Upload, MapPin, Mountain, TrendingUp, Check, FolderHeart } from 'lucide-react';
 import { api } from '../../lib/api.js';
-import type { RouteCategory, RouteItem } from '@crabac/shared';
+import type { RouteCategory, RouteItem, PersonalRouteItem } from '@crabac/shared';
 import { usePreferencesStore } from '../../stores/preferences.js';
 import type { DistanceUnits } from '@crabac/shared';
+
+type Tab = 'upload' | 'my-routes';
 
 interface Props {
   channelId: string;
@@ -11,6 +13,7 @@ interface Props {
   categories: RouteCategory[];
   onClose: () => void;
   onComplete: () => void;
+  initialTab?: Tab;
 }
 
 function formatDistance(km: number, units: DistanceUnits): string {
@@ -23,7 +26,8 @@ function formatElevation(m: number, units: DistanceUnits): string {
   return `${m} m`;
 }
 
-export function RouteUploadModal({ channelId, spaceId, categories, onClose, onComplete }: Props) {
+export function RouteUploadModal({ channelId, spaceId, categories, onClose, onComplete, initialTab = 'upload' }: Props) {
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -34,6 +38,49 @@ export function RouteUploadModal({ channelId, spaceId, categories, onClose, onCo
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<any>(null);
   const units = usePreferencesStore((s) => s.preferences.distanceUnits);
+
+  // My Routes state
+  const [personalRoutes, setPersonalRoutes] = useState<PersonalRouteItem[]>([]);
+  const [selectedPersonal, setSelectedPersonal] = useState<Set<string>>(new Set());
+  const [loadingPersonal, setLoadingPersonal] = useState(false);
+  const [copying, setCopying] = useState(false);
+
+  useEffect(() => {
+    if (tab === 'my-routes' && personalRoutes.length === 0 && !loadingPersonal) {
+      setLoadingPersonal(true);
+      api<PersonalRouteItem[]>('/users/me/collections/routes?limit=50')
+        .then(setPersonalRoutes)
+        .catch(() => setPersonalRoutes([]))
+        .finally(() => setLoadingPersonal(false));
+    }
+  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const togglePersonalItem = (id: string) => {
+    setSelectedPersonal((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleCopyPersonal = async () => {
+    if (selectedPersonal.size === 0) return;
+    setCopying(true);
+    setError('');
+    try {
+      for (const id of selectedPersonal) {
+        await api(`/users/me/collections/routes/${id}/copy`, {
+          method: 'POST',
+          body: JSON.stringify({ channelId }),
+        });
+      }
+      onComplete();
+    } catch (err: any) {
+      setError(err.message || 'Failed to add routes');
+      setCopying(false);
+    }
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -125,123 +172,198 @@ export function RouteUploadModal({ channelId, spaceId, categories, onClose, onCo
     <div style={styles.overlay} onClick={onClose}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div style={styles.header}>
-          <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Upload Route</h3>
+          <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Add Route</h3>
           <button onClick={onClose} style={styles.closeBtn}><X size={18} /></button>
         </div>
 
-        <div style={styles.body}>
-          {error && <div style={styles.error}>{error}</div>}
-
-          {!file ? (
-            <label style={styles.dropzone}>
-              <Upload size={32} style={{ color: 'var(--text-muted)' }} />
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Click to select a GPX file</span>
-              <input type="file" accept=".gpx" onChange={handleFileChange} style={{ display: 'none' }} />
-            </label>
-          ) : (
-            <>
-              {previewPolyline && (
-                <div style={styles.previewMap}>
-                  <svg viewBox="0 0 280 160" style={{ width: '100%', height: '100%' }}>
-                    <polyline
-                      points={previewPolyline}
-                      fill="none"
-                      stroke="var(--accent)"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </div>
-              )}
-
-              <div style={styles.fileInfo}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{file.name} ({(file.size / 1024).toFixed(0)} KB)</span>
-                <button onClick={() => { setFile(null); setPreview(null); setName(''); }} style={{ ...styles.closeBtn, padding: 2 }}>
-                  <X size={14} />
-                </button>
-              </div>
-
-              <div style={styles.field}>
-                <label style={styles.label}>Name</label>
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Route name"
-                  style={styles.input}
-                  maxLength={200}
-                />
-              </div>
-
-              <div style={styles.field}>
-                <label style={styles.label}>Description <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe this route..."
-                  style={{ ...styles.input, minHeight: 60, resize: 'vertical' }}
-                  maxLength={4000}
-                />
-              </div>
-
-              {categories.length > 0 && (
-                <div style={styles.field}>
-                  <label style={styles.label}>Category</label>
-                  <select
-                    value={categoryId}
-                    onChange={(e) => setCategoryId(e.target.value)}
-                    style={styles.input}
-                  >
-                    <option value="">None</option>
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div style={styles.field}>
-                <label style={styles.label}>Activity Type <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
-                <select
-                  value={activityType}
-                  onChange={(e) => setActivityType(e.target.value)}
-                  style={styles.input}
-                >
-                  <option value="">None</option>
-                  <option value="ride">Ride</option>
-                  <option value="run">Run</option>
-                  <option value="walk">Walk</option>
-                </select>
-              </div>
-
-              <div style={styles.checkboxRow}>
-                <input
-                  type="checkbox"
-                  id="route-public"
-                  checked={isPublic}
-                  onChange={(e) => setIsPublic(e.target.checked)}
-                />
-                <label htmlFor="route-public" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                  Make this route public
-                </label>
-              </div>
-            </>
-          )}
-        </div>
-
-        <div style={styles.footer}>
-          <button onClick={onClose} style={styles.cancelBtn}>Cancel</button>
+        {/* Tabs */}
+        <div style={styles.tabBar}>
           <button
-            onClick={handleUpload}
-            disabled={!file || !name.trim() || uploading}
+            onClick={() => setTab('upload')}
             style={{
-              ...styles.uploadSubmitBtn,
-              opacity: !file || !name.trim() || uploading ? 0.5 : 1,
+              ...styles.tab,
+              borderBottomColor: tab === 'upload' ? 'var(--accent)' : 'transparent',
+              color: tab === 'upload' ? 'var(--text-primary)' : 'var(--text-muted)',
             }}
           >
-            {uploading ? 'Uploading...' : 'Upload Route'}
+            <Upload size={15} /> Upload GPX
+          </button>
+          <button
+            onClick={() => setTab('my-routes')}
+            style={{
+              ...styles.tab,
+              borderBottomColor: tab === 'my-routes' ? 'var(--accent)' : 'transparent',
+              color: tab === 'my-routes' ? 'var(--text-primary)' : 'var(--text-muted)',
+            }}
+          >
+            <FolderHeart size={15} /> My Routes
           </button>
         </div>
+
+        {tab === 'upload' ? (
+          <>
+            <div style={styles.body}>
+              {error && <div style={styles.error}>{error}</div>}
+
+              {!file ? (
+                <label style={styles.dropzone}>
+                  <Upload size={32} style={{ color: 'var(--text-muted)' }} />
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Click to select a GPX file</span>
+                  <input type="file" accept=".gpx" onChange={handleFileChange} style={{ display: 'none' }} />
+                </label>
+              ) : (
+                <>
+                  {previewPolyline && (
+                    <div style={styles.previewMap}>
+                      <svg viewBox="0 0 280 160" style={{ width: '100%', height: '100%' }}>
+                        <polyline
+                          points={previewPolyline}
+                          fill="none"
+                          stroke="var(--accent)"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </div>
+                  )}
+
+                  <div style={styles.fileInfo}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{file.name} ({(file.size / 1024).toFixed(0)} KB)</span>
+                    <button onClick={() => { setFile(null); setPreview(null); setName(''); }} style={{ ...styles.closeBtn, padding: 2 }}>
+                      <X size={14} />
+                    </button>
+                  </div>
+
+                  <div style={styles.field}>
+                    <label style={styles.label}>Name</label>
+                    <input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Route name"
+                      style={styles.input}
+                      maxLength={200}
+                    />
+                  </div>
+
+                  <div style={styles.field}>
+                    <label style={styles.label}>Description <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
+                    <textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Describe this route..."
+                      style={{ ...styles.input, minHeight: 60, resize: 'vertical' }}
+                      maxLength={4000}
+                    />
+                  </div>
+
+                  {categories.length > 0 && (
+                    <div style={styles.field}>
+                      <label style={styles.label}>Category</label>
+                      <select
+                        value={categoryId}
+                        onChange={(e) => setCategoryId(e.target.value)}
+                        style={styles.input}
+                      >
+                        <option value="">None</option>
+                        {categories.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div style={styles.field}>
+                    <label style={styles.label}>Activity Type <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
+                    <select
+                      value={activityType}
+                      onChange={(e) => setActivityType(e.target.value)}
+                      style={styles.input}
+                    >
+                      <option value="">None</option>
+                      <option value="ride">Ride</option>
+                      <option value="run">Run</option>
+                      <option value="walk">Walk</option>
+                    </select>
+                  </div>
+
+                  <div style={styles.checkboxRow}>
+                    <input
+                      type="checkbox"
+                      id="route-public"
+                      checked={isPublic}
+                      onChange={(e) => setIsPublic(e.target.checked)}
+                    />
+                    <label htmlFor="route-public" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                      Make this route public
+                    </label>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div style={styles.footer}>
+              <button onClick={onClose} style={styles.cancelBtn}>Cancel</button>
+              <button
+                onClick={handleUpload}
+                disabled={!file || !name.trim() || uploading}
+                style={{
+                  ...styles.uploadSubmitBtn,
+                  opacity: !file || !name.trim() || uploading ? 0.5 : 1,
+                }}
+              >
+                {uploading ? 'Uploading...' : 'Upload Route'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={styles.body}>
+              {error && <div style={styles.error}>{error}</div>}
+              {loadingPersonal && <div style={styles.emptyState}>Loading...</div>}
+              {!loadingPersonal && personalRoutes.length === 0 && (
+                <div style={styles.emptyState}>
+                  No routes in your personal collection yet.
+                </div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {personalRoutes.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => togglePersonalItem(item.id)}
+                    style={{
+                      ...styles.listItem,
+                      background: selectedPersonal.has(item.id) ? 'var(--hover)' : 'transparent',
+                    }}
+                  >
+                    <div style={{ flex: 1, textAlign: 'left' }}>
+                      <div style={{ fontWeight: 600 }}>{item.name}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        {item.distanceKm?.toFixed(1)} km
+                        {item.elevationGainM != null && ` · ${item.elevationGainM}m`}
+                      </div>
+                    </div>
+                    {selectedPersonal.has(item.id) && <Check size={16} color="var(--accent)" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={styles.footer}>
+              <button onClick={onClose} style={styles.cancelBtn}>Cancel</button>
+              <button
+                onClick={handleCopyPersonal}
+                disabled={selectedPersonal.size === 0 || copying}
+                style={{
+                  ...styles.uploadSubmitBtn,
+                  opacity: selectedPersonal.size === 0 || copying ? 0.5 : 1,
+                }}
+              >
+                {copying ? 'Adding...' : `Add Selected (${selectedPersonal.size})`}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -250,7 +372,9 @@ export function RouteUploadModal({ channelId, spaceId, categories, onClose, onCo
 const styles: Record<string, React.CSSProperties> = {
   overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 },
   modal: { background: 'var(--bg-primary)', borderRadius: 'var(--radius)', width: 480, maxWidth: '90vw', maxHeight: '90vh', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', overflow: 'auto', display: 'flex', flexDirection: 'column' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--border)' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px 0' },
+  tabBar: { display: 'flex', gap: 0, padding: '0 20px', borderBottom: '1px solid var(--border)' },
+  tab: { display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', background: 'none', border: 'none', borderBottom: '2px solid transparent', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', transition: 'color 0.15s' },
   closeBtn: { background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4, borderRadius: 'var(--radius)' },
   body: { padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 },
   error: { background: 'rgba(237, 66, 69, 0.15)', color: 'var(--danger)', padding: '8px 12px', borderRadius: 'var(--radius)', fontSize: '0.85rem' },
@@ -264,4 +388,6 @@ const styles: Record<string, React.CSSProperties> = {
   footer: { display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '16px 20px', borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)' },
   cancelBtn: { padding: '8px 16px', background: 'none', border: 'none', color: 'var(--text-secondary)', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '0.85rem' },
   uploadSubmitBtn: { padding: '8px 20px', background: 'var(--accent)', border: 'none', color: 'white', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 },
+  emptyState: { padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' },
+  listItem: { display: 'flex', alignItems: 'center', width: '100%', padding: '0.6rem 0.75rem', borderRadius: 'var(--radius)', border: 'none', color: 'var(--text-primary)', fontSize: '0.85rem', cursor: 'pointer' },
 };

@@ -159,6 +159,24 @@ usersRoutes.delete('/blocks/:userId', async (req: Request, res: Response, next: 
   }
 });
 
+// ─── Username Lookup ───
+
+usersRoutes.get('/by-username/:username', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = await usersService.getUserByUsername(req.params.username);
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+    // Check if viewer can see this profile
+    const { canViewProfile } = await import('../personal-collections/privacy.service.js');
+    const canView = await canViewProfile(user.id, req.user!.userId);
+    res.json({ ...user, canViewProfile: canView });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── Public Profile ───
 
 usersRoutes.get('/:userId', async (req: Request, res: Response, next: NextFunction) => {

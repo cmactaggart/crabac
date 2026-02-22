@@ -1,0 +1,1629 @@
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Image, Map, CalendarDays, Upload, Plus, Trash2, Share2, Edit3, MapPinned, X, FileText, Users, ImagePlus, MapPin, Bell, User, CheckCheck, AtSign, Reply, Zap, Tag, SmilePlus, Newspaper } from 'lucide-react';
+import { CrabIcon } from '../components/icons/CrabIcon.js';
+import { useAuthStore } from '../stores/auth.js';
+import { usePersonalCollectionsStore } from '../stores/personalCollections.js';
+import { useNotificationsStore } from '../stores/notifications.js';
+import { useFriendsStore } from '../stores/friends.js';
+import { useIsMobile } from '../hooks/useIsMobile.js';
+import { Avatar } from '../components/common/Avatar.js';
+import { UserSettingsModal } from '../components/settings/user/UserSettingsModal.js';
+import { ShareToSpacePicker } from '../components/common/ShareToSpacePicker.js';
+import { FriendTagPicker } from '../components/common/FriendTagPicker.js';
+import { FriendMentionAutocomplete } from '../components/common/FriendMentionAutocomplete.js';
+import { EmojiPicker } from '../components/messages/EmojiPicker.js';
+import { PostCard as SharedPostCard, VisibilityBadge } from '../components/posts/PostCard.js';
+import { useFollowsStore } from '../stores/follows.js';
+import { FeedView } from '../pages/FeedPage.js';
+import { api } from '../lib/api.js';
+import type { PersonalGalleryItem, PersonalRouteItem, PersonalEvent, PersonalEventCategory, PersonalVisibility, UserPost, UserPostComment, Notification, MentionNotificationData, ReplyNotificationData, FollowUser } from '@crabac/shared';
+
+type SubTab = 'feed' | 'photos' | 'routes' | 'events';
+type SidebarView = 'home' | 'notifications' | 'feed';
+
+const VISIBILITY_LABELS: Record<PersonalVisibility, string> = {
+  public: 'Public',
+  private: 'Private',
+  friends: 'Friends',
+  spaces: 'Spaces',
+};
+
+const VISIBILITY_COLORS: Record<PersonalVisibility, string> = {
+  public: '#43b581',
+  private: '#747f8d',
+  friends: '#faa61a',
+  spaces: '#5865f2',
+};
+
+export function YouPage() {
+  const user = useAuthStore((s) => s.user);
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
+  const [activeTab, setActiveTab] = useState<SubTab>('feed');
+  const [sidebarView, setSidebarView] = useState<SidebarView>('home');
+  const [showSettings, setShowSettings] = useState(false);
+  const [shareItem, setShareItem] = useState<{ type: 'gallery' | 'route' | 'event' | 'post'; id: string } | null>(null);
+  const [defaultVisibility, setDefaultVisibility] = useState<PersonalVisibility>('private');
+
+  const {
+    galleryItems, routeItems, events, eventCategories, posts, postsLoading, postsHasMore, summary, loading,
+    fetchSummary, fetchGallery, fetchRoutes, fetchEvents, fetchEventCategories, fetchPosts,
+    uploadGalleryItem, uploadRoute, createEvent, createEventCategory, deleteEventCategory, createPost,
+    deleteGalleryItem, deleteRoute, deleteEvent, deletePost,
+    updateGalleryItem, updateRoute, updateEvent, updatePost,
+    togglePostReaction, fetchComments, addComment, deleteComment, toggleCommentReaction,
+    createRepost,
+  } = usePersonalCollectionsStore();
+
+  const { unreadCount, fetchUnreadCount } = useNotificationsStore();
+  const { counts: followCounts, fetchCounts: fetchFollowCounts, followers, following, fetchFollowers, fetchFollowing } = useFollowsStore();
+  const [followListMode, setFollowListMode] = useState<'followers' | 'following' | null>(null);
+
+  useEffect(() => {
+    fetchSummary();
+    fetchUnreadCount();
+    if (user?.id) fetchFollowCounts(user.id);
+    api('/users/preferences').then((prefs: any) => {
+      if (prefs.defaultVisibility) setDefaultVisibility(prefs.defaultVisibility);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (sidebarView !== 'home') return;
+    if (activeTab === 'feed') fetchPosts();
+    if (activeTab === 'photos') fetchGallery();
+    if (activeTab === 'routes') fetchRoutes();
+    if (activeTab === 'events') { fetchEvents(); fetchEventCategories(); }
+  }, [activeTab, sidebarView]);
+
+  const memberSince = user?.createdAt
+    ? new Date(user.createdAt).toLocaleDateString([], { year: 'numeric', month: 'long' })
+    : '';
+
+  if (isMobile) {
+    // Mobile: no sidebar, profile card at top, BottomTabBar handles navigation
+    return (
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 56, overflowY: 'auto', padding: '1rem' }}>
+        {/* Compact Profile Card */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1rem', padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)' }}>
+          <Avatar
+            src={user?.avatarUrl ?? null}
+            name={user?.displayName || '?'}
+            size={48}
+            baseColor={user?.baseColor ?? null}
+            accentColor={user?.accentColor ?? null}
+          />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{user?.displayName}</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>@{user?.username}</div>
+            {memberSince && (
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                Member since {memberSince}
+              </div>
+            )}
+          </div>
+          <button onClick={() => setShowSettings(true)} style={{ ...styles.editBtn, fontSize: '0.72rem', padding: '0.3rem 0.6rem' }}>
+            <Edit3 size={12} /> Edit
+          </button>
+        </div>
+
+        <div style={{ maxWidth: '100%' }}>
+          {/* Collection Counts */}
+          {summary && (
+            <div style={styles.summaryRow}>
+              <SummaryBadge icon={<FileText size={14} />} label="Feed" count={summary.postCount} active={activeTab === 'feed'} onClick={() => setActiveTab('feed')} />
+              <SummaryBadge icon={<Image size={14} />} label="Photos" count={summary.galleryCount} active={activeTab === 'photos'} onClick={() => setActiveTab('photos')} />
+              <SummaryBadge icon={<Map size={14} />} label="Routes" count={summary.routeCount} active={activeTab === 'routes'} onClick={() => setActiveTab('routes')} />
+              <SummaryBadge icon={<CalendarDays size={14} />} label="Events" count={summary.eventCount} active={activeTab === 'events'} onClick={() => setActiveTab('events')} />
+            </div>
+          )}
+
+          {/* Sub-tab Content */}
+          <div style={{ marginTop: '1rem', paddingBottom: '2rem' }}>
+            {activeTab === 'feed' && (
+              <FeedTab
+                posts={posts}
+                loading={postsLoading}
+                hasMore={postsHasMore}
+                onCreatePost={createPost}
+                onDeletePost={deletePost}
+                onUpdatePost={updatePost}
+                onLoadMore={() => {
+                  if (posts.length > 0) fetchPosts({ before: posts[posts.length - 1].id });
+                }}
+              />
+            )}
+            {activeTab === 'photos' && (
+              <PhotosTab
+                items={galleryItems}
+                loading={loading}
+                onUpload={uploadGalleryItem}
+                onDelete={deleteGalleryItem}
+                onUpdate={updateGalleryItem}
+                onShare={(id) => setShareItem({ type: 'gallery', id })}
+              />
+            )}
+            {activeTab === 'routes' && (
+              <RoutesTab
+                items={routeItems}
+                loading={loading}
+                onUpload={uploadRoute}
+                onDelete={deleteRoute}
+                onUpdate={updateRoute}
+                onShare={(id) => setShareItem({ type: 'route', id })}
+              />
+            )}
+            {activeTab === 'events' && (
+              <EventsTab
+                items={events}
+                loading={loading}
+                categories={eventCategories}
+                routes={routeItems}
+                onCreate={createEvent}
+                onDelete={deleteEvent}
+                onUpdate={updateEvent}
+                onShare={(id) => setShareItem({ type: 'event', id })}
+                onCreateCategory={createEventCategory}
+                onDeleteCategory={deleteEventCategory}
+                onFetchRoutes={fetchRoutes}
+              />
+            )}
+          </div>
+        </div>
+
+        {showSettings && <UserSettingsModal onClose={() => setShowSettings(false)} />}
+        {shareItem && (
+          <ShareToSpacePicker
+            contentType={shareItem.type}
+            itemId={shareItem.id}
+            onClose={() => setShareItem(null)}
+            onShared={() => setShareItem(null)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // Desktop layout
+  return (
+    <div style={styles.outerContainer}>
+      {/* Left Sidebar */}
+      <div style={styles.sidebar}>
+        {/* Profile Mini Card */}
+        <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+          <Avatar
+            src={user?.avatarUrl ?? null}
+            name={user?.displayName || '?'}
+            size={56}
+            baseColor={user?.baseColor ?? null}
+            accentColor={user?.accentColor ?? null}
+          />
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{user?.displayName}</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>@{user?.username}</div>
+          </div>
+          <button onClick={() => setShowSettings(true)} style={{ ...styles.editBtn, fontSize: '0.72rem', padding: '0.3rem 0.6rem' }}>
+            <Edit3 size={12} /> Edit
+          </button>
+          {/* Follower/Following counts */}
+          <div style={{ display: 'flex', gap: 12, fontSize: '0.78rem', marginTop: 4 }}>
+            <span
+              style={{ cursor: 'pointer', color: 'var(--text-secondary)' }}
+              onClick={() => { if (user?.id) { fetchFollowing(user.id); setFollowListMode('following'); } }}
+            >
+              <strong>{followCounts.followingCount}</strong> following
+            </span>
+            <span
+              style={{ cursor: 'pointer', color: 'var(--text-secondary)' }}
+              onClick={() => { if (user?.id) { fetchFollowers(user.id); setFollowListMode('followers'); } }}
+            >
+              <strong>{followCounts.followerCount}</strong> followers
+            </span>
+          </div>
+        </div>
+
+        {/* Nav Links: You / Feed / Spaces / Notifications */}
+        <button
+          onClick={() => setSidebarView('home')}
+          style={{
+            ...styles.sidebarLink,
+            background: sidebarView === 'home' ? 'var(--bg-tertiary)' : 'transparent',
+          }}
+        >
+          <User size={16} /> You
+        </button>
+        <button
+          onClick={() => setSidebarView('feed')}
+          style={{
+            ...styles.sidebarLink,
+            background: sidebarView === 'feed' ? 'var(--bg-tertiary)' : 'transparent',
+          }}
+        >
+          <Newspaper size={16} /> Feed
+        </button>
+        <button
+          onClick={() => navigate('/')}
+          style={{ ...styles.sidebarLink, background: 'transparent' }}
+        >
+          <CrabIcon size={16} /> Spaces
+        </button>
+        <button
+          onClick={() => setSidebarView('notifications')}
+          style={{
+            ...styles.sidebarLink,
+            background: sidebarView === 'notifications' ? 'var(--bg-tertiary)' : 'transparent',
+          }}
+        >
+          <Bell size={16} /> Notifications
+          {unreadCount > 0 && (
+            <span style={styles.unreadBadge}>{unreadCount > 99 ? '99+' : unreadCount}</span>
+          )}
+        </button>
+      </div>
+
+      {/* Main Content */}
+      <div style={{
+        flex: 1,
+        overflowY: 'auto',
+        padding: '2rem',
+        display: 'flex',
+        justifyContent: 'center',
+      }}>
+        {sidebarView === 'feed' ? (
+          <div style={{ width: '100%', maxWidth: 700 }}>
+            <FeedView />
+          </div>
+        ) : sidebarView === 'notifications' ? (
+          <div style={{ width: '100%', maxWidth: 700 }}>
+            <NotificationsPanel />
+          </div>
+        ) : (
+          <div style={{ ...styles.card, maxWidth: 700 }}>
+            {/* Profile Card */}
+            <div style={styles.profileSection}>
+              <Avatar
+                src={user?.avatarUrl ?? null}
+                name={user?.displayName || '?'}
+                size={80}
+                baseColor={user?.baseColor ?? null}
+                accentColor={user?.accentColor ?? null}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h2 style={{ margin: 0, fontSize: '1.3rem' }}>{user?.displayName}</h2>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>@{user?.username}</div>
+                {memberSince && (
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
+                    Member since {memberSince}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Collection Counts */}
+            {summary && (
+              <div style={styles.summaryRow}>
+                <SummaryBadge icon={<FileText size={14} />} label="Feed" count={summary.postCount} active={activeTab === 'feed'} onClick={() => setActiveTab('feed')} />
+                <SummaryBadge icon={<Image size={14} />} label="Photos" count={summary.galleryCount} active={activeTab === 'photos'} onClick={() => setActiveTab('photos')} />
+                <SummaryBadge icon={<Map size={14} />} label="Routes" count={summary.routeCount} active={activeTab === 'routes'} onClick={() => setActiveTab('routes')} />
+                <SummaryBadge icon={<CalendarDays size={14} />} label="Events" count={summary.eventCount} active={activeTab === 'events'} onClick={() => setActiveTab('events')} />
+              </div>
+            )}
+
+            {/* Sub-tab Content */}
+            <div style={{ marginTop: '1rem' }}>
+              {activeTab === 'feed' && (
+                <FeedTab
+                  posts={posts}
+                  loading={postsLoading}
+                  hasMore={postsHasMore}
+                  defaultVisibility={defaultVisibility}
+                  onCreatePost={createPost}
+                  onDeletePost={deletePost}
+                  onUpdatePost={updatePost}
+                  onLoadMore={() => {
+                    if (posts.length > 0) fetchPosts({ before: posts[posts.length - 1].id });
+                  }}
+                />
+              )}
+              {activeTab === 'photos' && (
+                <PhotosTab
+                  items={galleryItems}
+                  loading={loading}
+                  defaultVisibility={defaultVisibility}
+                  onUpload={uploadGalleryItem}
+                  onDelete={deleteGalleryItem}
+                  onUpdate={updateGalleryItem}
+                  onShare={(id) => setShareItem({ type: 'gallery', id })}
+                />
+              )}
+              {activeTab === 'routes' && (
+                <RoutesTab
+                  items={routeItems}
+                  loading={loading}
+                  defaultVisibility={defaultVisibility}
+                  onUpload={uploadRoute}
+                  onDelete={deleteRoute}
+                  onUpdate={updateRoute}
+                  onShare={(id) => setShareItem({ type: 'route', id })}
+                />
+              )}
+              {activeTab === 'events' && (
+                <EventsTab
+                  items={events}
+                  loading={loading}
+                  categories={eventCategories}
+                  routes={routeItems}
+                  defaultVisibility={defaultVisibility}
+                  onCreate={createEvent}
+                  onDelete={deleteEvent}
+                  onUpdate={updateEvent}
+                  onShare={(id) => setShareItem({ type: 'event', id })}
+                  onCreateCategory={createEventCategory}
+                  onDeleteCategory={deleteEventCategory}
+                  onFetchRoutes={fetchRoutes}
+                />
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {showSettings && <UserSettingsModal onClose={() => setShowSettings(false)} />}
+      {shareItem && (
+        <ShareToSpacePicker
+          contentType={shareItem.type}
+          itemId={shareItem.id}
+          onClose={() => setShareItem(null)}
+          onShared={() => setShareItem(null)}
+        />
+      )}
+      {followListMode && (
+        <FollowListModal
+          mode={followListMode}
+          users={followListMode === 'followers' ? followers : following}
+          onClose={() => setFollowListMode(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function FollowListModal({ mode, users, onClose }: {
+  mode: 'followers' | 'following';
+  users: FollowUser[];
+  onClose: () => void;
+}) {
+  const navigate = useNavigate();
+
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }} onClick={onClose}>
+      <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius)', padding: '1rem', maxWidth: 400, width: '100%', maxHeight: '70vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
+            {mode === 'followers' ? 'Followers' : 'Following'}
+          </h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, display: 'flex' }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        {users.length === 0 && (
+          <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem', fontSize: '0.9rem' }}>
+            No {mode} yet
+          </div>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {users.map((u) => (
+            <button
+              key={u.id}
+              onClick={() => { onClose(); navigate(`/p/${u.username}`); }}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px', borderRadius: 'var(--radius)', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-primary)', width: '100%', textAlign: 'left' }}
+            >
+              <Avatar
+                src={u.avatarUrl}
+                name={u.displayName}
+                size={32}
+                baseColor={u.baseColor}
+                accentColor={u.accentColor}
+              />
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{u.displayName}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>@{u.username}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SummaryBadge({ icon, label, count, active, onClick }: {
+  icon: React.ReactNode; label: string; count: number; active: boolean; onClick: () => void;
+}) {
+  return (
+    <button onClick={onClick} style={{
+      ...styles.summaryBadge,
+      background: active ? 'var(--accent)' : 'var(--bg-input)',
+      color: active ? 'white' : 'var(--text-secondary)',
+    }}>
+      {icon}
+      <span style={{ fontWeight: 600 }}>{count}</span>
+      <span style={{ fontSize: '0.75rem' }}>{label}</span>
+    </button>
+  );
+}
+
+// VisibilityBadge imported from components/posts/PostCard.tsx
+
+// ─── Photos Tab ───
+
+function PhotosTab({ items, loading, defaultVisibility = 'private', onUpload, onDelete, onUpdate, onShare }: {
+  items: PersonalGalleryItem[]; loading: boolean;
+  defaultVisibility?: PersonalVisibility;
+  onUpload: (files: File[], caption?: string, visibility?: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  onUpdate: (id: string, data: Record<string, any>) => Promise<void>;
+  onShare: (id: string) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [visibility, setVisibility] = useState<PersonalVisibility>(defaultVisibility);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files?.length) return;
+    setUploading(true);
+    try {
+      await onUpload(Array.from(files), undefined, visibility);
+    } catch {}
+    setUploading(false);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  return (
+    <div>
+      <div style={styles.tabHeader}>
+        <h3 style={styles.tabTitle}>My Photos</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <select value={visibility} onChange={(e) => setVisibility(e.target.value as PersonalVisibility)} style={{ ...styles.formInput, width: 'auto', padding: '0.3rem 0.5rem', fontSize: '0.75rem' }}>
+            <option value="private">Private</option>
+            <option value="friends">Friends</option>
+            <option value="spaces">Shared Spaces</option>
+            <option value="public">Public</option>
+          </select>
+          <button onClick={() => fileRef.current?.click()} disabled={uploading} style={styles.uploadBtn}>
+            <Upload size={14} /> {uploading ? 'Uploading...' : 'Upload'}
+          </button>
+        </div>
+        <input ref={fileRef} type="file" accept="image/*,video/*" multiple onChange={handleUpload} style={{ display: 'none' }} />
+      </div>
+
+      {items.length === 0 && !loading && (
+        <div style={styles.emptyState}>No photos yet. Upload some to get started!</div>
+      )}
+
+      <div style={styles.photoGrid}>
+        {items.map((item) => (
+          <div key={item.id} style={styles.photoCard}>
+            {item.attachments[0] && (
+              item.attachments[0].mimeType.startsWith('video/') ? (
+                <video src={item.attachments[0].url} style={styles.photoImg} />
+              ) : (
+                <img src={item.attachments[0].url} alt={item.caption || ''} style={styles.photoImg} />
+              )
+            )}
+            <div style={styles.photoOverlay}>
+              <VisibilityBadge visibility={item.visibility} />
+              <div style={styles.photoActions}>
+                <button onClick={() => onShare(item.id)} style={styles.iconBtn} title="Share to Space">
+                  <Share2 size={14} />
+                </button>
+                <button onClick={() => {
+                  if (confirm('Delete this photo?')) onDelete(item.id);
+                }} style={{ ...styles.iconBtn, color: 'var(--danger)' }} title="Delete">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+            {item.caption && <div style={styles.photoCaption}>{item.caption}</div>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Routes Tab ───
+
+function RoutesTab({ items, loading, defaultVisibility = 'private', onUpload, onDelete, onUpdate, onShare }: {
+  items: PersonalRouteItem[]; loading: boolean;
+  defaultVisibility?: PersonalVisibility;
+  onUpload: (file: File, name: string, data?: any) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  onUpdate: (id: string, data: Record<string, any>) => Promise<void>;
+  onShare: (id: string) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [routeName, setRouteName] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [visibility, setVisibility] = useState<PersonalVisibility>(defaultVisibility);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSelectedFile(file);
+    setRouteName(file.name.replace(/\.gpx$/i, ''));
+    setShowForm(true);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile || !routeName.trim()) return;
+    setUploading(true);
+    try {
+      await onUpload(selectedFile, routeName.trim(), { visibility });
+      setShowForm(false);
+      setSelectedFile(null);
+      setRouteName('');
+      setVisibility(defaultVisibility);
+    } catch {}
+    setUploading(false);
+  };
+
+  return (
+    <div>
+      <div style={styles.tabHeader}>
+        <h3 style={styles.tabTitle}>My Routes</h3>
+        <button onClick={() => fileRef.current?.click()} style={styles.uploadBtn}>
+          <Upload size={14} /> Upload GPX
+        </button>
+        <input ref={fileRef} type="file" accept=".gpx" onChange={handleFileSelect} style={{ display: 'none' }} />
+      </div>
+
+      {showForm && (
+        <div style={styles.inlineForm}>
+          <input
+            value={routeName}
+            onChange={(e) => setRouteName(e.target.value)}
+            placeholder="Route name"
+            style={styles.formInput}
+          />
+          <label style={styles.formLabel}>Visibility</label>
+          <select value={visibility} onChange={(e) => setVisibility(e.target.value as PersonalVisibility)} style={styles.formInput}>
+            <option value="private">Private</option>
+            <option value="friends">Friends</option>
+            <option value="spaces">Shared Spaces</option>
+            <option value="public">Public</option>
+          </select>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={handleUpload} disabled={uploading || !routeName.trim()} style={styles.uploadBtn}>
+              {uploading ? 'Uploading...' : 'Save'}
+            </button>
+            <button onClick={() => { setShowForm(false); setSelectedFile(null); setVisibility(defaultVisibility); }} style={styles.cancelBtn}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {items.length === 0 && !loading && !showForm && (
+        <div style={styles.emptyState}>No routes yet. Upload a GPX file to get started!</div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {items.map((item) => (
+          <div key={item.id} style={styles.routeCard}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontWeight: 600 }}>{item.name}</span>
+                <VisibilityBadge visibility={item.visibility} />
+                {item.activityType && (
+                  <span style={styles.activityBadge}>{item.activityType}</span>
+                )}
+              </div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4 }}>
+                {item.distanceKm != null && <span>{item.distanceKm.toFixed(1)} km</span>}
+                {item.elevationGainM != null && <span> · {item.elevationGainM}m gain</span>}
+                {item.durationSec != null && <span> · {Math.round(item.durationSec / 60)} min</span>}
+              </div>
+              {item.description && (
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 4 }}>
+                  {item.description}
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              <button onClick={() => onShare(item.id)} style={styles.iconBtn} title="Share to Space">
+                <Share2 size={14} />
+              </button>
+              <button onClick={() => {
+                if (confirm('Delete this route?')) onDelete(item.id);
+              }} style={{ ...styles.iconBtn, color: 'var(--danger)' }} title="Delete">
+                <Trash2 size={14} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Events Tab ───
+
+function EventsTab({ items, loading, categories, routes, defaultVisibility = 'private', onCreate, onDelete, onUpdate, onShare, onCreateCategory, onDeleteCategory, onFetchRoutes }: {
+  items: PersonalEvent[]; loading: boolean;
+  categories: PersonalEventCategory[];
+  routes: PersonalRouteItem[];
+  defaultVisibility?: PersonalVisibility;
+  onCreate: (data: Record<string, any>) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  onUpdate: (id: string, data: Record<string, any>) => Promise<void>;
+  onShare: (id: string) => void;
+  onCreateCategory: (data: { name: string; color?: string }) => Promise<PersonalEventCategory>;
+  onDeleteCategory: (id: string) => Promise<void>;
+  onFetchRoutes: () => Promise<void>;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const [eventName, setEventName] = useState('');
+  const [eventDate, setEventDate] = useState('');
+  const [eventTime, setEventTime] = useState('');
+  const [location, setLocation] = useState('');
+  const [description, setDescription] = useState('');
+  const [activityType, setActivityType] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [routeId, setRouteId] = useState('');
+  const [showRouteSelect, setShowRouteSelect] = useState(false);
+  const [color, setColor] = useState('');
+  const [visibility, setVisibility] = useState<PersonalVisibility>(defaultVisibility);
+  const [creating, setCreating] = useState(false);
+  const [routesFetched, setRoutesFetched] = useState(false);
+
+  // Category inline creation
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatColor, setNewCatColor] = useState('#5865f2');
+
+  const routeLinked = showRouteSelect && !!routeId;
+
+  const resetForm = () => {
+    setEventName('');
+    setEventDate('');
+    setEventTime('');
+    setLocation('');
+    setDescription('');
+    setActivityType('');
+    setCategoryId('');
+    setRouteId('');
+    setShowRouteSelect(false);
+    setColor('');
+    setVisibility(defaultVisibility);
+  };
+
+  const handleCreate = async () => {
+    if (!eventName.trim() || !eventDate) return;
+    if (routeLinked && !location.trim()) return;
+    setCreating(true);
+    try {
+      await onCreate({
+        name: eventName.trim(),
+        eventDate,
+        eventTime: eventTime || null,
+        location: location.trim() || null,
+        description: description.trim() || null,
+        activityType: activityType || null,
+        categoryId: categoryId || null,
+        routeId: (showRouteSelect && routeId) ? routeId : null,
+        color: color || null,
+        visibility,
+      });
+      setShowForm(false);
+      resetForm();
+    } catch {}
+    setCreating(false);
+  };
+
+  const handleCreateCategory = async () => {
+    if (!newCatName.trim()) return;
+    try {
+      const cat = await onCreateCategory({ name: newCatName.trim(), color: newCatColor });
+      setCategoryId(cat.id);
+      setShowNewCategory(false);
+      setNewCatName('');
+      setNewCatColor('#5865f2');
+    } catch {}
+  };
+
+  // Fetch routes when route selection is enabled
+  useEffect(() => {
+    if (showRouteSelect && !routesFetched) {
+      onFetchRoutes();
+      setRoutesFetched(true);
+    }
+  }, [showRouteSelect]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div>
+      <div style={styles.tabHeader}>
+        <h3 style={styles.tabTitle}>My Events</h3>
+        <button onClick={() => { setShowForm(!showForm); if (showForm) resetForm(); }} style={styles.uploadBtn}>
+          <Plus size={14} /> New Event
+        </button>
+      </div>
+
+      {showForm && (
+        <div style={styles.inlineForm}>
+          {/* Name */}
+          <label style={styles.formLabel}>Name</label>
+          <input value={eventName} onChange={(e) => setEventName(e.target.value)} placeholder="Event name" style={styles.formInput} />
+
+          {/* Date & Time */}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              <label style={styles.formLabel}>Date</label>
+              <input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} style={styles.formInput} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={styles.formLabel}>{routeLinked ? 'Time' : 'Time (optional)'}</label>
+              <input type="time" value={eventTime} onChange={(e) => setEventTime(e.target.value)} style={styles.formInput} />
+            </div>
+          </div>
+
+          {/* Location */}
+          <label style={styles.formLabel}>{routeLinked ? 'Meet Point' : 'Location (optional)'}</label>
+          <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Coffee shop parking lot" style={styles.formInput} maxLength={500} />
+
+          {/* Activity Type */}
+          <label style={styles.formLabel}>Activity Type (optional)</label>
+          <select value={activityType} onChange={(e) => setActivityType(e.target.value)} style={styles.formInput}>
+            <option value="">None</option>
+            <option value="ride">Ride</option>
+            <option value="run">Run</option>
+            <option value="walk">Walk</option>
+          </select>
+
+          {/* Category */}
+          <label style={styles.formLabel}>Category (optional)</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} style={{ ...styles.formInput, flex: 1 }}>
+              <option value="">No category</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => setShowNewCategory(!showNewCategory)}
+              style={{ ...styles.cancelBtn, padding: '0.35rem 0.6rem', fontSize: '0.75rem' }}
+              title="Add category"
+            >
+              <Plus size={12} />
+            </button>
+          </div>
+          {showNewCategory && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)' }}>
+              <input
+                type="color"
+                value={newCatColor}
+                onChange={(e) => setNewCatColor(e.target.value)}
+                style={{ width: 28, height: 28, border: 'none', borderRadius: 'var(--radius)', cursor: 'pointer', padding: 0, background: 'transparent' }}
+              />
+              <input
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                placeholder="Category name"
+                style={{ ...styles.formInput, flex: 1 }}
+                maxLength={100}
+              />
+              <button onClick={handleCreateCategory} disabled={!newCatName.trim()} style={{ ...styles.uploadBtn, padding: '0.35rem 0.6rem', fontSize: '0.75rem' }}>
+                Add
+              </button>
+            </div>
+          )}
+
+          {/* Route Linking */}
+          <div style={{ marginTop: 4 }}>
+            <label style={{ ...styles.formLabel, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={showRouteSelect}
+                onChange={(e) => {
+                  setShowRouteSelect(e.target.checked);
+                  if (!e.target.checked) setRouteId('');
+                }}
+                style={{ margin: 0 }}
+              />
+              <MapPinned size={14} />
+              <span style={{ textTransform: 'none', fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-primary)' }}>Link a Route</span>
+            </label>
+            {showRouteSelect && (
+              <div style={{ marginTop: 8, padding: 10, background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)' }}>
+                {routes.length === 0 ? (
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>No personal routes yet. Upload routes first.</div>
+                ) : (
+                  <select value={routeId} onChange={(e) => setRouteId(e.target.value)} style={styles.formInput}>
+                    <option value="">Select a route...</option>
+                    {routes.map((r) => (
+                      <option key={r.id} value={r.id}>{r.name} ({r.distanceKm?.toFixed(1)} km)</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Color */}
+          <label style={styles.formLabel}>Color (optional)</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input
+              type="color"
+              value={color || '#5865f2'}
+              onChange={(e) => setColor(e.target.value)}
+              style={{ width: 32, height: 32, border: 'none', borderRadius: 'var(--radius)', cursor: 'pointer', padding: 0, background: 'transparent' }}
+            />
+            <input
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              placeholder="#5865f2"
+              style={{ ...styles.formInput, width: 90, fontSize: '0.8rem' }}
+            />
+            {color && (
+              <button onClick={() => setColor('')} style={{ ...styles.cancelBtn, padding: '0.3rem 0.5rem', fontSize: '0.7rem' }}>
+                Clear
+              </button>
+            )}
+          </div>
+
+          {/* Visibility */}
+          <label style={styles.formLabel}>Visibility</label>
+          <select value={visibility} onChange={(e) => setVisibility(e.target.value as PersonalVisibility)} style={styles.formInput}>
+            <option value="private">Private</option>
+            <option value="friends">Friends</option>
+            <option value="spaces">Shared Spaces</option>
+            <option value="public">Public</option>
+          </select>
+
+          {/* Description */}
+          <label style={styles.formLabel}>Description (optional)</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Event description..."
+            style={{ ...styles.formInput, minHeight: 60, resize: 'vertical', fontFamily: 'inherit' }}
+            maxLength={5000}
+          />
+
+          {/* Submit */}
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            <button
+              onClick={handleCreate}
+              disabled={creating || !eventName.trim() || !eventDate || (routeLinked && !location.trim())}
+              style={{
+                ...styles.uploadBtn,
+                opacity: creating || !eventName.trim() || !eventDate ? 0.5 : 1,
+              }}
+            >
+              {creating ? 'Creating...' : 'Create Event'}
+            </button>
+            <button onClick={() => { setShowForm(false); resetForm(); }} style={styles.cancelBtn}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {items.length === 0 && !loading && !showForm && (
+        <div style={styles.emptyState}>No events yet. Create one to get started!</div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {items.map((item) => {
+          const dateStr = new Date(item.eventDate + 'T00:00:00').toLocaleDateString([], {
+            weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+          });
+
+          return (
+            <div key={item.id} style={styles.eventCard}>
+              {(item.color || item.category?.color) && (
+                <div style={{ width: 4, borderRadius: 2, background: item.color || item.category?.color || 'var(--accent)', flexShrink: 0, alignSelf: 'stretch' }} />
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 600 }}>{item.name}</span>
+                  <VisibilityBadge visibility={item.visibility} />
+                  {item.activityType && (
+                    <span style={{ ...styles.activityBadge, background: 'var(--accent)', color: '#fff' }}>{item.activityType}</span>
+                  )}
+                  {item.category && (
+                    <span style={{ ...styles.activityBadge, background: `${item.category.color}22`, color: item.category.color }}>{item.category.name}</span>
+                  )}
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4 }}>
+                  {dateStr}
+                  {item.eventTime && ` at ${item.eventTime}`}
+                  {item.location && ` · ${item.location}`}
+                </div>
+                {item.route && (
+                  <div style={{ fontSize: '0.78rem', color: 'var(--accent)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <MapPinned size={12} />
+                    {item.route.name} ({item.route.distanceKm?.toFixed(1)} km)
+                  </div>
+                )}
+                {item.description && (
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 4 }}>
+                    {item.description}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <button onClick={() => onShare(item.id)} style={styles.iconBtn} title="Share to Space">
+                  <Share2 size={14} />
+                </button>
+                <button onClick={() => {
+                  if (confirm('Delete this event?')) onDelete(item.id);
+                }} style={{ ...styles.iconBtn, color: 'var(--danger)' }} title="Delete">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Notifications Panel ───
+
+function NotificationsPanel() {
+  const navigate = useNavigate();
+  const { notifications, loading, hasMore, fetchNotifications, markAsRead, markAllAsRead } = useNotificationsStore();
+
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
+
+  const handleClick = (n: Notification) => {
+    if (!n.read) markAsRead(n.id);
+    const data = n.data as any;
+    if (n.type === 'post_tag' && data.postId) {
+      // Stay on YouPage, switch to feed
+      return;
+    }
+    if (data.spaceId && data.channelId) {
+      navigate(`/space/${data.spaceId}/channel/${data.channelId}`);
+    }
+  };
+
+  const loadMore = () => {
+    if (notifications.length > 0) {
+      fetchNotifications(notifications[notifications.length - 1].id);
+    }
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Notifications</h3>
+        <button onClick={() => markAllAsRead()} style={styles.markAllBtn}>
+          <CheckCheck size={14} /> Mark all read
+        </button>
+      </div>
+
+      {notifications.length === 0 && !loading && (
+        <div style={styles.emptyState}>No notifications yet</div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {notifications.map((n) => (
+          <button
+            key={n.id}
+            style={{
+              ...styles.notifItem,
+              background: n.read ? 'transparent' : 'rgba(88, 101, 242, 0.08)',
+            }}
+            onClick={() => handleClick(n)}
+          >
+            <div style={{ flexShrink: 0, paddingTop: 2 }}>
+              {n.type === 'mention' && <AtSign size={16} style={{ color: 'var(--accent)' }} />}
+              {n.type === 'reply' && <Reply size={16} style={{ color: 'var(--accent)' }} />}
+              {n.type === 'portal_invite' && <Zap size={16} style={{ color: 'var(--accent)' }} />}
+              {n.type === 'friend_request' && <Users size={16} style={{ color: 'var(--accent)' }} />}
+              {n.type === 'dm_request' && <Users size={16} style={{ color: 'var(--accent)' }} />}
+              {n.type === 'event_cancelled' && <CalendarDays size={16} style={{ color: 'var(--danger, #ed4245)' }} />}
+              {n.type === 'post_tag' && <Tag size={16} style={{ color: 'var(--accent)' }} />}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '0.82rem', fontWeight: 600, marginBottom: 2 }}>
+                {formatNotifTitle(n)}
+              </div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {(n.data as any).messagePreview || (n.data as any).postPreview || ''}
+              </div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                {formatNotifTime(n.createdAt)}
+              </div>
+            </div>
+            {!n.read && <div style={styles.unreadDot} />}
+          </button>
+        ))}
+      </div>
+
+      {hasMore && notifications.length > 0 && (
+        <button onClick={loadMore} disabled={loading} style={{ ...styles.cancelBtn, width: '100%', marginTop: 12, textAlign: 'center' }}>
+          {loading ? 'Loading...' : 'Load more'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function formatNotifTitle(n: Notification): string {
+  const data = n.data as any;
+  switch (n.type) {
+    case 'mention': {
+      const d = data as MentionNotificationData;
+      if (d.mentionType === 'everyone') return `@everyone in #${d.channelName}`;
+      if (d.mentionType === 'here') return `@here in #${d.channelName}`;
+      return `${d.authorUsername} mentioned you in #${d.channelName}`;
+    }
+    case 'reply': {
+      const d = data as ReplyNotificationData;
+      return `${d.repliedByUsername} replied in #${d.channelName}`;
+    }
+    case 'portal_invite':
+      return `Portal invite from ${data.sourceSpaceName}`;
+    case 'friend_request':
+      return `${data.fromDisplayName} sent you a friend request`;
+    case 'dm_request':
+      return `${data.fromDisplayName} sent you a message`;
+    case 'event_cancelled':
+      return `${data.eventName} was cancelled`;
+    case 'post_tag':
+      return `${data.taggedByDisplayName} tagged you in a post`;
+    default:
+      return 'Notification';
+  }
+}
+
+function formatNotifTime(createdAt: string): string {
+  const date = new Date(createdAt);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+// ─── Feed Tab ───
+
+function FeedTab({ posts, loading, hasMore, defaultVisibility = 'private', onCreatePost, onDeletePost, onUpdatePost, onLoadMore }: {
+  posts: UserPost[]; loading: boolean; hasMore: boolean;
+  defaultVisibility?: PersonalVisibility;
+  onCreatePost: (formData: FormData) => Promise<void>;
+  onDeletePost: (id: string) => Promise<void>;
+  onUpdatePost: (id: string, data: Record<string, any>) => Promise<void>;
+  onLoadMore: () => void;
+}) {
+  const navigate = useNavigate();
+  const currentUser = useAuthStore((s) => s.user);
+  const { togglePostReaction, fetchComments, addComment, deleteComment, toggleCommentReaction, createRepost } = usePersonalCollectionsStore();
+  const [body, setBody] = useState('');
+  const [visibility, setVisibility] = useState<PersonalVisibility>(defaultVisibility);
+  const [files, setFiles] = useState<File[]>([]);
+  const [taggedIds, setTaggedIds] = useState<string[]>([]);
+  const [showTagPicker, setShowTagPicker] = useState(false);
+  const [posting, setPosting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editBody, setEditBody] = useState('');
+  const [editVisibility, setEditVisibility] = useState<PersonalVisibility>('private');
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const gpxRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const friends = useFriendsStore((s) => s.friends);
+
+  const handleAddFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newFiles = e.target.files;
+    if (!newFiles) return;
+    setFiles((prev) => [...prev, ...Array.from(newFiles)]);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const handleAddGpx = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newFiles = e.target.files;
+    if (!newFiles) return;
+    setFiles((prev) => [...prev, ...Array.from(newFiles)]);
+    if (gpxRef.current) gpxRef.current.value = '';
+  };
+
+  const removeFile = (index: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleBodyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setBody(val);
+    // Detect @mention query from text before cursor
+    const cursorPos = e.target.selectionStart ?? val.length;
+    const textBeforeCursor = val.slice(0, cursorPos);
+    const match = textBeforeCursor.match(/@([a-zA-Z0-9_-]*)$/);
+    setMentionQuery(match ? match[1] : null);
+  };
+
+  const handleMentionSelect = useCallback((username: string, userId: string) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const cursorPos = ta.selectionStart ?? body.length;
+    const textBeforeCursor = body.slice(0, cursorPos);
+    const matchIdx = textBeforeCursor.lastIndexOf('@');
+    if (matchIdx === -1) return;
+    const newBody = body.slice(0, matchIdx) + `@${username} ` + body.slice(cursorPos);
+    setBody(newBody);
+    setMentionQuery(null);
+    if (!taggedIds.includes(userId)) {
+      setTaggedIds((prev) => [...prev, userId]);
+    }
+    // Restore focus after React re-render
+    requestAnimationFrame(() => {
+      const newPos = matchIdx + username.length + 2; // @ + username + space
+      ta.focus();
+      ta.setSelectionRange(newPos, newPos);
+    });
+  }, [body, taggedIds]);
+
+  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // When mention autocomplete is open, let it handle these keys
+    if (mentionQuery !== null && ['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
+      // The FriendMentionAutocomplete listens on document keydown (capture) and will handle it
+      return;
+    }
+  };
+
+  const handlePost = async () => {
+    if (!body.trim() && files.length === 0) return;
+    setPosting(true);
+    try {
+      // Also scan body for @username patterns and resolve to userIds
+      const allTaggedIds = [...taggedIds];
+      const mentionMatches = body.matchAll(/@([a-zA-Z0-9_-]+)/g);
+      for (const m of mentionMatches) {
+        const friend = friends.find((f) => f.user.username.toLowerCase() === m[1].toLowerCase());
+        if (friend && !allTaggedIds.includes(friend.user.id)) {
+          allTaggedIds.push(friend.user.id);
+        }
+      }
+
+      const formData = new FormData();
+      if (body.trim()) formData.append('body', body.trim());
+      formData.append('visibility', visibility);
+      files.forEach((f) => formData.append('files', f));
+      if (allTaggedIds.length > 0) formData.append('taggedUserIds', JSON.stringify(allTaggedIds));
+      await onCreatePost(formData);
+      setBody('');
+      setFiles([]);
+      setTaggedIds([]);
+      setVisibility(defaultVisibility);
+    } catch {}
+    setPosting(false);
+  };
+
+  const startEdit = (post: UserPost) => {
+    setEditingId(post.id);
+    setEditBody(post.body || '');
+    setEditVisibility(post.visibility);
+  };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+    await onUpdatePost(editingId, { body: editBody.trim() || null, visibility: editVisibility });
+    setEditingId(null);
+  };
+
+  return (
+    <div>
+      <h3 style={styles.tabTitle}>My Feed</h3>
+
+      {/* Compose Area */}
+      <div style={{ ...styles.inlineForm, marginBottom: '1rem' }}>
+        <div style={{ position: 'relative' }}>
+          {mentionQuery !== null && (
+            <FriendMentionAutocomplete
+              query={mentionQuery}
+              onSelect={handleMentionSelect}
+              onClose={() => setMentionQuery(null)}
+            />
+          )}
+          <textarea
+            ref={textareaRef}
+            value={body}
+            onChange={handleBodyChange}
+            onKeyDown={handleTextareaKeyDown}
+            placeholder="What's on your mind?"
+            style={{ ...styles.formInput, minHeight: 60, resize: 'vertical', fontFamily: 'inherit' }}
+            maxLength={10000}
+          />
+        </div>
+
+        {/* File previews */}
+        {files.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {files.map((f, i) => (
+              <div key={i} style={{ position: 'relative', padding: '4px 8px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                <button onClick={() => removeFile(i)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, display: 'flex' }}>
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Tagged friends */}
+        {taggedIds.length > 0 && (
+          <div style={{ fontSize: '0.75rem', color: 'var(--accent)' }}>
+            <Users size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+            {taggedIds.length} friend{taggedIds.length > 1 ? 's' : ''} tagged
+          </div>
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <button onClick={() => fileRef.current?.click()} style={styles.cancelBtn} title="Add media">
+            <ImagePlus size={14} /> Media
+          </button>
+          <input ref={fileRef} type="file" accept="image/*,video/*" multiple onChange={handleAddFiles} style={{ display: 'none' }} />
+
+          <button onClick={() => gpxRef.current?.click()} style={styles.cancelBtn} title="Add GPX">
+            <MapPin size={14} /> GPX
+          </button>
+          <input ref={gpxRef} type="file" accept=".gpx" multiple onChange={handleAddGpx} style={{ display: 'none' }} />
+
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setShowTagPicker(!showTagPicker)} style={styles.cancelBtn} title="Tag friends">
+              <Users size={14} /> Tag
+            </button>
+            {showTagPicker && (
+              <FriendTagPicker
+                selectedIds={taggedIds}
+                onChange={setTaggedIds}
+                onClose={() => setShowTagPicker(false)}
+              />
+            )}
+          </div>
+
+          <select value={visibility} onChange={(e) => setVisibility(e.target.value as PersonalVisibility)} style={{ ...styles.formInput, width: 'auto', padding: '0.3rem 0.5rem', fontSize: '0.75rem' }}>
+            <option value="private">Private</option>
+            <option value="friends">Friends</option>
+            <option value="spaces">Shared Spaces</option>
+            <option value="public">Public</option>
+          </select>
+
+          <button
+            onClick={handlePost}
+            disabled={posting || (!body.trim() && files.length === 0)}
+            style={{ ...styles.uploadBtn, marginLeft: 'auto', opacity: posting || (!body.trim() && files.length === 0) ? 0.5 : 1 }}
+          >
+            {posting ? 'Posting...' : 'Post'}
+          </button>
+        </div>
+      </div>
+
+      {/* Posts List */}
+      {posts.length === 0 && !loading && (
+        <div style={styles.emptyState}>No posts yet. Share something!</div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {posts.map((post) => (
+          <SharedPostCard
+            key={post.id}
+            post={post}
+            currentUserId={currentUser?.id || ''}
+            isOwn={true}
+            isEditing={editingId === post.id}
+            editBody={editBody}
+            editVisibility={editVisibility}
+            onEditBodyChange={setEditBody}
+            onEditVisibilityChange={setEditVisibility}
+            onStartEdit={() => startEdit(post)}
+            onSaveEdit={saveEdit}
+            onCancelEdit={() => setEditingId(null)}
+            onDelete={() => { if (confirm('Delete this post?')) onDeletePost(post.id); }}
+            onReaction={(emoji, hasReacted) => togglePostReaction(post.id, emoji, hasReacted)}
+            onFetchComments={(opts) => fetchComments(post.id, opts)}
+            onAddComment={(text) => addComment(post.id, text)}
+            onDeleteComment={(commentId) => deleteComment(post.id, commentId)}
+            onCommentReaction={(commentId, emoji, hasReacted) => toggleCommentReaction(commentId, emoji, hasReacted)}
+            onRepost={undefined}
+            onShare={() => {}}
+          />
+        ))}
+      </div>
+
+      {/* Load More */}
+      {hasMore && posts.length > 0 && (
+        <button onClick={onLoadMore} disabled={loading} style={{ ...styles.cancelBtn, width: '100%', marginTop: 12, textAlign: 'center' }}>
+          {loading ? 'Loading...' : 'Load more'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+const styles: Record<string, React.CSSProperties> = {
+  outerContainer: {
+    display: 'flex',
+    height: '100vh',
+    overflow: 'hidden',
+  },
+  sidebar: {
+    width: 200,
+    flexShrink: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    borderRight: '1px solid var(--border)',
+    background: 'var(--bg-secondary)',
+    overflowY: 'auto',
+  },
+  sidebarLink: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '10px 16px',
+    border: 'none',
+    cursor: 'pointer',
+    color: 'var(--text-primary)',
+    fontSize: '0.85rem',
+    fontWeight: 600,
+    borderRadius: 0,
+    textAlign: 'left',
+    width: '100%',
+    position: 'relative' as const,
+  },
+  unreadBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 18,
+    height: 18,
+    padding: '0 5px',
+    borderRadius: 9,
+    background: 'var(--danger, #ed4245)',
+    color: '#fff',
+    fontSize: '0.65rem',
+    fontWeight: 700,
+    marginLeft: 'auto',
+  },
+  markAllBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    background: 'none',
+    border: 'none',
+    color: 'var(--accent)',
+    fontSize: '0.78rem',
+    cursor: 'pointer',
+    fontWeight: 600,
+  },
+  notifItem: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 10,
+    width: '100%',
+    textAlign: 'left',
+    padding: '10px 14px',
+    border: 'none',
+    borderBottom: '1px solid var(--border)',
+    borderRadius: 'var(--radius)',
+    cursor: 'pointer',
+    color: 'var(--text-primary)',
+    marginBottom: 2,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    background: 'var(--accent)',
+    flexShrink: 0,
+    marginTop: 6,
+  },
+  card: {
+    width: '100%',
+    maxWidth: 700,
+  },
+  profileSection: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1rem',
+    padding: '1.5rem',
+    background: 'var(--bg-secondary)',
+    borderRadius: 'var(--radius)',
+  },
+  editBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '0.4rem 0.8rem',
+    borderRadius: 'var(--radius)',
+    border: '1px solid var(--border)',
+    background: 'transparent',
+    color: 'var(--text-secondary)',
+    fontSize: '0.8rem',
+    fontWeight: 600,
+    cursor: 'pointer',
+    flexShrink: 0,
+  },
+  summaryRow: {
+    display: 'flex',
+    gap: 8,
+    marginTop: '1rem',
+  },
+  summaryBadge: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    padding: '10px 12px',
+    borderRadius: 'var(--radius)',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '0.85rem',
+  },
+  tabHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: '0.75rem',
+  },
+  tabTitle: {
+    margin: 0,
+    fontSize: '0.95rem',
+    fontWeight: 700,
+  },
+  uploadBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '0.4rem 0.8rem',
+    borderRadius: 'var(--radius)',
+    border: 'none',
+    background: 'var(--accent)',
+    color: 'white',
+    fontSize: '0.8rem',
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  cancelBtn: {
+    padding: '0.4rem 0.8rem',
+    borderRadius: 'var(--radius)',
+    border: '1px solid var(--border)',
+    background: 'transparent',
+    color: 'var(--text-secondary)',
+    fontSize: '0.8rem',
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  emptyState: {
+    padding: '2rem',
+    textAlign: 'center',
+    color: 'var(--text-muted)',
+    fontSize: '0.9rem',
+  },
+  photoGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+    gap: 8,
+  },
+  photoCard: {
+    position: 'relative',
+    borderRadius: 'var(--radius)',
+    overflow: 'hidden',
+    background: 'var(--bg-secondary)',
+  },
+  photoImg: {
+    width: '100%',
+    aspectRatio: '1',
+    objectFit: 'cover',
+    display: 'block',
+  },
+  photoOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    padding: 6,
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    background: 'linear-gradient(180deg, rgba(0,0,0,0.5) 0%, transparent 100%)',
+  },
+  photoActions: {
+    display: 'flex',
+    gap: 4,
+  },
+  photoCaption: {
+    padding: '6px 8px',
+    fontSize: '0.8rem',
+    color: 'var(--text-secondary)',
+  },
+  iconBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 28,
+    height: 28,
+    borderRadius: 'var(--radius)',
+    border: 'none',
+    background: 'rgba(0,0,0,0.3)',
+    color: 'white',
+    cursor: 'pointer',
+    padding: 0,
+  },
+  routeCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '0.75rem',
+    borderRadius: 'var(--radius)',
+    background: 'var(--bg-secondary)',
+  },
+  eventCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '0.75rem',
+    borderRadius: 'var(--radius)',
+    background: 'var(--bg-secondary)',
+  },
+  postCard: {
+    padding: '1rem',
+    borderRadius: 'var(--radius)',
+    background: 'var(--bg-secondary)',
+  },
+  activityBadge: {
+    display: 'inline-block',
+    padding: '2px 6px',
+    borderRadius: 10,
+    fontSize: '0.65rem',
+    fontWeight: 600,
+    background: 'var(--bg-tertiary)',
+    color: 'var(--text-muted)',
+    textTransform: 'capitalize',
+  },
+  inlineForm: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    padding: '0.75rem',
+    borderRadius: 'var(--radius)',
+    background: 'var(--bg-secondary)',
+    marginBottom: '0.75rem',
+  },
+  formLabel: {
+    fontSize: '0.7rem',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    color: 'var(--text-muted)',
+    letterSpacing: '0.05em',
+    marginTop: 2,
+  },
+  formInput: {
+    padding: '0.5rem 0.7rem',
+    borderRadius: 'var(--radius)',
+    border: 'none',
+    background: 'var(--bg-input)',
+    color: 'var(--text-primary)',
+    fontSize: '0.9rem',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box' as const,
+  },
+};

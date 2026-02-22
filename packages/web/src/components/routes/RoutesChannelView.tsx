@@ -293,7 +293,7 @@ export function RoutesChannelView({ channelId, channel, spaceId, showBackButton,
         )}
         {canUpload && (
           <button onClick={() => setShowUpload(true)} style={styles.uploadBtn}>
-            <Plus size={16} /> Add Route
+            <Plus size={16} /> Add
           </button>
         )}
       </div>
@@ -368,7 +368,7 @@ export function RoutesChannelView({ channelId, channel, spaceId, showBackButton,
           <div style={styles.placeholder}>
             <MapPinned size={48} style={{ color: 'var(--text-muted)', opacity: 0.3 }} />
             <p style={{ color: 'var(--text-muted)', margin: '12px 0 0' }}>
-              No routes yet. {canUpload ? 'Click "Add Route" to upload a GPX file.' : ''}
+              No routes yet. {canUpload ? 'Click "Add" to upload a GPX file or import from your collection.' : ''}
             </p>
           </div>
         ) : viewMode === 'card' || isMobile ? (
@@ -502,6 +502,7 @@ export function RoutesChannelView({ channelId, channel, spaceId, showBackButton,
           onClose={() => setReportTarget(null)}
         />
       )}
+
     </div>
   );
 }

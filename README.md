@@ -5,9 +5,9 @@
 
 # crab.ac
 
-An open-source community organization platform with first-class support for outdoor activity groups.
+An open-source community organization platform — communication, coordination, social, and public presence in one place.
 
-crab.ac started as a collection of small tools for organizing a bike community — route sharing, event coordination, photo galleries — stitched together around a chat client. It's since grown into a unified platform for running any kind of real-world community: clubs, neighborhoods, coalitions, creative groups, and more. The chat is still there, but it's one piece of a larger system that includes calendars, route libraries, public forums, automated workflows, media galleries, blogs, and cross-community linking.
+crab.ac is a unified platform for running real-world communities: clubs, neighborhoods, coalitions, creative groups, outdoor activity organizations, and more. It brings together real-time chat, forums, calendars, route libraries, media galleries, social profiles, a news feed, blogs, workflow automation, and cross-community linking into a single integrated system.
 
 The platform is especially well-suited for outdoor activity communities (cycling, running, hiking, etc.) but the tools are general-purpose enough for any group that needs to communicate, coordinate, and share with each other and the public.
 
@@ -17,30 +17,28 @@ The platform is especially well-suited for outdoor activity communities (cycling
 
 ---
 
-## What's New in 0.3.0
+## What's New in 0.4.0
 
-- **Workflow automation** — trigger-condition-action engine for automating community tasks: welcome flows, image routing, role assignments, custom slash commands, interactive cards, and more
-- **Incoming webhooks** — connect external services (Strava, GitHub, payment processors) to trigger workflows via per-space webhook URLs
-- **Outgoing webhooks** — workflow actions can POST to external URLs for integrations with Slack, Discord, spreadsheets, etc.
-- **Custom slash commands** — define named commands with typed arguments that trigger workflows
-- **Interactive cards** — workflow-generated cards with buttons and form fields for member interaction (RSVPs, approvals, polls)
-- **Moderation system** — user reports for messages, photos, routes, and forum posts; space bans with admin channel notifications; global app bans
-- **User blocks** — bidirectional blocking with DM filtering and message hiding
-- **Mobile OTA updates** — admin-managed over-the-air bundle updates for native mobile apps
+- **Social profiles** — personal galleries, route collections, event calendars, and a post feed on every user profile with visibility controls (public/friends/private)
+- **User posts** — text posts with photo/route attachments, friend tagging, reactions, comments, and reposts
+- **Follows** — one-way follows for public profiles; friends count as implicit bidirectional follows
+- **Social feed** — aggregated feed of posts from followed users, friends, and self with infinite scroll
+- **Personal collections** — users can curate their own photos, routes, and events independently of any space, and copy items into space channels
+- **Profile visibility** — configurable profile privacy (public, friends-only, private) with per-item visibility overrides
 
 ---
 
 ## Why crab.ac?
 
-Most community platforms are either chat apps that bolt on features, or website builders that bolt on chat. crab.ac is built from the ground up around the idea that a community needs all of these things working together:
+Community platforms tend to do one thing well and bolt on everything else. crab.ac treats communication, organization, social, and public presence as equal first-class concerns:
 
-- **A place to talk** (real-time chat, forums, DMs)
-- **A way to organize** (calendars, route libraries, role-based permissions)
-- **A public presence** (forums, galleries, blogs, calendars — each independently publishable to the web)
-- **Automation** (workflows that react to events and reduce manual admin work)
-- **Connections between communities** (portals that link channels across independent spaces)
+- **Communication** — real-time chat, forums, DMs, slash commands
+- **Organization** — calendars, route libraries, role-based permissions, workflow automation
+- **Social** — user profiles with posts, follows, personal collections, and a news feed
+- **Public presence** — forums, galleries, blogs, calendars, and route libraries each independently publishable to the web
+- **Cross-community** — portals that link channels across independent spaces
 
-The result is a single platform where a bike club can share routes, plan group rides, post race photos, publish a public blog, run automated welcome flows, and chat — all without duct-taping five different services together.
+The result is a single platform where a community can share routes, plan events, post photos, publish a blog, run automated workflows, and maintain social profiles — all without stitching together separate services.
 
 ---
 
@@ -80,17 +78,53 @@ Messages are delivered in real-time via Socket.io with typing indicators, online
 
 1:1 and group direct messages with a message request flow for non-friends. Group DMs support up to 10 participants with custom names.
 
+<!-- TODO: screenshot of DM conversation -->
+<!-- ![Screenshot: Direct messages](docs/screenshots/dm-view.png) -->
+
 ### Forums
 
 Forum channels support threaded discussions with pinning, locking, and moderation controls. Forum threads can be exposed as public boards with optional anonymous browsing and lightweight board-only registration.
+
+<!-- TODO: screenshot of forum channel with threads -->
+<!-- ![Screenshot: Forum channel](docs/screenshots/forum-channel.png) -->
 
 ### Slash Commands
 
 Built-in commands (`/shrug`, `/tableflip`, `/unflip`, `/me`, `/lenny`) plus custom commands defined through the workflow system. All commands show an autocomplete palette as you type.
 
+![Screenshot: Slash command palette](docs/screenshots/slash-commands.png)
+
 ### Search
 
 Full-text message search with `from:user` and `in:channel` operators.
+
+---
+
+## Social Profiles & Feed
+
+Every user has a personal profile page with social features that work independently of any space.
+
+### User Profiles
+
+Each profile includes personal collections (photos, routes, events), social posts, follower/following counts, and customizable branding colors. Profile visibility is configurable: public, friends-only, or private.
+
+![Screenshot: User profile page](docs/screenshots/you-page.png)
+
+### Posts
+
+Users can publish posts with text, photo attachments, route attachments, and friend tags. Posts support reactions, comments, and reposts. Each post has its own visibility setting (public, friends, private).
+
+![Screenshot: Post with reactions](docs/screenshots/post-card.png)
+
+### Follows & Feed
+
+One-way follows let users subscribe to public profiles. Friends (mutual, bidirectional) count as implicit follows in both directions. The feed aggregates posts from followed users, friends, and self in reverse chronological order with infinite scroll.
+
+![Screenshot: Social feed](docs/screenshots/feed.png)
+
+### Personal Collections
+
+Users can curate their own photos, routes, and events on their profile — independent of any space. Collection items can be copied into space channels (galleries, route libraries, calendars) when needed, bridging personal and community content.
 
 ---
 
@@ -136,6 +170,8 @@ Media gallery channels display uploads in a responsive photo grid with a detail 
 ### Community Blog
 
 A built-in blogging system with a Markdown editor, inline image uploads, live preview, and a draft/publish workflow. Posts can individually be made public for the external blog web view.
+
+![Screenshot: Blog editor](docs/screenshots/blog-editor.png)
 
 ---
 
@@ -347,6 +383,9 @@ Blog posts can individually be made public for an external blog page with full M
 
 URL: `app.crab.ac/blog/your-space-slug`
 
+<!-- TODO: screenshot of public blog page -->
+<!-- ![Screenshot: Public blog](docs/screenshots/public-blog.png) -->
+
 ### Configuration
 
 Each public component is controlled by its own toggle in admin settings:
@@ -378,7 +417,7 @@ Portals can be created directly (if you have permission in both spaces) or propo
 
 ## Built for Outdoor Communities
 
-While crab.ac works for any kind of community, its feature set reflects its origins in organizing cycling groups. Here's how the pieces fit together for an outdoor activity community:
+While crab.ac works for any kind of community, its feature set has deep support for outdoor activity groups. Here's how the pieces fit together for an outdoor activity community:
 
 ### Route Sharing as a First-Class Feature
 
@@ -584,7 +623,7 @@ sudo cloudflared service install
 
 ## API Documentation
 
-See [docs/api.md](docs/api.md) for the complete REST API reference (v0.3.0), including all endpoints, request/response formats, WebSocket events, and permission requirements.
+See [docs/api.md](docs/api.md) for the complete REST API reference (v0.4.0), including all endpoints, request/response formats, WebSocket events, and permission requirements.
 
 ---
 

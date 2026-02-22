@@ -1,5 +1,5 @@
-import { useNavigate } from 'react-router-dom';
-import { Mail, ChevronsLeft } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Mail, ChevronsLeft, User } from 'lucide-react';
 import { useLayoutStore } from '../../stores/layout.js';
 import { useDMStore } from '../../stores/dm.js';
 import { CrabIcon } from '../icons/CrabIcon.js';
@@ -14,6 +14,7 @@ interface Props {
 
 export function SpaceSidebar({ spaces, activeSpaceId }: Props) {
   const navigate = useNavigate();
+  const location = useLocation();
   const toggleSpaceSidebar = useLayoutStore((s) => s.toggleSpaceSidebar);
   const dmUnreads = useDMStore((s) => s.dmUnreads);
   const totalDMUnreads = Object.values(dmUnreads).reduce((sum, n) => sum + n, 0);
@@ -41,6 +42,18 @@ export function SpaceSidebar({ spaces, activeSpaceId }: Props) {
             {totalDMUnreads > 99 ? '99+' : totalDMUnreads}
           </span>
         )}
+      </button>
+
+      {/* You button */}
+      <button
+        onClick={() => navigate('/you')}
+        style={{
+          ...styles.icon,
+          background: location.pathname === '/you' ? 'var(--accent)' : 'var(--bg-tertiary)',
+        }}
+        title="You"
+      >
+        <User size={20} />
       </button>
 
       <div style={styles.divider} />

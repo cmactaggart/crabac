@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ImagePlus, Grid3x3, Layers, Image } from 'lucide-react';
+import { Plus, Grid3x3, Layers, Image } from 'lucide-react';
 import { getSocket } from '../../lib/socket.js';
 import { api } from '../../lib/api.js';
 import { Permissions, hasPermission, combinePermissions } from '@crabac/shared';
@@ -176,8 +176,8 @@ export function GalleryChannelView({ channelId, channel, spaceId, showBackButton
         </div>
         {canUpload && (
           <button onClick={() => setShowUpload(true)} style={styles.uploadBtn}>
-            <ImagePlus size={16} />
-            Add Media
+            <Plus size={16} />
+            Add
           </button>
         )}
       </div>
@@ -189,7 +189,7 @@ export function GalleryChannelView({ channelId, channel, spaceId, showBackButton
           <div style={styles.placeholder}>
             <Grid3x3 size={48} style={{ color: 'var(--text-muted)', opacity: 0.3 }} />
             <p style={{ color: 'var(--text-muted)', margin: '12px 0 0' }}>
-              No media yet. {canUpload ? 'Click "Add Media" to upload.' : ''}
+              No media yet. {canUpload ? 'Click "Add" to upload or import from your collection.' : ''}
             </p>
           </div>
         ) : viewMode === 'grouped' ? (
@@ -288,6 +288,7 @@ export function GalleryChannelView({ channelId, channel, spaceId, showBackButton
           onComplete={handleUploadComplete}
         />
       )}
+
     </div>
   );
 }

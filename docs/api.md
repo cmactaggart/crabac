@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.3.0
+## API Version 0.4.0
 
 Base URL: `https://app.crab.ac/api`
 
@@ -226,6 +226,10 @@ Mute a user. Requires auth.
 ### DELETE /users/mutes/:userId
 
 Unmute a user. Requires auth.
+
+### GET /users/by-username/:username
+
+Look up a user by username. Requires auth. Returns the user object with an additional `canViewProfile` boolean indicating whether the requesting user can see this profile's content (based on visibility settings and friendship status).
 
 ### GET /users/:userId
 
@@ -1273,6 +1277,356 @@ Remove a friend.
 ### GET /friends/status/:userId
 
 Get friendship status with a user.
+
+---
+
+## Follows
+
+One-way follows for public profiles. Friends count as implicit bidirectional follows — they appear in follower/following lists and counts automatically. All endpoints require auth.
+
+### GET /follows/feed
+
+Get an aggregated feed of posts from followed users, friends, and self.
+
+**Query:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `before` | string | - | Cursor for keyset pagination (post ID) |
+| `limit` | number | 10 | Max 50 |
+
+**Visibility rules:**
+- Own posts: all visibilities
+- Friends' posts: `public` and `friends`
+- Followed (non-friend) posts: `public` only
+
+**Response:** Array of UserPost objects with author info, attachments, tags, reactions, comment counts, and repost data.
+
+### GET /follows/status/:userId
+
+Get follow status with a user.
+
+**Response:** `{ isFollowing: boolean, isFriend: boolean }`
+
+### GET /follows/counts/:userId
+
+Get follower/following counts for a user. Counts include both explicit follows and accepted friendships (deduplicated).
+
+**Response:** `{ followingCount: number, followerCount: number }`
+
+### GET /follows/:userId/followers
+
+List a user's followers (explicit follows + friends). Deduplicated by user ID.
+
+**Response:** Array of `{ id, username, displayName, avatarUrl, baseColor, accentColor }`
+
+### GET /follows/:userId/following
+
+List who a user is following (explicit follows + friends). Deduplicated by user ID.
+
+**Response:** Array of `{ id, username, displayName, avatarUrl, baseColor, accentColor }`
+
+### POST /follows/:userId
+
+Follow a user. Returns `400` if attempting to follow yourself. Silently skips if already following or already friends (friendship implies follow).
+
+**Response:** `204 No Content`
+
+### DELETE /follows/:userId
+
+Unfollow a user. Returns `400` if the target is a friend (must unfriend instead).
+
+**Response:** `204 No Content`
+
+---
+
+## Personal Collections
+
+Users have personal collections for photos, routes, and events that live on their profile (independent of any space). Items have a `visibility` field: `public`, `friends`, or `private`. All endpoints require auth.
+
+### Profile Visibility Gate
+
+When accessing another user's collections (`/users/:userId/collections/*`), the API checks profile visibility. If the viewer cannot see the profile (based on the owner's `profileVisibility` setting and friendship status), the response is `{ profilePrivate: true }`.
+
+### Bulk Visibility
+
+#### POST /users/me/collections/bulk-visibility
+
+Update the default visibility for all collection items at once.
+
+**Body:** `{ visibility: 'public' | 'friends' | 'private' }`
+
+### Personal Gallery
+
+#### GET /users/me/collections/gallery
+
+List own gallery items.
+
+**Query:**
+| Param | Type | Default |
+|-------|------|---------|
+| `before` | string | - |
+| `limit` | number | 30 |
+| `visibility` | string | - |
+
+#### GET /users/:userId/collections/gallery
+
+List another user's gallery items. Filtered by visibility based on relationship.
+
+**Query:** Same as own gallery.
+
+#### POST /users/me/collections/gallery/upload
+
+Upload gallery items. Multipart form data with `files` field (max 20 files, max 100MB each; non-video max 10MB).
+
+**Form fields:**
+| Field | Type | Required |
+|-------|------|----------|
+| `caption` | string | no |
+| `visibility` | string | no |
+
+#### PATCH /users/me/collections/gallery/:itemId
+
+Update a gallery item (caption, visibility).
+
+#### DELETE /users/me/collections/gallery/:itemId
+
+Delete a gallery item.
+
+#### POST /users/me/collections/gallery/:itemId/copy
+
+Copy a personal gallery item to a space media gallery channel.
+
+**Body:** `{ channelId: string }`
+
+### Personal Routes
+
+#### GET /users/me/collections/routes
+
+List own route items.
+
+**Query:** Same as personal gallery.
+
+#### GET /users/:userId/collections/routes
+
+List another user's route items. Filtered by visibility.
+
+#### POST /users/me/collections/routes/upload
+
+Upload a GPX route. Multipart form data with `file` field (single `.gpx` file).
+
+**Form fields:**
+| Field | Type | Required |
+|-------|------|----------|
+| `name` | string | no |
+| `description` | string | no |
+| `activityType` | string | no |
+| `visibility` | string | no |
+
+#### PATCH /users/me/collections/routes/:itemId
+
+Update a route item.
+
+#### DELETE /users/me/collections/routes/:itemId
+
+Delete a route item.
+
+#### POST /users/me/collections/routes/:itemId/copy
+
+Copy a personal route to a space route library channel.
+
+**Body:** `{ channelId: string }`
+
+### Personal Events
+
+#### GET /users/me/collections/events
+
+List own personal events.
+
+**Query:**
+| Param | Type | Default |
+|-------|------|---------|
+| `from` | string | - |
+| `to` | string | - |
+| `limit` | number | 50 |
+| `visibility` | string | - |
+
+#### GET /users/:userId/collections/events
+
+List another user's events. Filtered by visibility.
+
+#### POST /users/me/collections/events
+
+Create a personal event.
+
+#### PATCH /users/me/collections/events/:eventId
+
+Update a personal event.
+
+#### DELETE /users/me/collections/events/:eventId
+
+Delete a personal event.
+
+#### POST /users/me/collections/events/:eventId/copy
+
+Copy a personal event to a space calendar.
+
+**Body:** `{ spaceId: string }`
+
+### Personal Event Categories
+
+#### GET /users/me/collections/events/categories
+
+List own event categories.
+
+#### POST /users/me/collections/events/categories
+
+Create a personal event category.
+
+**Body:** `{ name: string, color: string }`
+
+#### PATCH /users/me/collections/events/categories/:categoryId
+
+Update a category.
+
+#### DELETE /users/me/collections/events/categories/:categoryId
+
+Delete a category.
+
+### Collection Summary
+
+#### GET /users/me/collections/summary
+
+Get counts and recent items across all own collections.
+
+#### GET /users/:userId/collections/summary
+
+Get summary for another user's collections. Filtered by visibility.
+
+---
+
+## User Posts
+
+Social posts that live on a user's profile. Posts support text, file attachments, tagged friends, visibility controls, reactions, comments, and reposts. All endpoints require auth.
+
+### Own Posts
+
+#### GET /users/me/posts
+
+List own posts.
+
+**Query:**
+| Param | Type | Default |
+|-------|------|---------|
+| `before` | string | - |
+| `limit` | number | 20 |
+
+**Response:** Array of UserPost objects with attachments, tags, reactions, comment counts, and repost data.
+
+#### POST /users/me/posts
+
+Create a post. Multipart form data with optional `files` field (max 20).
+
+**Form fields:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `body` | string | no | Post text (required if no attachments) |
+| `visibility` | string | no | `public`, `friends`, or `private` |
+| `taggedUserIds` | string | no | JSON array of user IDs to tag |
+| `existingGalleryItemIds` | string | no | JSON array of gallery item IDs to attach |
+| `existingRouteItemIds` | string | no | JSON array of route item IDs to attach |
+
+#### PATCH /users/me/posts/:postId
+
+Update a post (body, visibility).
+
+#### DELETE /users/me/posts/:postId
+
+Delete a post.
+
+#### POST /users/me/posts/:postId/share-to-channel
+
+Share a post to a space channel as a message.
+
+**Body:** `{ channelId: string, content?: string }`
+
+### Reposts
+
+#### POST /users/me/posts/repost
+
+Repost another user's post to your own profile.
+
+**Body:**
+| Field | Type | Required |
+|-------|------|----------|
+| `originalPostId` | string | yes |
+| `visibility` | string | no |
+| `body` | string | no |
+
+### Other Users' Posts
+
+#### GET /users/:userId/posts
+
+List another user's posts. Filtered by visibility based on relationship.
+
+### Post Reactions
+
+#### PUT /users/me/posts/:postId/reactions/:emoji
+
+Add a reaction to own post.
+
+#### DELETE /users/me/posts/:postId/reactions/:emoji
+
+Remove a reaction from own post.
+
+#### PUT /users/:userId/posts/:postId/reactions/:emoji
+
+Add a reaction to another user's post.
+
+#### DELETE /users/:userId/posts/:postId/reactions/:emoji
+
+Remove a reaction from another user's post.
+
+### Post Comments
+
+#### GET /users/me/posts/:postId/comments
+
+List comments on own post.
+
+**Query:** `before`, `limit`
+
+#### POST /users/me/posts/:postId/comments
+
+Add a comment to own post.
+
+**Body:** `{ body: string }`
+
+#### DELETE /users/me/posts/:postId/comments/:commentId
+
+Delete a comment (author only).
+
+#### GET /users/:userId/posts/:postId/comments
+
+List comments on another user's post.
+
+#### POST /users/:userId/posts/:postId/comments
+
+Add a comment to another user's post.
+
+**Body:** `{ body: string }`
+
+#### DELETE /users/:userId/posts/:postId/comments/:commentId
+
+Delete a comment (author only).
+
+### Comment Reactions
+
+#### PUT /users/posts/comments/:commentId/reactions/:emoji
+
+Add a reaction to a comment.
+
+#### DELETE /users/posts/comments/:commentId/reactions/:emoji
+
+Remove a reaction from a comment.
 
 ---
 

@@ -1,40 +1,50 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Bell, User } from 'lucide-react';
+import { Bell, Mail, User, Newspaper } from 'lucide-react';
+import { CrabIcon } from '../icons/CrabIcon.js';
 import { useNotificationsStore } from '../../stores/notifications.js';
+import { useDMStore } from '../../stores/dm.js';
 
 export function BottomTabBar() {
   const navigate = useNavigate();
   const location = useLocation();
   const unreadCount = useNotificationsStore((s) => s.unreadCount);
+  const dmUnreads = useDMStore((s) => s.dmUnreads);
+  const totalDMUnreads = Object.values(dmUnreads).reduce((sum, n) => sum + n, 0);
 
-  const tabs = [
-    { icon: Home, label: 'Home', path: '/' },
-    { icon: Bell, label: 'Notifications', path: '/notifications' },
-    { icon: User, label: 'Account', path: '/account' },
+  const tabs: { icon: typeof Bell | null; label: string; path: string; badgeKey?: 'notifications' | 'messages' }[] = [
+    { icon: null, label: 'Spaces', path: '/' },
+    { icon: Newspaper, label: 'Feed', path: '/feed' },
+    { icon: Mail, label: 'Messages', path: '/dm', badgeKey: 'messages' },
+    { icon: Bell, label: 'Notifications', path: '/notifications', badgeKey: 'notifications' },
+    { icon: User, label: 'You', path: '/you' },
   ];
 
-  const activeTab = tabs.find((t) => location.pathname === t.path)?.path
-    || (location.pathname.startsWith('/space') || location.pathname.startsWith('/dm') ? null : '/');
+  const activeTab = tabs.find((t) => location.pathname === t.path || (t.path === '/dm' && location.pathname.startsWith('/dm')))?.path
+    || (location.pathname.startsWith('/space') ? null : '/');
 
   return (
     <div style={styles.bar}>
       {tabs.map((tab) => {
         const isActive = activeTab === tab.path;
-        const Icon = tab.icon;
+        const color = isActive ? 'var(--accent)' : 'var(--text-muted)';
         return (
           <button
             key={tab.path}
             onClick={() => navigate(tab.path)}
-            style={{
-              ...styles.tab,
-              color: isActive ? 'var(--accent)' : 'var(--text-muted)',
-            }}
+            style={{ ...styles.tab, color }}
           >
             <div style={{ position: 'relative', display: 'inline-flex' }}>
-              <Icon size={22} />
-              {tab.path === '/notifications' && unreadCount > 0 && (
+              {tab.icon ? (() => { const Icon = tab.icon; return <Icon size={22} />; })() : (
+                <CrabIcon size={22} color={color} />
+              )}
+              {tab.badgeKey === 'notifications' && unreadCount > 0 && (
                 <span style={styles.badge}>
                   {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+              {tab.badgeKey === 'messages' && totalDMUnreads > 0 && (
+                <span style={styles.badge}>
+                  {totalDMUnreads > 99 ? '99+' : totalDMUnreads}
                 </span>
               )}
             </div>

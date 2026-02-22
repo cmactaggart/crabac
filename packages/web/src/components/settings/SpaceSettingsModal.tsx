@@ -6,6 +6,7 @@ import { api } from '../../lib/api.js';
 import { useAuthStore } from '../../stores/auth.js';
 import { useSpacesStore } from '../../stores/spaces.js';
 import { useChannelsStore } from '../../stores/channels.js';
+import { useIsMobile } from '../../hooks/useIsMobile.js';
 import { OverviewTab } from './OverviewTab.js';
 import { ChannelsTab } from './ChannelsTab.js';
 import { RolesTab } from './RolesTab.js';
@@ -85,10 +86,12 @@ export function SpaceSettingsModal({ spaceId, onClose }: Props) {
     }
   }, [visibleTabs, activeTab]);
 
+  const isMobile = useIsMobile();
+
   if (!space) return null;
 
-  const renderTab = () => {
-    switch (activeTab) {
+  const renderTabContent = (key: string) => {
+    switch (key) {
       case 'overview':
         return <OverviewTab space={space} onClose={onClose} />;
       case 'visibility':
@@ -115,6 +118,27 @@ export function SpaceSettingsModal({ spaceId, onClose }: Props) {
         return null;
     }
   };
+
+  if (isMobile) {
+    return (
+      <div style={styles.overlay} onClick={onClose}>
+        <div style={styles.mobileModal} onClick={(e) => e.stopPropagation()}>
+          <div style={styles.mobileHeader}>
+            <h2 style={{ margin: 0, fontSize: '1.1rem' }}>{space.name} Settings</h2>
+            <button onClick={onClose} style={styles.closeBtn}><X size={20} /></button>
+          </div>
+          <div style={styles.mobileBody}>
+            {visibleTabs.map((tab) => (
+              <section key={tab.key} style={styles.section}>
+                <h3 style={styles.sectionTitle}>{tab.label}</h3>
+                {renderTabContent(tab.key)}
+              </section>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={styles.overlay} onClick={onClose}>
@@ -148,7 +172,7 @@ export function SpaceSettingsModal({ spaceId, onClose }: Props) {
             <button onClick={onClose} style={styles.closeBtn}><X size={20} /></button>
           </div>
           <div style={styles.contentBody}>
-            {renderTab()}
+            {renderTabContent(activeTab)}
           </div>
         </div>
       </div>
@@ -218,6 +242,39 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
     overflow: 'hidden',
+  },
+  mobileModal: {
+    position: 'fixed' as const,
+    inset: 0,
+    background: 'var(--bg-primary)',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  mobileHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '16px 20px',
+    borderBottom: '1px solid var(--border)',
+    flexShrink: 0,
+  },
+  mobileBody: {
+    flex: 1,
+    overflowY: 'auto',
+    overflowX: 'hidden',
+    padding: '0 16px 80px',
+  },
+  section: {
+    padding: '16px 0',
+    borderBottom: '1px solid var(--border)',
+  },
+  sectionTitle: {
+    margin: '0 0 12px',
+    fontSize: '0.75rem',
+    fontWeight: 700,
+    textTransform: 'uppercase' as const,
+    color: 'var(--text-muted)',
+    letterSpacing: '0.05em',
   },
   sidebar: {
     width: 180,

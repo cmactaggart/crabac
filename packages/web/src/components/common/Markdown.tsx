@@ -14,7 +14,7 @@ function renderMentionsAndChannels(text: string, navigate: (path: string) => voi
   const parts = text.split(/(@(?:everyone|here|[a-zA-Z0-9_-]+)|#[a-z0-9][a-z0-9-]*)/g);
   if (parts.length === 1) return text;
   return parts.map((part, i) => {
-    if (part.match(/^@(?:everyone|here|[a-zA-Z0-9_-]+)$/)) {
+    if (part.match(/^@(?:everyone|here)$/)) {
       return (
         <span
           key={i}
@@ -24,6 +24,26 @@ function renderMentionsAndChannels(text: string, navigate: (path: string) => voi
             fontWeight: 600,
             padding: '0 2px',
             borderRadius: 3,
+          }}
+        >
+          {part}
+        </span>
+      );
+    }
+    if (part.match(/^@[a-zA-Z0-9_-]+$/)) {
+      const username = part.slice(1);
+      return (
+        <span
+          key={i}
+          role="link"
+          onClick={() => navigate(`/p/${username}`)}
+          style={{
+            background: 'rgba(88, 101, 242, 0.15)',
+            color: 'var(--accent)',
+            fontWeight: 600,
+            padding: '0 2px',
+            borderRadius: 3,
+            cursor: 'pointer',
           }}
         >
           {part}

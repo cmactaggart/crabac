@@ -398,6 +398,13 @@ function MessageItem({
             </div>
           ) : null}
 
+          {/* Shared Post Card */}
+          {message.metadata?.sharedPost && (
+            <div style={{ paddingLeft: 44, marginTop: 4 }}>
+              <SharedPostCard sharedPost={message.metadata.sharedPost} />
+            </div>
+          )}
+
           {/* Attachments */}
           {message.attachments && message.attachments.length > 0 && (() => {
             const gpxAtts = message.attachments.filter((att) => (att as any).metadata?.gpx);
@@ -564,6 +571,86 @@ function formatTimestamp(snowflakeId: string): string {
   } catch {
     return '';
   }
+}
+
+// ─── Shared Post Card (embedded in messages) ───
+
+function SharedPostCard({ sharedPost }: { sharedPost: any }) {
+  const navigate = useNavigate();
+
+  return (
+    <div style={{
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius)',
+      padding: '0.75rem',
+      marginTop: 4,
+      background: 'var(--bg-tertiary)',
+      maxWidth: 500,
+    }}>
+      {/* Author */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        {sharedPost.author && (
+          <>
+            <div
+              style={{
+                width: 24, height: 24, borderRadius: '50%', overflow: 'hidden',
+                background: sharedPost.author.baseColor || 'var(--accent)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '0.6rem', color: '#fff', fontWeight: 700, flexShrink: 0,
+                cursor: 'pointer',
+              }}
+              onClick={() => navigate(`/p/${sharedPost.author.username}`)}
+            >
+              {sharedPost.author.avatarUrl ? (
+                <img src={sharedPost.author.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                (sharedPost.author.displayName || '?')[0].toUpperCase()
+              )}
+            </div>
+            <span
+              style={{ fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer' }}
+              onClick={() => navigate(`/p/${sharedPost.author.username}`)}
+            >
+              {sharedPost.author.displayName}
+            </span>
+          </>
+        )}
+        {sharedPost.createdAt && (
+          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
+            {new Date(sharedPost.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+          </span>
+        )}
+      </div>
+
+      {/* Body */}
+      {sharedPost.body && (
+        <div style={{ fontSize: '0.85rem', lineHeight: 1.4, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          <Markdown content={sharedPost.body} />
+        </div>
+      )}
+
+      {sharedPost.attachments && sharedPost.attachments.filter((a: any) => a.type === 'image' || a.type === 'video').length > 0 && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: sharedPost.attachments.filter((a: any) => a.type !== 'gpx').length === 1 ? '1fr' : 'repeat(auto-fill, minmax(140px, 1fr))',
+          gap: 4,
+          marginTop: 6,
+          borderRadius: 'var(--radius)',
+          overflow: 'hidden',
+        }}>
+          {sharedPost.attachments
+            .filter((a: any) => a.type === 'image' || a.type === 'video')
+            .map((a: any, i: number) =>
+              a.type === 'video' ? (
+                <video key={i} src={a.url} controls style={{ width: '100%', maxHeight: 300, objectFit: 'cover', borderRadius: 'var(--radius)' }} />
+              ) : (
+                <img key={i} src={a.url} alt={a.originalName || ''} style={{ width: '100%', aspectRatio: '1', objectFit: 'cover' }} />
+              )
+            )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 const styles: Record<string, React.CSSProperties> = {

@@ -205,6 +205,14 @@ export const totpDisableSchema = z.object({
 // User Preferences
 export const updateUserPreferencesSchema = z.object({
   distanceUnits: z.enum(['metric', 'imperial']).optional(),
+  defaultVisibility: z.enum(['public', 'private', 'friends', 'spaces']).optional(),
+  profileVisibility: z.enum(['public', 'private', 'friends', 'spaces']).optional(),
+  onboardingCompleted: z.boolean().optional(),
+});
+
+// Bulk Visibility
+export const bulkUpdateVisibilitySchema = z.object({
+  visibility: z.enum(['public', 'private', 'friends', 'spaces']),
 });
 
 // Forum Threads
@@ -598,4 +606,129 @@ export const workflowExecutionsQuerySchema = z.object({
   workflowId: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   before: z.string().optional(),
+});
+
+// ─── Personal Collections ───
+
+export const personalVisibilityEnum = z.enum(['public', 'private', 'friends', 'spaces']);
+
+export const createPersonalGalleryItemSchema = z.object({
+  caption: z.string().max(2000).nullable().optional(),
+  visibility: personalVisibilityEnum.default('private'),
+});
+
+export const updatePersonalGalleryItemSchema = z.object({
+  caption: z.string().max(2000).nullable().optional(),
+  visibility: personalVisibilityEnum.optional(),
+});
+
+export const createPersonalRouteSchema = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().max(5000).nullable().optional(),
+  visibility: personalVisibilityEnum.default('private'),
+  activityType: z.enum(['ride', 'run', 'walk']).nullable().optional(),
+});
+
+export const updatePersonalRouteSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(5000).nullable().optional(),
+  visibility: personalVisibilityEnum.optional(),
+  activityType: z.enum(['ride', 'run', 'walk']).nullable().optional(),
+});
+
+export const createPersonalEventCategorySchema = z.object({
+  name: z.string().min(1).max(100),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#5865f2'),
+});
+
+export const updatePersonalEventCategorySchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+});
+
+export const createPersonalEventSchema = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().max(5000).nullable().optional(),
+  eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD'),
+  eventTime: z.string().regex(/^\d{2}:\d{2}$/, 'Must be HH:mm').nullable().optional(),
+  location: z.string().max(500).nullable().optional(),
+  visibility: personalVisibilityEnum.default('private'),
+  activityType: z.enum(['ride', 'run', 'walk']).nullable().optional(),
+  categoryId: z.string().nullable().optional(),
+  routeId: z.string().nullable().optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+});
+
+export const updatePersonalEventSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(5000).nullable().optional(),
+  eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').optional(),
+  eventTime: z.string().regex(/^\d{2}:\d{2}$/, 'Must be HH:mm').nullable().optional(),
+  location: z.string().max(500).nullable().optional(),
+  visibility: personalVisibilityEnum.optional(),
+  activityType: z.enum(['ride', 'run', 'walk']).nullable().optional(),
+  categoryId: z.string().nullable().optional(),
+  routeId: z.string().nullable().optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+});
+
+export const personalCollectionsQuerySchema = z.object({
+  before: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+  visibility: personalVisibilityEnum.optional(),
+});
+
+export const personalEventsQuerySchema = z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  visibility: personalVisibilityEnum.optional(),
+});
+
+export const copyToChannelSchema = z.object({
+  channelId: z.string().min(1),
+});
+
+export const copyToSpaceSchema = z.object({
+  spaceId: z.string().min(1),
+});
+
+// ─── User Posts ───
+
+export const createUserPostSchema = z.object({
+  body: z.string().max(10000).nullable().optional(),
+  visibility: personalVisibilityEnum.default('private'),
+  taggedUserIds: z.array(z.string()).max(20).optional(),
+  existingGalleryItemIds: z.array(z.string()).max(20).optional(),
+  existingRouteItemIds: z.array(z.string()).max(10).optional(),
+});
+
+export const updateUserPostSchema = z.object({
+  body: z.string().max(10000).nullable().optional(),
+  visibility: personalVisibilityEnum.optional(),
+});
+
+export const userPostsQuerySchema = z.object({
+  before: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+
+export const createPostCommentSchema = z.object({
+  body: z.string().min(1).max(4000),
+});
+
+export const postCommentsQuerySchema = z.object({
+  before: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+});
+
+export const createRepostSchema = z.object({
+  originalPostId: z.string().min(1),
+  visibility: personalVisibilityEnum,
+  body: z.string().max(10000).nullable().optional(),
+});
+
+export const sharePostToChannelSchema = z.object({
+  channelId: z.string().min(1),
+  content: z.string().max(4000).optional(),
 });

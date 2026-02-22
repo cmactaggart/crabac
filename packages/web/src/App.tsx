@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/auth.js';
 import { useDMStore } from './stores/dm.js';
@@ -6,6 +6,7 @@ import { usePresence } from './hooks/usePresence.js';
 import { useDMUnreadSocket } from './hooks/useDMUnreadSocket.js';
 import { useIsMobile } from './hooks/useIsMobile.js';
 import { useTabNotifications } from './hooks/useTabNotifications.js';
+import { useSwipeNavigation } from './hooks/useSwipeNavigation.js';
 import { Login } from './pages/Login.js';
 import { Register } from './pages/Register.js';
 import { VerifyEmail } from './pages/VerifyEmail.js';
@@ -18,6 +19,11 @@ import { Home } from './pages/Home.js';
 import { AdminPanel } from './pages/AdminPanel.js';
 import { NotificationsPage } from './pages/NotificationsPage.js';
 import { AccountPage } from './pages/AccountPage.js';
+import { YouPage } from './pages/YouPage.js';
+import { FeedPage } from './pages/FeedPage.js';
+import { PublicProfilePage } from './pages/PublicProfilePage.js';
+import { OnboardingModal } from './components/common/OnboardingModal.js';
+import { api } from './lib/api.js';
 import { BottomTabBar } from './components/layout/BottomTabBar.js';
 import { PublicSpaceLanding } from './pages/PublicSpaceLanding.js';
 import { BoardLayout } from './pages/boards/BoardLayout.js';
@@ -43,7 +49,9 @@ export function App() {
   usePresence(!!user);
   useDMUnreadSocket(!!user);
   useTabNotifications();
+  useSwipeNavigation();
   const isMobile = useIsMobile();
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     restore();
@@ -53,6 +61,10 @@ export function App() {
   useEffect(() => {
     if (user) {
       useDMStore.getState().fetchDMUnreads();
+      // Check onboarding status
+      api('/users/preferences').then((prefs: any) => {
+        if (!prefs.onboardingCompleted) setShowOnboarding(true);
+      }).catch(() => {});
     }
   }, [user]);
 
@@ -81,6 +93,9 @@ export function App() {
         <Route path="/dm" element={user ? <DMView /> : <Navigate to="/login" />} />
         <Route path="/admin" element={user?.isAdmin ? <AdminPanel /> : <Navigate to="/" />} />
         <Route path="/notifications" element={user ? <NotificationsPage /> : <Navigate to="/login" />} />
+        <Route path="/feed" element={user ? <FeedPage /> : <Navigate to="/login" />} />
+        <Route path="/you" element={user ? <YouPage /> : <Navigate to="/login" />} />
+        <Route path="/p/:username" element={user ? <PublicProfilePage /> : <Navigate to="/login" />} />
         <Route path="/account" element={user ? <AccountPage /> : <Navigate to="/login" />} />
         <Route path="/space/slug/:slug" element={<PublicSpaceLanding />} />
         <Route path="/" element={user ? <Home /> : <Navigate to="/login" />} />
@@ -113,6 +128,9 @@ export function App() {
         </Route>
       </Routes>
       {isMobile && user && <BottomTabBar />}
+      {showOnboarding && user && (
+        <OnboardingModal onComplete={() => setShowOnboarding(false)} />
+      )}
     </>
   );
 }

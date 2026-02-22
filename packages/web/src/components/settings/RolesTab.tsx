@@ -159,7 +159,7 @@ export function RolesTab({ spaceId }: Props) {
       {roles.map((role) => (
         <div key={role.id} style={styles.roleCard}>
           <div style={styles.roleHeader} onClick={() => {
-            const isOwnerRole = role.isSystem && !role.isDefault;
+            const isOwnerRole = role.isSystem && !role.isDefault && !role.isGuest;
             if (!isOwnerRole) startEdit(role);
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
@@ -171,17 +171,18 @@ export function RolesTab({ spaceId }: Props) {
                 flexShrink: 0,
               }} />
               <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{role.name}</span>
-              {role.isSystem && !role.isDefault && <span style={styles.badge}>System</span>}
+              {role.isSystem && !role.isDefault && !role.isGuest && <span style={styles.badge}>Owner</span>}
+              {role.isGuest && <span style={styles.badge}>Guest</span>}
               {role.isDefault && <span style={styles.badge}>Default</span>}
             </div>
-            {!(role.isSystem && !role.isDefault) && (
+            {!(role.isSystem && !role.isDefault && !role.isGuest) && (
               <span style={{ color: 'var(--text-muted)' }}>
                 {expandedRole === role.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
               </span>
             )}
           </div>
 
-          {expandedRole === role.id && !(role.isSystem && !role.isDefault) && (
+          {expandedRole === role.id && !(role.isSystem && !role.isDefault && !role.isGuest) && (
             <div style={styles.roleEdit}>
               <div style={{ display: 'flex', gap: 8 }}>
                 <div style={{ flex: 1 }}>
@@ -214,6 +215,10 @@ export function RolesTab({ spaceId }: Props) {
                 {role.isDefault ? (
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
                     Applied to all members
+                  </span>
+                ) : role.isGuest ? (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                    Applied to unauthenticated visitors
                   </span>
                 ) : confirmDelete === role.id ? (
                   <div style={{ display: 'flex', gap: 4 }}>

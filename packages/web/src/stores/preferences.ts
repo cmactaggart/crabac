@@ -10,6 +10,9 @@ interface PreferencesState {
 
 const DEFAULTS: UserPreferences = {
   distanceUnits: 'imperial',
+  defaultVisibility: 'private',
+  profileVisibility: 'spaces',
+  onboardingCompleted: false,
 };
 
 export const usePreferencesStore = create<PreferencesState>((set, get) => ({

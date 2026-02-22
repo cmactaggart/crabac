@@ -3,6 +3,9 @@ import type { UserPreferences } from '@crabac/shared';
 
 const DEFAULTS: UserPreferences = {
   distanceUnits: 'imperial',
+  defaultVisibility: 'private',
+  profileVisibility: 'spaces',
+  onboardingCompleted: false,
 };
 
 export async function getPreferences(userId: string): Promise<UserPreferences> {
@@ -14,6 +17,9 @@ export async function getPreferences(userId: string): Promise<UserPreferences> {
 
   return {
     distanceUnits: row.distance_units,
+    defaultVisibility: row.default_visibility || 'private',
+    profileVisibility: row.profile_visibility || 'spaces',
+    onboardingCompleted: !!row.onboarding_completed,
   };
 }
 
@@ -23,6 +29,9 @@ export async function updatePreferences(
 ): Promise<UserPreferences> {
   const updates: Record<string, any> = {};
   if (data.distanceUnits !== undefined) updates.distance_units = data.distanceUnits;
+  if (data.defaultVisibility !== undefined) updates.default_visibility = data.defaultVisibility;
+  if (data.profileVisibility !== undefined) updates.profile_visibility = data.profileVisibility;
+  if (data.onboardingCompleted !== undefined) updates.onboarding_completed = data.onboardingCompleted;
 
   if (Object.keys(updates).length > 0) {
     await db('user_preferences')

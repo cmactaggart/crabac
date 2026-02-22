@@ -181,8 +181,8 @@ export function OverviewTab({ space, onClose }: Props) {
       <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
         <label style={styles.label}>Branding Colors</label>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 150 }}>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 4 }}>Base Color</div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input
@@ -200,7 +200,7 @@ export function OverviewTab({ space, onClose }: Props) {
                 />
               </div>
             </div>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 150 }}>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 4 }}>Accent Color</div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input
