@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.4.0
+## API Version 0.5.0
 
 Base URL: `https://app.crab.ac/api`
 
@@ -600,6 +600,38 @@ Mark a channel as read.
 ### GET /spaces/:spaceId/channels/unreads
 
 Get unread counts for all channels in a space.
+
+---
+
+## Space Entry
+
+### GET /spaces/:spaceId/enter
+
+Combined endpoint that returns channels, categories, unread counts, and initial messages in a single response. Designed to eliminate the waterfall of sequential HTTP calls when entering a space. Requires membership or public access.
+
+**Query:**
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `channelId` | string | no | Channel to load messages for. Defaults to the first non-admin channel. |
+
+**Response:**
+```json
+{
+  "channels": [Channel],
+  "categories": [ChannelCategory],
+  "unreads": {
+    "<channelId>": { "unreadCount": 0, "mentionCount": 0 }
+  },
+  "messages": [Message],
+  "channelId": "string | null"
+}
+```
+
+- `channels` — same as `GET /spaces/:spaceId/channels` (filtered by user permissions)
+- `categories` — same as `GET /spaces/:spaceId/categories`
+- `unreads` — same as `GET /spaces/:spaceId/channels/unreads` (keyed by channel ID)
+- `messages` — last 50 messages for the target channel (same format as `GET /channels/:channelId/messages`)
+- `channelId` — the channel whose messages were loaded (useful when no `channelId` query param was provided)
 
 ---
 

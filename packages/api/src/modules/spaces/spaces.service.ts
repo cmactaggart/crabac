@@ -3,6 +3,7 @@ import { snowflake } from '../_shared.js';
 import { NotFoundError, ConflictError, ForbiddenError, BadRequestError } from '../../lib/errors.js';
 import { DEFAULT_MEMBER_PERMISSIONS, ALL_PERMISSIONS } from '@crabac/shared';
 import { eventBus } from '../../lib/event-bus.js';
+import { getCache, setCache, delCache } from '../../lib/redis.js';
 
 export async function createSpace(userId: string, data: { name: string; slug: string; description?: string }) {
   const existing = await db('spaces').where('slug', data.slug).first();
@@ -237,6 +238,7 @@ export async function kickMember(spaceId: string, targetUserId: string) {
 
   if (!deleted) throw new NotFoundError('Member');
 
+  await delCache(`member:${spaceId}:${targetUserId}`, `perms:${spaceId}:${targetUserId}`);
   eventBus.emit('space.member_left', { spaceId, userId: targetUserId });
 }
 
@@ -246,6 +248,7 @@ export async function leaveSpace(spaceId: string, userId: string) {
   if (userId === space.owner_id) throw new BadRequestError('Owner cannot leave the space. Transfer ownership first or delete the space.');
 
   await db('space_members').where({ space_id: spaceId, user_id: userId }).delete();
+  await delCache(`member:${spaceId}:${userId}`, `perms:${spaceId}:${userId}`);
   eventBus.emit('space.member_left', { spaceId, userId });
 }
 
@@ -298,15 +301,36 @@ export async function joinViaInvite(userId: string, code: string) {
     await trx('invites').where('id', invite.id).increment('use_count', 1);
   });
 
+  // Invalidate membership/permission caches
+  await delCache(`member:${invite.space_id}:${userId}`, `perms:${invite.space_id}:${userId}`);
+
   eventBus.emit('space.member_joined', { spaceId: invite.space_id, userId, inviteCode: code });
 
   return getSpace(invite.space_id);
 }
 
 /** Check if a user is a member of a space */
-export async function isMember(spaceId: string, userId: string): Promise<boolean> {
+export async function isMember(spaceId: string, userId: string, cache?: Map<string, string>): Promise<boolean> {
+  const cacheKey = `member:${spaceId}:${userId}`;
+  // Check request-scoped cache first
+  if (cache) {
+    const cached = cache.get(cacheKey);
+    if (cached !== undefined) return cached === '1';
+  }
+  // Check Redis cache
+  const redisCached = await getCache(cacheKey);
+  if (redisCached !== null) {
+    const result = redisCached === '1';
+    if (cache) cache.set(cacheKey, redisCached);
+    return result;
+  }
+  // DB lookup
   const row = await db('space_members').where({ space_id: spaceId, user_id: userId }).first();
-  return !!row;
+  const result = !!row;
+  const val = result ? '1' : '0';
+  if (cache) cache.set(cacheKey, val);
+  await setCache(cacheKey, val, 60);
+  return result;
 }
 
 /** Join a public space */
@@ -355,6 +379,8 @@ export async function joinPublicSpace(userId: string, spaceId: string) {
   } catch {
     // ignore
   }
+
+  await delCache(`member:${spaceId}:${userId}`, `perms:${spaceId}:${userId}`);
 
   eventBus.emit('space.member_joined', { spaceId, userId, inviteCode: null });
 
@@ -484,6 +510,8 @@ export async function banMember(spaceId: string, targetUserId: string, bannedBy:
       reason: reason || null,
     });
   });
+
+  await delCache(`member:${spaceId}:${targetUserId}`, `perms:${spaceId}:${targetUserId}`);
 
   // Post system message to admin channel
   try {

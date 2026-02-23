@@ -1,10 +1,22 @@
 import { create } from 'zustand';
 import { api } from '../lib/api.js';
-import type { Channel, ChannelCategory } from '@crabac/shared';
+import type { Channel, ChannelCategory, Message } from '@crabac/shared';
 
 interface UnreadInfo {
   unreadCount: number;
   mentionCount: number;
+}
+
+interface SpaceCacheEntry {
+  channels: Channel[];
+  categories: ChannelCategory[];
+  unreads: Record<string, UnreadInfo>;
+  timestamp: number;
+}
+
+interface EnterSpaceResult {
+  messages: Message[];
+  channelId: string | null;
 }
 
 interface ChannelsState {
@@ -14,6 +26,8 @@ interface ChannelsState {
   unreads: Record<string, UnreadInfo>;
   mutedChannels: Set<string>;
   loading: boolean;
+  spaceCache: Map<string, SpaceCacheEntry>;
+  _prefetchInflight: Set<string>;
   fetchChannels: (spaceId: string) => Promise<void>;
   fetchCategories: (spaceId: string) => Promise<void>;
   setActiveChannel: (id: string | null) => void;
@@ -29,7 +43,12 @@ interface ChannelsState {
   reorderCategories: (spaceId: string, items: { categoryId: string; position: number }[]) => Promise<void>;
   fetchMuted: (spaceId: string) => Promise<void>;
   toggleMute: (spaceId: string, channelId: string) => Promise<void>;
+  enterSpace: (spaceId: string, channelId?: string) => Promise<EnterSpaceResult | null>;
+  prefetchSpace: (spaceId: string) => void;
 }
+
+const CACHE_FRESH_MS = 30_000; // 30 seconds
+const MAX_CACHED_SPACES = 5;
 
 export const useChannelsStore = create<ChannelsState>((set, get) => ({
   channels: [],
@@ -38,6 +57,8 @@ export const useChannelsStore = create<ChannelsState>((set, get) => ({
   unreads: {},
   mutedChannels: new Set<string>(),
   loading: false,
+  spaceCache: new Map(),
+  _prefetchInflight: new Set(),
 
   fetchChannels: async (spaceId) => {
     set({ loading: true });
@@ -184,5 +205,152 @@ export const useChannelsStore = create<ChannelsState>((set, get) => ({
     } catch {
       // ignore
     }
+  },
+
+  enterSpace: async (spaceId, channelId?) => {
+    const { spaceCache } = get();
+    const cached = spaceCache.get(spaceId);
+    const now = Date.now();
+
+    // If cached and fresh, use cached data immediately and revalidate in background
+    if (cached && (now - cached.timestamp) < CACHE_FRESH_MS) {
+      set({
+        channels: cached.channels,
+        categories: cached.categories,
+        unreads: cached.unreads,
+        loading: false,
+      });
+      // Revalidate in background
+      const qs = channelId ? `?channelId=${channelId}` : '';
+      api<{ channels: Channel[]; categories: ChannelCategory[]; unreads: Record<string, UnreadInfo>; messages: Message[]; channelId: string | null }>(
+        `/spaces/${spaceId}/enter${qs}`,
+      ).then((data) => {
+        const { spaceCache: sc } = get();
+        const newCache = new Map(sc);
+        newCache.set(spaceId, {
+          channels: data.channels,
+          categories: data.categories,
+          unreads: data.unreads,
+          timestamp: Date.now(),
+        });
+        set({
+          channels: data.channels,
+          categories: data.categories,
+          unreads: data.unreads,
+          spaceCache: newCache,
+        });
+      }).catch(() => {});
+      // Return empty messages — caller should use cached messages or fetch fresh
+      return { messages: [], channelId: channelId || null };
+    }
+
+    // If cached but stale, show cached immediately then fetch fresh
+    if (cached) {
+      set({
+        channels: cached.channels,
+        categories: cached.categories,
+        unreads: cached.unreads,
+        loading: true,
+      });
+    } else {
+      set({ loading: true });
+    }
+
+    try {
+      const qs = channelId ? `?channelId=${channelId}` : '';
+      const data = await api<{
+        channels: Channel[];
+        categories: ChannelCategory[];
+        unreads: Record<string, UnreadInfo>;
+        messages: Message[];
+        channelId: string | null;
+      }>(`/spaces/${spaceId}/enter${qs}`);
+
+      // Update space cache
+      const { spaceCache: sc } = get();
+      const newCache = new Map(sc);
+      newCache.set(spaceId, {
+        channels: data.channels,
+        categories: data.categories,
+        unreads: data.unreads,
+        timestamp: Date.now(),
+      });
+      // Evict oldest entries if over limit
+      if (newCache.size > MAX_CACHED_SPACES) {
+        let oldestKey: string | null = null;
+        let oldestTime = Infinity;
+        for (const [key, entry] of newCache) {
+          if (entry.timestamp < oldestTime) {
+            oldestTime = entry.timestamp;
+            oldestKey = key;
+          }
+        }
+        if (oldestKey) newCache.delete(oldestKey);
+      }
+
+      set({
+        channels: data.channels,
+        categories: data.categories,
+        unreads: data.unreads,
+        loading: false,
+        spaceCache: newCache,
+      });
+
+      return { messages: data.messages, channelId: data.channelId };
+    } catch {
+      set({ loading: false });
+      return null;
+    }
+  },
+
+  prefetchSpace: (spaceId) => {
+    const { spaceCache, _prefetchInflight } = get();
+    // Skip if already cached and fresh, or if prefetch is in-flight
+    const cached = spaceCache.get(spaceId);
+    if (cached && (Date.now() - cached.timestamp) < CACHE_FRESH_MS) return;
+    if (_prefetchInflight.has(spaceId)) return;
+
+    const newInflight = new Set(_prefetchInflight);
+    newInflight.add(spaceId);
+    set({ _prefetchInflight: newInflight });
+
+    api<{
+      channels: Channel[];
+      categories: ChannelCategory[];
+      unreads: Record<string, UnreadInfo>;
+      messages: Message[];
+      channelId: string | null;
+    }>(`/spaces/${spaceId}/enter`)
+      .then((data) => {
+        const { spaceCache: sc, _prefetchInflight: inf } = get();
+        const newCache = new Map(sc);
+        newCache.set(spaceId, {
+          channels: data.channels,
+          categories: data.categories,
+          unreads: data.unreads,
+          timestamp: Date.now(),
+        });
+        // Evict oldest entries if over limit
+        if (newCache.size > MAX_CACHED_SPACES) {
+          let oldestKey: string | null = null;
+          let oldestTime = Infinity;
+          for (const [key, entry] of newCache) {
+            if (entry.timestamp < oldestTime) {
+              oldestTime = entry.timestamp;
+              oldestKey = key;
+            }
+          }
+          if (oldestKey) newCache.delete(oldestKey);
+        }
+        const newInf = new Set(inf);
+        newInf.delete(spaceId);
+        set({ spaceCache: newCache, _prefetchInflight: newInf });
+      })
+      .catch(() => {
+        const { _prefetchInflight: inf } = get();
+        const newInf = new Set(inf);
+        newInf.delete(spaceId);
+        set({ _prefetchInflight: newInf });
+      });
   },
 }));

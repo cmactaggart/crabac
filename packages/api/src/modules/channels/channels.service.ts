@@ -45,8 +45,8 @@ export async function listChannels(spaceId: string) {
  * List channels visible to a specific user, respecting channel overrides and admin visibility.
  * Also includes portaled channels from other spaces.
  */
-export async function listChannelsForUser(spaceId: string, userId: string) {
-  const spacePerms = await computePermissions(spaceId, userId);
+export async function listChannelsForUser(spaceId: string, userId: string, cache?: Map<string, string>) {
+  const spacePerms = await computePermissions(spaceId, userId, cache);
   const isAdmin = hasPermission(spacePerms, Permissions.ADMINISTRATOR);
   const canViewAdmin = hasPermission(spacePerms, Permissions.VIEW_ADMIN_CHANNEL);
 

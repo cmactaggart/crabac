@@ -1,7 +1,9 @@
+import { useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Mail, ChevronsLeft, User } from 'lucide-react';
 import { useLayoutStore } from '../../stores/layout.js';
 import { useDMStore } from '../../stores/dm.js';
+import { useChannelsStore } from '../../stores/channels.js';
 import { CrabIcon } from '../icons/CrabIcon.js';
 import { getContrastColor } from '../spaces/SpaceBrandedCard.js';
 import { LetterIcon } from '../icons/LetterIcon.js';
@@ -18,6 +20,22 @@ export function SpaceSidebar({ spaces, activeSpaceId }: Props) {
   const toggleSpaceSidebar = useLayoutStore((s) => s.toggleSpaceSidebar);
   const dmUnreads = useDMStore((s) => s.dmUnreads);
   const totalDMUnreads = Object.values(dmUnreads).reduce((sum, n) => sum + n, 0);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSpaceMouseEnter = useCallback((spaceId: string) => {
+    if (spaceId === activeSpaceId) return;
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = setTimeout(() => {
+      useChannelsStore.getState().prefetchSpace(spaceId);
+    }, 150);
+  }, [activeSpaceId]);
+
+  const handleSpaceMouseLeave = useCallback(() => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+  }, []);
 
   return (
     <div style={styles.sidebar}>
@@ -78,6 +96,8 @@ export function SpaceSidebar({ spaces, activeSpaceId }: Props) {
           <button
             key={space.id}
             onClick={() => navigate(`/space/${space.id}`)}
+            onMouseEnter={() => handleSpaceMouseEnter(space.id)}
+            onMouseLeave={handleSpaceMouseLeave}
             style={{
               ...styles.icon,
               background: space.iconUrl ? 'transparent' : 'none',

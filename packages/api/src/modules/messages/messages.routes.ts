@@ -67,7 +67,10 @@ async function requireChannelAccess(req: Request, _res: Response, next: NextFunc
     const channelId = req.params.channelId;
     const spaceId = await getChannelSpaceId(channelId);
     const userId = req.user!.userId;
-    let isMember = await spacesService.isMember(spaceId, userId);
+
+    // Reuse request-scoped cache if available
+    if (!req.permCache) req.permCache = new Map();
+    let isMember = await spacesService.isMember(spaceId, userId, req.permCache);
 
     if (!isMember) {
       // Check if user has portal access: channel is portaled into a space the user IS in
@@ -75,7 +78,7 @@ async function requireChannelAccess(req: Request, _res: Response, next: NextFunc
         .where('channel_id', channelId)
         .first();
       if (portal) {
-        isMember = await spacesService.isMember(String(portal.target_space_id), userId);
+        isMember = await spacesService.isMember(String(portal.target_space_id), userId, req.permCache);
       }
       if (!isMember) return next(new ForbiddenError('You are not a member of this space'));
       // For portal users, store that they're accessing via portal
@@ -84,8 +87,8 @@ async function requireChannelAccess(req: Request, _res: Response, next: NextFunc
     }
 
     (req as any).spaceId = spaceId;
-    // Compute channel-level permissions for the user
-    const chanPerms = await computeChannelPermissions(spaceId, channelId, userId);
+    // Compute channel-level permissions for the user, reusing cache
+    const chanPerms = await computeChannelPermissions(spaceId, channelId, userId, req.permCache);
     (req as any).channelPerms = chanPerms;
     next();
   } catch (err) {

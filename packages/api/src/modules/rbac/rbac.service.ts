@@ -3,30 +3,52 @@ import { snowflake } from '../_shared.js';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../../lib/errors.js';
 import { ALL_PERMISSIONS, Permissions, combinePermissions, GUEST_PERMISSIONS } from '@crabac/shared';
 import * as spacesService from '../spaces/spaces.service.js';
+import { getCache, setCache, delCache, delCachePattern } from '../../lib/redis.js';
 
 /**
  * Compute effective permissions for a user in a space.
  * Owner always gets ALL_PERMISSIONS regardless of role assignments.
  * Non-members in public spaces get guest permissions.
  */
-export async function computePermissions(spaceId: string, userId: string): Promise<bigint> {
+export async function computePermissions(spaceId: string, userId: string, cache?: Map<string, string>): Promise<bigint> {
+  const cacheKey = `perms:${spaceId}:${userId}`;
+  // Check request-scoped cache first
+  if (cache) {
+    const cached = cache.get(cacheKey);
+    if (cached !== undefined) return BigInt(cached);
+  }
+  // Check Redis cache
+  const redisCached = await getCache(cacheKey);
+  if (redisCached !== null) {
+    if (cache) cache.set(cacheKey, redisCached);
+    return BigInt(redisCached);
+  }
+
   // Check if user is the space owner
   const space = await db('spaces').where('id', spaceId).first();
   if (!space) throw new NotFoundError('Space');
-  if (space.owner_id === userId) return ALL_PERMISSIONS;
+  if (space.owner_id === userId) {
+    const val = ALL_PERMISSIONS.toString();
+    if (cache) cache.set(cacheKey, val);
+    await setCache(cacheKey, val, 60);
+    return ALL_PERMISSIONS;
+  }
 
   // Check if user is a member
-  const isMember = await spacesService.isMember(spaceId, userId);
+  const member = await spacesService.isMember(spaceId, userId, cache);
 
-  if (isMember) {
+  if (member) {
     // Combine all role permissions via OR
     const roles = await db('member_roles')
       .join('roles', 'member_roles.role_id', 'roles.id')
       .where({ 'member_roles.space_id': spaceId, 'member_roles.user_id': userId })
       .select('roles.permissions');
 
-    if (roles.length === 0) return 0n;
-    return combinePermissions(...roles.map((r: any) => BigInt(r.permissions)));
+    const result = roles.length === 0 ? 0n : combinePermissions(...roles.map((r: any) => BigInt(r.permissions)));
+    const val = result.toString();
+    if (cache) cache.set(cacheKey, val);
+    await setCache(cacheKey, val, 60);
+    return result;
   }
 
   // Not a member — check if space is public for guest permissions
@@ -36,12 +58,15 @@ export async function computePermissions(spaceId: string, userId: string): Promi
     const guestRole = await db('roles')
       .where({ space_id: spaceId, is_guest: true })
       .first();
-    if (guestRole) {
-      return BigInt(guestRole.permissions);
-    }
-    return GUEST_PERMISSIONS;
+    const result = guestRole ? BigInt(guestRole.permissions) : GUEST_PERMISSIONS;
+    const val = result.toString();
+    if (cache) cache.set(cacheKey, val);
+    await setCache(cacheKey, val, 60);
+    return result;
   }
 
+  if (cache) cache.set(cacheKey, '0');
+  await setCache(cacheKey, '0', 60);
   return 0n;
 }
 
@@ -50,8 +75,8 @@ export async function computePermissions(spaceId: string, userId: string): Promi
  * Applies channel-level permission overrides on top of space-level permissions.
  * Administrators always get ALL_PERMISSIONS (overrides can't deny admins).
  */
-export async function computeChannelPermissions(spaceId: string, channelId: string, userId: string): Promise<bigint> {
-  const basePerms = await computePermissions(spaceId, userId);
+export async function computeChannelPermissions(spaceId: string, channelId: string, userId: string, cache?: Map<string, string>): Promise<bigint> {
+  const basePerms = await computePermissions(spaceId, userId, cache);
 
   // Administrators bypass channel overrides
   if ((basePerms & Permissions.ADMINISTRATOR) !== 0n) return ALL_PERMISSIONS;
@@ -168,6 +193,10 @@ export async function updateRole(
 
   if (Object.keys(updates).length > 0) {
     await db('roles').where({ id: roleId, space_id: spaceId }).update(updates);
+    // Role change affects all members with this role — invalidate all perms in this space
+    if (data.permissions !== undefined || data.position !== undefined) {
+      await delCachePattern(`perms:${spaceId}:*`);
+    }
   }
 
   return getRoleById(roleId);
@@ -184,6 +213,8 @@ export async function deleteRole(spaceId: string, roleId: string, actorUserId: s
   }
 
   await db('roles').where({ id: roleId, space_id: spaceId }).delete();
+  // Role deletion affects all members — invalidate all perms in this space
+  await delCachePattern(`perms:${spaceId}:*`);
 }
 
 export async function setMemberRoles(
@@ -245,6 +276,9 @@ export async function setMemberRoles(
       );
     }
   });
+
+  // Invalidate permission cache for the target user
+  await delCache(`perms:${spaceId}:${targetUserId}`);
 
   return listMemberRoles(spaceId, targetUserId);
 }

@@ -37,9 +37,11 @@ export async function listMessages(channelId: string, options: { before?: string
 
   const rows = await query;
   const messageIds = rows.map((r: any) => r.id);
-  const reactions = await getReactionsForMessages(messageIds);
-  const replyCounts = await getReplyCountsForMessages(messageIds);
-  const attachments = await getAttachmentsForMessages(messageIds);
+  const [reactions, replyCounts, attachments] = await Promise.all([
+    getReactionsForMessages(messageIds),
+    getReplyCountsForMessages(messageIds),
+    getAttachmentsForMessages(messageIds),
+  ]);
 
   const formatted = rows.map((r: any) => formatMessage(r, reactions.get(r.id) || [], replyCounts.get(r.id) || 0, attachments.get(r.id) || []));
   return options.after ? formatted : formatted.reverse();
@@ -191,8 +193,10 @@ export async function getPinnedMessages(channelId: string) {
     .orderBy('messages.id', 'desc');
 
   const messageIds = rows.map((r: any) => r.id);
-  const reactions = await getReactionsForMessages(messageIds);
-  const attachments = await getAttachmentsForMessages(messageIds);
+  const [reactions, attachments] = await Promise.all([
+    getReactionsForMessages(messageIds),
+    getAttachmentsForMessages(messageIds),
+  ]);
 
   return rows.map((r: any) => formatMessage(r, reactions.get(r.id) || [], 0, attachments.get(r.id) || []));
 }
@@ -225,8 +229,10 @@ export async function getThreadMessages(channelId: string, parentId: string, opt
 
   const rows = await query;
   const allIds = [parentId, ...rows.map((r: any) => r.id)];
-  const reactions = await getReactionsForMessages(allIds);
-  const attachments = await getAttachmentsForMessages(allIds);
+  const [reactions, attachments] = await Promise.all([
+    getReactionsForMessages(allIds),
+    getAttachmentsForMessages(allIds),
+  ]);
 
   return {
     parent,
@@ -344,9 +350,11 @@ export async function getMessageById(messageId: string) {
     .first();
 
   if (!row) throw new NotFoundError('Message');
-  const reactions = await getReactionsForMessage(messageId);
-  const replyCount = await getReplyCount(messageId);
-  const attachments = await getAttachmentsForMessages([messageId]);
+  const [reactions, replyCount, attachments] = await Promise.all([
+    getReactionsForMessage(messageId),
+    getReplyCount(messageId),
+    getAttachmentsForMessages([messageId]),
+  ]);
   return {
     ...formatMessage(row, reactions, replyCount, attachments.get(messageId) || []),
     channelName: row.channel_name,
@@ -410,9 +418,11 @@ async function getMessage(messageId: string) {
     .first();
 
   if (!row) throw new NotFoundError('Message');
-  const reactions = await getReactionsForMessage(messageId);
-  const replyCount = await getReplyCount(messageId);
-  const attachments = await getAttachmentsForMessages([messageId]);
+  const [reactions, replyCount, attachments] = await Promise.all([
+    getReactionsForMessage(messageId),
+    getReplyCount(messageId),
+    getAttachmentsForMessages([messageId]),
+  ]);
   return formatMessage(row, reactions, replyCount, attachments.get(messageId) || []);
 }
 

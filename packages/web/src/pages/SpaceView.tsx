@@ -23,7 +23,7 @@ export function SpaceView() {
   const isMobile = useIsMobile();
   const { spaceSidebarOpen, channelSidebarOpen, membersSidebarOpen, calendarOpen, blogOpen, mobileView, setMobileView, setCalendarOpen, setBlogOpen, toggleSpaceSidebar, toggleChannelSidebar } = useLayoutStore();
   const { spaces, fetchSpaces, setActiveSpace, members, fetchMembers, updateMemberStatus } = useSpacesStore();
-  const { channels, categories, fetchChannels, fetchCategories, fetchUnreads, fetchMuted, setActiveChannel } = useChannelsStore();
+  const { channels, categories, enterSpace, fetchMuted, setActiveChannel } = useChannelsStore();
 
   useEffect(() => {
     fetchSpaces();
@@ -31,15 +31,24 @@ export function SpaceView() {
 
   useEffect(() => {
     if (spaceId) {
-      useChannelsStore.setState({ channels: [], categories: [], activeChannelId: null });
-      useMessagesStore.getState().clearMessages();
       setActiveSpace(spaceId);
-      fetchChannels(spaceId);
-      fetchCategories(spaceId);
-      fetchUnreads(spaceId);
+      // Use the combined enter endpoint — single HTTP call for channels, categories, unreads, and messages
+      const urlChannelId = window.location.pathname.match(/\/channel\/(\d+)/)?.[1];
+      enterSpace(spaceId, urlChannelId).then((result) => {
+        if (result && result.messages.length > 0 && result.channelId) {
+          // Push prefetched messages directly into messages store
+          // Use setState to set all fields atomically — avoids flash from clearMessages()
+          useMessagesStore.setState({
+            messages: result.messages,
+            loading: false,
+            hasMore: result.messages.length === 50,
+          });
+        }
+      });
+      // Muted channels are low priority — fetch separately without blocking
       fetchMuted(spaceId);
     }
-  }, [spaceId, setActiveSpace, fetchChannels, fetchCategories, fetchUnreads, fetchMuted]);
+  }, [spaceId, setActiveSpace, enterSpace, fetchMuted]);
 
   useEffect(() => {
     if (channelId) {

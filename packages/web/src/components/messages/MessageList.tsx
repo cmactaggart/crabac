@@ -58,7 +58,7 @@ export function MessageList({ messages, loading, hasMore, currentUserId, channel
   return (
     <div ref={containerRef} onScroll={handleScroll} style={styles.container}>
       {loading && messages.length === 0 && (
-        <div style={styles.loading}>Loading messages...</div>
+        <MessageSkeletons />
       )}
 
       {hasMore && messages.length > 0 && (
@@ -116,6 +116,64 @@ export function MessageList({ messages, loading, hasMore, currentUserId, channel
 }
 
 // Quick reactions bar (most used)
+// ─── Skeleton Loading UI ───
+
+const skeletonWidths = [180, 260, 140, 320, 200, 280, 160, 240, 300, 220];
+
+function MessageSkeletons() {
+  return (
+    <div style={{ padding: '16px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <style>{`
+        @keyframes skeletonPulse {
+          0%, 100% { opacity: 0.4; }
+          50% { opacity: 0.8; }
+        }
+      `}</style>
+      {skeletonWidths.map((width, i) => (
+        <div key={i} style={{ display: 'flex', gap: 12, padding: '2px 8px' }}>
+          <div style={{
+            width: 32,
+            height: 32,
+            borderRadius: '50%',
+            background: 'var(--bg-tertiary)',
+            flexShrink: 0,
+            animation: 'skeletonPulse 1.5s ease-in-out infinite',
+            animationDelay: `${i * 0.08}s`,
+          }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+            <div style={{
+              width: 80 + (i % 3) * 30,
+              height: 12,
+              borderRadius: 4,
+              background: 'var(--bg-tertiary)',
+              animation: 'skeletonPulse 1.5s ease-in-out infinite',
+              animationDelay: `${i * 0.08}s`,
+            }} />
+            <div style={{
+              width: Math.min(width, 320),
+              height: 14,
+              borderRadius: 4,
+              background: 'var(--bg-tertiary)',
+              animation: 'skeletonPulse 1.5s ease-in-out infinite',
+              animationDelay: `${i * 0.08 + 0.05}s`,
+            }} />
+            {i % 3 === 0 && (
+              <div style={{
+                width: Math.min(width * 0.6, 200),
+                height: 14,
+                borderRadius: 4,
+                background: 'var(--bg-tertiary)',
+                animation: 'skeletonPulse 1.5s ease-in-out infinite',
+                animationDelay: `${i * 0.08 + 0.1}s`,
+              }} />
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const QUICK_REACTIONS = ['\u{1F44D}', '\u{2764}\u{FE0F}', '\u{1F602}', '\u{1F389}', '\u{1F914}', '\u{1F622}', '\u{1F525}', '\u{1F440}'];
 
 function MessageItem({

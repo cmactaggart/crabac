@@ -4,7 +4,9 @@ import { validate } from '../../middleware/validate.js';
 import { validation, Permissions } from '@crabac/shared';
 import { requirePermission, requireMember, requireMemberOrPublicAccess } from '../rbac/rbac.middleware.js';
 import * as channelsService from './channels.service.js';
+import * as categoriesService from './categories.service.js';
 import * as readsService from './reads.service.js';
+import * as messagesService from '../messages/messages.service.js';
 
 export const channelsRoutes = Router();
 
@@ -209,6 +211,52 @@ channelsRoutes.get(
         result[channelId] = counts;
       }
       res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ─── Combined Enter Endpoint ───
+// Returns channels, categories, unreads, and initial messages in a single response
+// to eliminate the waterfall of sequential HTTP calls when entering a space.
+channelsRoutes.get(
+  '/:spaceId/enter',
+  requireMemberOrPublicAccess,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { spaceId } = req.params;
+      const userId = req.user!.userId;
+
+      // Reuse the request-scoped cache from requireMemberOrPublicAccess middleware
+      const cache = req.permCache;
+
+      // Fetch channels first (needed to derive channelIds and target channel)
+      const channels = await channelsService.listChannelsForUser(spaceId, userId, cache);
+      const channelIds = channels.map((c: any) => c.id);
+
+      // Determine which channel to load messages for
+      const requestedChannelId = typeof req.query.channelId === 'string' ? req.query.channelId : null;
+      const targetChannelId = requestedChannelId
+        || (channels.find((c: any) => !c.isAdmin) || channels[0])?.id
+        || null;
+
+      // Fetch categories, unreads, and messages in parallel
+      const [categories, unreadsMap, messages] = await Promise.all([
+        categoriesService.listCategories(spaceId),
+        readsService.getUnreadCounts(userId, channelIds),
+        targetChannelId
+          ? messagesService.listMessages(targetChannelId, { limit: 50 })
+          : Promise.resolve([]),
+      ]);
+
+      // Convert unreads Map to plain object
+      const unreads: Record<string, { unreadCount: number; mentionCount: number }> = {};
+      for (const [channelId, counts] of unreadsMap) {
+        unreads[channelId] = counts;
+      }
+
+      res.json({ channels, categories, unreads, messages, channelId: targetChannelId });
     } catch (err) {
       next(err);
     }

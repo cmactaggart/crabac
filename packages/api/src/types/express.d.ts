@@ -6,5 +6,9 @@ import 'express';
 declare module 'express' {
   interface Request {
     params: Record<string, string>;
+    /** Base space-level permissions, stashed by auth middleware to avoid recomputation */
+    basePerms?: bigint;
+    /** Request-scoped cache for permission/membership lookups */
+    permCache?: Map<string, string>;
   }
 }
