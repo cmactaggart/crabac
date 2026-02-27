@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, ChevronDown, Hash, LogOut, PanelLeftClose, Settings, Shield, Zap, CheckCheck, BellOff, Bell, Link, Copy, Plus, SlidersHorizontal, FolderPlus, GripVertical, ArrowRightLeft, MessageSquareDashed, Trash2, Pencil, Calendar, DoorOpen, Grid3x3, MapPinned, Globe, Lock, BookOpen } from 'lucide-react';
+import { UserPlus, ChevronDown, Hash, LogOut, PanelLeftClose, Settings, Shield, Zap, CheckCheck, BellOff, Bell, Link, Copy, Plus, SlidersHorizontal, FolderPlus, GripVertical, ArrowRightLeft, MessageSquareDashed, Trash2, Pencil, Calendar, DoorOpen, Grid3x3, MapPinned, Globe, Lock, BookOpen, Mail } from 'lucide-react';
 import { Permissions } from '@crabac/shared';
 import type { SpaceAdminSettings } from '@crabac/shared';
 import { api } from '../../lib/api.js';
@@ -157,6 +157,8 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
   const setCalendarOpen = useLayoutStore((s) => s.setCalendarOpen);
   const blogOpen = useLayoutStore((s) => s.blogOpen);
   const setBlogOpen = useLayoutStore((s) => s.setBlogOpen);
+  const newsletterOpen = useLayoutStore((s) => s.newsletterOpen);
+  const setNewsletterOpen = useLayoutStore((s) => s.setNewsletterOpen);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const unreads = useChannelsStore((s) => s.unreads);
@@ -657,6 +659,24 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
           >
             <BookOpen size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} />
             <span style={{ flex: 1 }}>Blog</span>
+          </button>
+        )}
+        {space.newsletterEnabled && (
+          <button
+            onClick={() => {
+              setNewsletterOpen(true);
+              useLayoutStore.getState().setMobileView('chat');
+              navigate(`/space/${space.id}`, { replace: true });
+            }}
+            style={{
+              ...sidebarStyles.channelItem,
+              background: newsletterOpen ? 'var(--hover)' : 'transparent',
+              color: newsletterOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
+              marginBottom: 4,
+            }}
+          >
+            <Mail size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+            <span style={{ flex: 1 }}>Newsletter</span>
           </button>
         )}
         <DndContext

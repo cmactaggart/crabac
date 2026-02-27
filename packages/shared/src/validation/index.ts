@@ -208,6 +208,7 @@ export const updateUserPreferencesSchema = z.object({
   defaultVisibility: z.enum(['public', 'private', 'friends', 'spaces']).optional(),
   profileVisibility: z.enum(['public', 'private', 'friends', 'spaces']).optional(),
   onboardingCompleted: z.boolean().optional(),
+  newsletterEnabled: z.boolean().optional(),
 });
 
 // Bulk Visibility
@@ -248,12 +249,24 @@ export const updateSpaceAdminSettingsSchema = z.object({
   calendarEnabled: z.boolean().optional(),
   blogEnabled: z.boolean().optional(),
   allowPublicBlog: z.boolean().optional(),
+  newsletterEnabled: z.boolean().optional(),
+  allowPublicNewsletter: z.boolean().optional(),
+  allowPublicNewsletterSubscription: z.boolean().optional(),
+  newsletterTrackingEnabled: z.boolean().optional(),
   isPublic: z.boolean().optional(),
   requireVerifiedEmail: z.boolean().optional(),
   baseColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
   accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
   textColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+  publicTheme: z.string().max(50).nullable().optional(),
   webhooksEnabled: z.boolean().optional(),
+  publicNavLinks: z.array(z.object({
+    label: z.string().min(1).max(100),
+    url: z.string().url().max(500),
+  })).max(20).optional(),
+  publicNavDisabledFeatures: z.array(
+    z.enum(['boards', 'gallery', 'routes', 'calendar', 'blog', 'newsletter']),
+  ).optional(),
 });
 
 // Space Tags
@@ -731,4 +744,66 @@ export const createRepostSchema = z.object({
 export const sharePostToChannelSchema = z.object({
   channelId: z.string().min(1),
   content: z.string().max(4000).optional(),
+});
+
+// ─── Newsletter ───
+
+const textBlockSchema = z.object({ type: z.literal('text'), content: z.string().max(50000) });
+const imageBlockSchema = z.object({ type: z.literal('image'), url: z.string().max(512), caption: z.string().max(500).nullable().optional(), alt: z.string().max(500).nullable().optional() });
+const imageGalleryBlockSchema = z.object({ type: z.literal('image_gallery'), images: z.array(z.object({ url: z.string().max(512), caption: z.string().max(500).nullable().optional(), alt: z.string().max(500).nullable().optional() })).max(20) });
+const quoteBlockSchema = z.object({ type: z.literal('quote'), content: z.string().max(2000), attribution: z.string().max(200).nullable().optional() });
+const dividerBlockSchema = z.object({ type: z.literal('divider') });
+const embedBlockSchema = z.object({ type: z.literal('embed'), url: z.string().url().max(512), title: z.string().max(200).nullable().optional() });
+const sectionHeadingBlockSchema = z.object({ type: z.literal('section_heading'), content: z.string().max(200) });
+
+export const newsletterBlockSchema = z.discriminatedUnion('type', [
+  textBlockSchema, imageBlockSchema, imageGalleryBlockSchema,
+  quoteBlockSchema, dividerBlockSchema, embedBlockSchema, sectionHeadingBlockSchema,
+]);
+
+export const createNewsletterSchema = z.object({
+  subject: z.string().min(1).max(500),
+  summary: z.string().max(500).nullable().optional(),
+  headerImageUrl: z.string().max(512).nullable().optional(),
+  blocks: z.array(newsletterBlockSchema).max(100),
+  status: z.enum(['draft', 'published']).default('draft'),
+  isPublic: z.boolean().optional(),
+});
+
+export const updateNewsletterSchema = z.object({
+  subject: z.string().min(1).max(500).optional(),
+  summary: z.string().max(500).nullable().optional(),
+  headerImageUrl: z.string().max(512).nullable().optional(),
+  blocks: z.array(newsletterBlockSchema).max(100).optional(),
+  status: z.enum(['draft', 'published']).optional(),
+  isPublic: z.boolean().optional(),
+});
+
+export const newslettersQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  before: z.string().optional(),
+  status: z.enum(['draft', 'published']).optional(),
+});
+
+export const subscribeNewsletterSchema = z.object({
+  sourceType: z.enum(['space', 'user']),
+  sourceId: z.string().min(1),
+  frequency: z.enum(['immediate', 'daily_digest', 'weekly_digest']).default('immediate'),
+});
+
+export const updateNewsletterSubscriptionSchema = z.object({
+  frequency: z.enum(['immediate', 'daily_digest', 'weekly_digest']).optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const anonymousSubscribeSchema = z.object({
+  email: z.string().email().max(255),
+  sourceType: z.enum(['space', 'user']),
+  sourceId: z.string().min(1),
+  frequency: z.enum(['immediate', 'daily_digest', 'weekly_digest']).default('immediate'),
+});
+
+export const updateAnonymousPreferencesSchema = z.object({
+  frequency: z.enum(['immediate', 'daily_digest', 'weekly_digest']).optional(),
+  isActive: z.boolean().optional(),
 });

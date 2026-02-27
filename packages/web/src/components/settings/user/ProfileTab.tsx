@@ -1,7 +1,8 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Camera } from 'lucide-react';
 import { useAuthStore } from '../../../stores/auth.js';
 import { Avatar } from '../../common/Avatar.js';
+import { api } from '../../../lib/api.js';
 
 export function ProfileTab() {
   const user = useAuthStore((s) => s.user);
@@ -11,10 +12,17 @@ export function ProfileTab() {
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [baseColor, setBaseColor] = useState(user?.baseColor || '');
   const [accentColor, setAccentColor] = useState(user?.accentColor || '');
+  const [newsletterEnabled, setNewsletterEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    api('/users/preferences').then((prefs: any) => {
+      setNewsletterEnabled(!!prefs.newsletterEnabled);
+    }).catch(() => {});
+  }, []);
 
   const hasNameChange = displayName !== (user?.displayName || '');
   const hasColorChange =
@@ -137,6 +145,30 @@ export function ProfileTab() {
             Reset colors
           </button>
         )}
+      </div>
+
+      {/* Newsletter */}
+      <div>
+        <label style={styles.label}>Personal Newsletter</label>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '4px 0 8px' }}>
+          Enable to compose and publish newsletters from your profile.
+        </p>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.85rem' }}>
+          <input
+            type="checkbox"
+            checked={newsletterEnabled}
+            onChange={async (e) => {
+              const val = e.target.checked;
+              setNewsletterEnabled(val);
+              try {
+                await api('/users/preferences', { method: 'PUT', body: JSON.stringify({ newsletterEnabled: val }) });
+              } catch {
+                setNewsletterEnabled(!val);
+              }
+            }}
+          />
+          Enable newsletter
+        </label>
       </div>
 
       {/* Save */}

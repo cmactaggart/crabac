@@ -17,14 +17,15 @@ The platform is especially well-suited for outdoor activity communities (cycling
 
 ---
 
-## What's New in 0.4.0
+## What's New in 0.6.0
 
+- **Newsletter system** — space and personal newsletters with a block editor (text, images, galleries, quotes, embeds, dividers), email delivery via SES, open/click tracking, anonymous + authenticated subscriptions, and daily/weekly digest scheduling
+- **Public page navigation bar** — cross-page navbar across all public features (boards, gallery, routes, calendar, blog, newsletter) with configurable feature visibility and custom external links
+- **Single-item auto-redirect** — public board and gallery listing pages auto-redirect to the content when only one channel exists, eliminating useless intermediate pages
+- **Workflow engine** — trigger-condition-action automations: welcome flows, auto-imports, slash commands, interactive cards, incoming/outgoing webhooks
 - **Social profiles** — personal galleries, route collections, event calendars, and a post feed on every user profile with visibility controls (public/friends/private)
 - **User posts** — text posts with photo/route attachments, friend tagging, reactions, comments, and reposts
-- **Follows** — one-way follows for public profiles; friends count as implicit bidirectional follows
-- **Social feed** — aggregated feed of posts from followed users, friends, and self with infinite scroll
-- **Personal collections** — users can curate their own photos, routes, and events independently of any space, and copy items into space channels
-- **Profile visibility** — configurable profile privacy (public, friends-only, private) with per-item visibility overrides
+- **Follows & feed** — one-way follows for public profiles with an aggregated social feed
 
 ---
 
@@ -35,10 +36,10 @@ Community platforms tend to do one thing well and bolt on everything else. crab.
 - **Communication** — real-time chat, forums, DMs, slash commands
 - **Organization** — calendars, route libraries, role-based permissions, workflow automation
 - **Social** — user profiles with posts, follows, personal collections, and a news feed
-- **Public presence** — forums, galleries, blogs, calendars, and route libraries each independently publishable to the web
+- **Public presence** — forums, galleries, blogs, calendars, route libraries, and newsletters each independently publishable to the web
 - **Cross-community** — portals that link channels across independent spaces
 
-The result is a single platform where a community can share routes, plan events, post photos, publish a blog, run automated workflows, and maintain social profiles — all without stitching together separate services.
+The result is a single platform where a community can share routes, plan events, post photos, publish a blog, send newsletters, run automated workflows, and maintain social profiles — all without stitching together separate services.
 
 ---
 
@@ -62,7 +63,7 @@ Channels live inside spaces and come in several types:
 
 ### Roles & Permissions
 
-Access control uses a bitfield RBAC system with 23 granular permission flags. Roles are stacked — a member with multiple roles gets the union of all their permissions. The space owner bypasses all checks.
+Access control uses a bitfield RBAC system with granular permission flags. Roles are stacked — a member with multiple roles gets the union of all their permissions. The space owner bypasses all checks.
 
 ---
 
@@ -172,6 +173,21 @@ Media gallery channels display uploads in a responsive photo grid with a detail 
 A built-in blogging system with a Markdown editor, inline image uploads, live preview, and a draft/publish workflow. Posts can individually be made public for the external blog web view.
 
 ![Screenshot: Blog editor](docs/screenshots/blog-editor.png)
+
+### Newsletters
+
+A full email newsletter system built into the platform. Space admins can compose newsletters using a block editor (rich text, images, image galleries, pull quotes, section headings, embeds, and dividers), then publish to subscribers via email.
+
+Features:
+- **Block editor** — visual composition with live preview
+- **Email delivery** — sends via SMTP (SES) with automatic batching
+- **Subscriptions** — both authenticated (logged-in users) and anonymous (email-only) subscribers
+- **Digest scheduling** — subscribers choose immediate delivery, daily digest, or weekly digest
+- **Open & click tracking** — per-newsletter analytics with pixel tracking and link wrapping (toggleable per space)
+- **Public archive** — published newsletters can be made public for a web-viewable archive
+- **Personal newsletters** — users can also publish their own newsletters from their profile, independent of any space
+
+URL: `app.crab.ac/newsletter/your-space-slug`
 
 ---
 
@@ -386,6 +402,25 @@ URL: `app.crab.ac/blog/your-space-slug`
 <!-- TODO: screenshot of public blog page -->
 <!-- ![Screenshot: Public blog](docs/screenshots/public-blog.png) -->
 
+### Public Newsletter
+
+Published newsletters can be made public for a web-viewable archive. Anonymous visitors can subscribe by email directly from the public page (if enabled).
+
+URL: `app.crab.ac/newsletter/your-space-slug`
+
+### Cross-Page Navigation Bar
+
+When a space has multiple public features enabled, all public pages automatically show a navigation bar linking between them (Boards, Gallery, Routes, Calendar, Blog, Newsletter). Admins can:
+
+- **Hide features from the navbar** — keep a feature's public URL working but remove it from the navigation (e.g. hide the gallery link while keeping the gallery accessible at its URL)
+- **Add custom external links** — add links to the space's main website, social media, or any other URL; these open in a new tab with an external-link indicator
+
+The navbar only appears when there's more than one visible feature or at least one custom link.
+
+### Single-Item Auto-Redirect
+
+When a space has only one public forum or gallery channel, visitors are automatically redirected to the content instead of seeing a listing page with a single item.
+
 ### Configuration
 
 Each public component is controlled by its own toggle in admin settings:
@@ -395,7 +430,11 @@ Each public component is controlled by its own toggle in admin settings:
 - **Enable Public Routes** — exposes route library channels marked as public
 - **Enable Public Calendar** — exposes events marked as public
 - **Enable Public Blog** — exposes blog posts marked as public
+- **Enable Public Newsletter** — exposes newsletters marked as public
+- **Allow Public Newsletter Subscription** — lets anonymous visitors subscribe by email
 - **Allow Anonymous Browsing** — controls whether visitors need to log in to view public content
+- **Navigation Bar** — per-feature toggles to show/hide each feature in the cross-page navbar
+- **Custom Navigation Links** — external links added to the navbar (max 20)
 
 ---
 
@@ -441,8 +480,9 @@ A bike club can maintain a professional public web presence entirely within crab
 - **Public gallery** for ride photos and event coverage
 - **Public blog** for ride reports, gear reviews, and community news
 - **Public forums** for open discussion
+- **Newsletter** for weekly ride roundups and announcements delivered to subscribers' inboxes
 
-All of this is managed from the same interface where members chat, without maintaining a separate website.
+All of this is managed from the same interface where members chat, with a unified navigation bar linking between all public pages — no separate website needed.
 
 <!-- TODO: screenshot of public routes page -->
 <!-- ![Screenshot: Public routes web view](docs/screenshots/public-routes.png) -->
@@ -536,7 +576,7 @@ The web client will be available at `http://localhost:5173` and the API at `http
 
 ### SMTP Configuration
 
-crab.ac sends email for account verification, magic link login, and password resets. Configure these values in `packages/api/.env`:
+crab.ac sends email for account verification, magic link login, password resets, and newsletter delivery. Configure these values in `packages/api/.env`:
 
 ```env
 SMTP_HOST=email-smtp.us-east-1.amazonaws.com
@@ -618,12 +658,13 @@ sudo cloudflared service install
 - **Ban enforcement** — global and space-level bans enforced at the middleware layer
 - **Block filtering** — blocked users' messages hidden from all listings
 - **SSRF protection** — outgoing webhook actions block private IP ranges
+- **Newsletter tracking opt-out** — open/click tracking is toggleable per space in admin settings
 
 ---
 
 ## API Documentation
 
-See [docs/api.md](docs/api.md) for the complete REST API reference (v0.4.0), including all endpoints, request/response formats, WebSocket events, and permission requirements.
+See [docs/api.md](docs/api.md) for the complete REST API reference (v0.6.0), including all endpoints, request/response formats, WebSocket events, and permission requirements.
 
 ---
 

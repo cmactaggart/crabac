@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Image, Map, CalendarDays, FileText, UserPlus, UserMinus, Check, Clock, MessageSquare, Lock, ArrowLeft, SmilePlus, MessageCircle, Repeat2, Forward, X, Users, MapPin, Trash2, UserCheck } from 'lucide-react';
+import { Image, Map, CalendarDays, FileText, UserPlus, UserMinus, Check, Clock, MessageSquare, Lock, ArrowLeft, UserCheck, Edit3, User, Bell, Newspaper } from 'lucide-react';
+import { CrabIcon } from '../components/icons/CrabIcon.js';
 import { useAuthStore } from '../stores/auth.js';
 import { useFriendsStore } from '../stores/friends.js';
 import { useDMStore } from '../stores/dm.js';
 import { usePersonalCollectionsStore } from '../stores/personalCollections.js';
+import { useNotificationsStore } from '../stores/notifications.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 import { Avatar } from '../components/common/Avatar.js';
-import { Markdown } from '../components/common/Markdown.js';
-import { EmojiPicker } from '../components/messages/EmojiPicker.js';
-import { ShareToSpacePicker } from '../components/common/ShareToSpacePicker.js';
+import { PostCard as SharedPostCard } from '../components/posts/PostCard.js';
+import { UserSettingsModal } from '../components/settings/user/UserSettingsModal.js';
 import { useFollowsStore } from '../stores/follows.js';
 import { api } from '../lib/api.js';
 import type { PersonalGalleryItem, PersonalRouteItem, PersonalEvent, UserPost, UserPostComment, UserCollectionsSummary, FriendshipStatus, PersonalVisibility, FollowCounts } from '@crabac/shared';
@@ -24,6 +25,7 @@ interface ProfileUser {
   status: string;
   createdAt: string;
   canViewProfile: boolean;
+  newsletterEnabled?: boolean;
 }
 
 type SubTab = 'feed' | 'photos' | 'routes' | 'events';
@@ -47,6 +49,8 @@ export function PublicProfilePage() {
   const navigate = useNavigate();
   const currentUser = useAuthStore((s) => s.user);
   const isMobile = useIsMobile();
+  const [showSettings, setShowSettings] = useState(false);
+  const { unreadCount, fetchUnreadCount } = useNotificationsStore();
 
   const [profile, setProfile] = useState<ProfileUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -67,7 +71,7 @@ export function PublicProfilePage() {
   const [followStatus, setFollowStatus] = useState<{ isFollowing: boolean; isFriend: boolean } | null>(null);
   const [followLoading, setFollowLoading] = useState(false);
   const [followCounts, setFollowCounts] = useState<FollowCounts>({ followingCount: 0, followerCount: 0 });
-  const { followUser: doFollow, unfollowUser: doUnfollow, getFollowStatus, fetchCounts } = useFollowsStore();
+  const { followUser: doFollow, unfollowUser: doUnfollow, getFollowStatus, fetchCounts, counts: currentUserFollowCounts } = useFollowsStore();
   const sendFriendRequest = useFriendsStore((s) => s.sendFriendRequest);
   const acceptFriendRequest = useFriendsStore((s) => s.acceptFriendRequest);
   const removeFriend = useFriendsStore((s) => s.removeFriend);
@@ -79,6 +83,12 @@ export function PublicProfilePage() {
       navigate('/you', { replace: true });
     }
   }, [currentUser, username, navigate]);
+
+  // Fetch sidebar data (current user's follow counts + unread notifications)
+  useEffect(() => {
+    fetchUnreadCount();
+    if (currentUser?.id) fetchCounts(currentUser.id);
+  }, [currentUser]);
 
   // Fetch profile
   useEffect(() => {
@@ -283,7 +293,10 @@ export function PublicProfilePage() {
         />
         <div style={{ textAlign: 'center' }}>
           <h2 style={{ margin: 0, fontSize: '1.3rem' }}>{profile.displayName}</h2>
-          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>@{profile.username}</div>
+          <div
+            style={{ fontSize: '0.85rem', color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }}
+            onClick={() => navigate(`/p/${profile.username}`)}
+          >@{profile.username}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: '0.9rem' }}>
           <Lock size={16} /> This account is private
@@ -317,7 +330,10 @@ export function PublicProfilePage() {
         />
         <div style={{ flex: 1, minWidth: 0 }}>
           <h2 style={{ margin: 0, fontSize: isMobile ? '1.1rem' : '1.3rem' }}>{profile.displayName}</h2>
-          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>@{profile.username}</div>
+          <div
+            style={{ fontSize: '0.85rem', color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }}
+            onClick={() => navigate(`/p/${profile.username}`)}
+          >@{profile.username}</div>
           {memberSince && (
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
               Member since {memberSince}
@@ -350,6 +366,7 @@ export function PublicProfilePage() {
           <SummaryBadge icon={<Image size={14} />} label="Photos" count={summary.galleryCount} active={activeTab === 'photos'} onClick={() => setActiveTab('photos')} />
           <SummaryBadge icon={<Map size={14} />} label="Routes" count={summary.routeCount} active={activeTab === 'routes'} onClick={() => setActiveTab('routes')} />
           <SummaryBadge icon={<CalendarDays size={14} />} label="Events" count={summary.eventCount} active={activeTab === 'events'} onClick={() => setActiveTab('events')} />
+          {profile.newsletterEnabled && <SummaryBadge icon={<Newspaper size={14} />} label="Newsletter" count={0} active={false} onClick={() => navigate(`/newsletter/u/${profile.username}`)} />}
         </div>
       )}
 
@@ -395,13 +412,80 @@ export function PublicProfilePage() {
   }
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem', height: '100vh', overflowY: 'auto' }}>
-      <div style={{ position: 'absolute', top: 16, left: 16 }}>
-        <button onClick={() => navigate(-1)} style={styles.backBtn}>
-          <ArrowLeft size={16} /> Back
+    <div style={styles.outerContainer}>
+      {/* Left Sidebar */}
+      <div style={styles.sidebar}>
+        {/* Current User Mini Card */}
+        <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+          <Avatar
+            src={currentUser?.avatarUrl ?? null}
+            name={currentUser?.displayName || '?'}
+            size={56}
+            baseColor={currentUser?.baseColor ?? null}
+            accentColor={currentUser?.accentColor ?? null}
+          />
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{currentUser?.displayName}</div>
+            <div
+              style={{ fontSize: '0.75rem', color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }}
+              onClick={() => currentUser?.username && navigate(`/p/${currentUser.username}`)}
+            >@{currentUser?.username}</div>
+          </div>
+          <button onClick={() => setShowSettings(true)} style={styles.editBtn}>
+            <Edit3 size={12} /> Edit
+          </button>
+          <div style={{ display: 'flex', gap: 12, fontSize: '0.78rem', marginTop: 4 }}>
+            <span style={{ color: 'var(--text-secondary)' }}>
+              <strong>{currentUserFollowCounts.followingCount}</strong> following
+            </span>
+            <span style={{ color: 'var(--text-secondary)' }}>
+              <strong>{currentUserFollowCounts.followerCount}</strong> followers
+            </span>
+          </div>
+        </div>
+
+        {/* Nav Links */}
+        <button
+          onClick={() => navigate('/you')}
+          style={{ ...styles.sidebarLink, background: 'transparent' }}
+        >
+          <User size={16} /> You
+        </button>
+        <button
+          onClick={() => navigate('/you')}
+          style={{ ...styles.sidebarLink, background: 'transparent' }}
+        >
+          <Newspaper size={16} /> Feed
+        </button>
+        <button
+          onClick={() => navigate('/')}
+          style={{ ...styles.sidebarLink, background: 'transparent' }}
+        >
+          <CrabIcon size={16} /> Spaces
+        </button>
+        <button
+          onClick={() => navigate('/you')}
+          style={{ ...styles.sidebarLink, background: 'transparent' }}
+        >
+          <Bell size={16} /> Notifications
+          {unreadCount > 0 && (
+            <span style={styles.unreadBadge}>{unreadCount > 99 ? '99+' : unreadCount}</span>
+          )}
         </button>
       </div>
-      {content}
+
+      {/* Main Content */}
+      <div style={{
+        flex: 1,
+        overflowY: 'auto',
+        padding: '2rem',
+        display: 'flex',
+        justifyContent: 'center',
+      }}>
+        {content}
+      </div>
+
+      {showSettings && <UserSettingsModal onClose={() => setShowSettings(false)} />}
     </div>
   );
 }
@@ -505,406 +589,21 @@ function ReadOnlyFeedTab({ posts, setPosts, profileUserId, friendStatus, handleF
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {posts.map((post) => (
-          <ProfilePostCard
+          <SharedPostCard
             key={post.id}
             post={post}
             currentUserId={currentUserId}
-            profileUserId={profileUserId}
+            isOwn={false}
             onReaction={(emoji, hasReacted) => handleReaction(post.id, emoji, hasReacted)}
-            onFetchComments={() => handleFetchComments(post.id)}
+            onFetchComments={(opts) => handleFetchComments(post.id)}
             onAddComment={(body) => handleAddComment(post.id, body)}
             onDeleteComment={(commentId) => handleDeleteComment(post.id, commentId)}
             onCommentReaction={(commentId, emoji, hasReacted) => toggleCommentReaction(commentId, emoji, hasReacted)}
+            onRepost={post.userId !== currentUserId && !post.repostOfId ? () => {} : undefined}
+            onShare={() => {}}
+            showAuthorLink={true}
           />
         ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Profile Post Card (for other users' posts) ───
-
-function ProfilePostCard({ post, currentUserId, profileUserId, onReaction, onFetchComments, onAddComment, onDeleteComment, onCommentReaction }: {
-  post: UserPost;
-  currentUserId: string;
-  profileUserId: string;
-  onReaction: (emoji: string, hasReacted: boolean) => void;
-  onFetchComments: () => Promise<UserPostComment[]>;
-  onAddComment: (body: string) => Promise<UserPostComment>;
-  onDeleteComment: (commentId: string) => Promise<void>;
-  onCommentReaction: (commentId: string, emoji: string, hasReacted: boolean) => Promise<any>;
-}) {
-  const navigate = useNavigate();
-  const { createRepost } = usePersonalCollectionsStore();
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [showComments, setShowComments] = useState(false);
-  const [comments, setComments] = useState<UserPostComment[]>([]);
-  const [commentsLoading, setCommentsLoading] = useState(false);
-  const [commentText, setCommentText] = useState('');
-  const [repostForm, setRepostForm] = useState(false);
-  const [repostBody, setRepostBody] = useState('');
-  const [repostVisibility, setRepostVisibility] = useState<PersonalVisibility>('public');
-  const [reposting, setReposting] = useState(false);
-  const [sharePickerOpen, setSharePickerOpen] = useState(false);
-
-  const loadComments = async () => {
-    setCommentsLoading(true);
-    try {
-      const result = await onFetchComments();
-      setComments(result);
-    } catch {}
-    setCommentsLoading(false);
-  };
-
-  const handleToggleComments = () => {
-    const next = !showComments;
-    setShowComments(next);
-    if (next && comments.length === 0) loadComments();
-  };
-
-  const handleAddComment = async () => {
-    if (!commentText.trim()) return;
-    try {
-      const comment = await onAddComment(commentText.trim());
-      setComments((prev) => [...prev, comment]);
-      setCommentText('');
-    } catch {}
-  };
-
-  const handleDeleteComment = async (commentId: string) => {
-    try {
-      await onDeleteComment(commentId);
-      setComments((prev) => prev.filter((c) => c.id !== commentId));
-    } catch {}
-  };
-
-  const handleCommentReaction = async (commentId: string, emoji: string, hasReacted: boolean) => {
-    try {
-      const reactions = await onCommentReaction(commentId, emoji, hasReacted);
-      setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, reactions } : c));
-    } catch {}
-  };
-
-  const handleRepost = async () => {
-    setReposting(true);
-    try {
-      await createRepost(post.id, repostVisibility, repostBody || null);
-      setRepostForm(false);
-      setRepostBody('');
-    } catch {}
-    setReposting(false);
-  };
-
-  return (
-    <div style={styles.postCard}>
-      {/* Repost header */}
-      {post.repostOfId && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-          <Repeat2 size={14} />
-          <span>Reposted by <strong style={{ color: 'var(--text-primary)' }}>{post.author?.displayName}</strong></span>
-        </div>
-      )}
-
-      {/* Embedded repost card */}
-      {post.repostOfId && post.repostOf ? (
-        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '0.75rem', marginBottom: 8, background: 'var(--bg-tertiary)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <Avatar src={post.repostOf.author?.avatarUrl || null} name={post.repostOf.author?.displayName || '?'} size={24} baseColor={post.repostOf.author?.baseColor} accentColor={post.repostOf.author?.accentColor} />
-            <span style={{ fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer' }} onClick={() => navigate(`/p/${post.repostOf!.author?.username}`)}>{post.repostOf.author?.displayName}</span>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{new Date(post.repostOf.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
-          </div>
-          {post.repostOf.body && <div style={{ fontSize: '0.85rem', lineHeight: 1.4, marginBottom: 6, whiteSpace: 'pre-wrap' }}>{post.repostOf.body}</div>}
-          {post.repostOf.attachments.filter((a) => a.type === 'image' || a.type === 'video').length > 0 && (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: post.repostOf.attachments.filter((a) => a.type !== 'gpx').length === 1 ? '1fr' : 'repeat(auto-fill, minmax(140px, 1fr))',
-              gap: 4,
-              borderRadius: 'var(--radius)',
-              overflow: 'hidden',
-            }}>
-              {post.repostOf.attachments.filter((a) => a.type === 'image' || a.type === 'video').map((a) =>
-                a.type === 'video' ? (
-                  <video key={a.id} src={a.url} controls style={{ width: '100%', maxHeight: 300, objectFit: 'cover', borderRadius: 'var(--radius)' }} />
-                ) : (
-                  <img key={a.id} src={a.url} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover' }} />
-                )
-              )}
-            </div>
-          )}
-        </div>
-      ) : post.repostOfId && !post.repostOf ? (
-        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '0.75rem', marginBottom: 8, background: 'var(--bg-tertiary)', color: 'var(--text-muted)', fontSize: '0.82rem', fontStyle: 'italic' }}>
-          [Original post deleted]
-        </div>
-      ) : null}
-
-      {/* Author header */}
-      {!post.repostOfId && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <Avatar
-            src={post.author?.avatarUrl || null}
-            name={post.author?.displayName || '?'}
-            size={32}
-            baseColor={post.author?.baseColor}
-            accentColor={post.author?.accentColor}
-          />
-          <div>
-            <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{post.author?.displayName}</div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-              {new Date(post.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
-            </div>
-          </div>
-          <div style={{ marginLeft: 'auto' }}>
-            <span style={{
-              fontSize: '0.65rem',
-              padding: '2px 6px',
-              borderRadius: 8,
-              background: VISIBILITY_COLORS[post.visibility] + '22',
-              color: VISIBILITY_COLORS[post.visibility],
-              fontWeight: 600,
-            }}>
-              {VISIBILITY_LABELS[post.visibility]}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {post.body && (
-        <div style={{ fontSize: '0.9rem', lineHeight: 1.5 }}>
-          <Markdown content={post.body} />
-        </div>
-      )}
-
-      {/* Attachments */}
-      {post.attachments.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-          {post.attachments.filter((a) => a.type === 'image').map((a) => (
-            <img
-              key={a.id}
-              src={a.url}
-              alt={a.originalName}
-              style={{ maxWidth: 200, maxHeight: 200, borderRadius: 'var(--radius)', objectFit: 'cover' }}
-            />
-          ))}
-          {post.attachments.filter((a) => a.type === 'video').map((a) => (
-            <video key={a.id} src={a.url} controls style={{ maxWidth: 300, maxHeight: 200, borderRadius: 'var(--radius)' }} />
-          ))}
-          {post.attachments.filter((a) => a.type === 'gpx').map((a) => (
-            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', fontSize: '0.8rem' }}>
-              <MapPin size={14} style={{ color: 'var(--accent)' }} />
-              <span style={{ fontWeight: 600 }}>{a.originalName}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Tags */}
-      {post.tags.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 8, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-          <Users size={12} />
-          {post.tags.map((t, i) => (
-            <span key={t.userId}>
-              <span
-                style={{ fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }}
-                onClick={() => navigate(`/p/${t.username}`)}
-              >
-                @{t.username}
-              </span>
-              {i < post.tags.length - 1 && ', '}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Reaction chips */}
-      {post.reactions && post.reactions.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
-          {post.reactions.map((reaction) => {
-            const hasReacted = reaction.users.some((u) => u.id === currentUserId);
-            return (
-              <button
-                key={reaction.emoji}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  padding: '2px 8px', borderRadius: 12, border: `1px solid ${hasReacted ? 'var(--accent)' : 'var(--border)'}`,
-                  background: hasReacted ? 'rgba(88, 101, 242, 0.15)' : 'var(--bg-tertiary)',
-                  cursor: 'pointer', fontSize: '0.82rem',
-                }}
-                onClick={() => onReaction(reaction.emoji, hasReacted)}
-                title={reaction.users.map((u) => u.username).join(', ')}
-              >
-                <span>{reaction.emoji}</span>
-                <span style={{ fontSize: '0.75rem', color: hasReacted ? 'var(--accent)' : 'var(--text-secondary)' }}>
-                  {reaction.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Action bar */}
-      <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 8 }}>
-        <div style={{ position: 'relative' }}>
-          <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} style={styles.postIconBtn} title="Add reaction">
-            <SmilePlus size={13} />
-          </button>
-          {showEmojiPicker && (
-            <EmojiPicker onSelect={(emoji) => { onReaction(emoji, false); setShowEmojiPicker(false); }} onClose={() => setShowEmojiPicker(false)} />
-          )}
-        </div>
-
-        <button onClick={handleToggleComments} style={{ ...styles.postIconBtn, gap: 4, width: 'auto', paddingLeft: 8, paddingRight: 8 }} title="Comments">
-          <MessageCircle size={13} />
-          {post.commentCount > 0 && <span style={{ fontSize: '0.72rem' }}>{post.commentCount}</span>}
-        </button>
-
-        {/* Repost (not own posts) */}
-        {post.userId !== currentUserId && !post.repostOfId && (
-          <button onClick={() => setRepostForm(!repostForm)} style={styles.postIconBtn} title="Repost">
-            <Repeat2 size={13} />
-          </button>
-        )}
-
-        <button onClick={() => setSharePickerOpen(true)} style={styles.postIconBtn} title="Share to channel">
-          <Forward size={13} />
-        </button>
-      </div>
-
-      {/* Repost form */}
-      {repostForm && (
-        <div style={{ marginTop: 8, padding: '0.5rem', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <textarea
-            value={repostBody}
-            onChange={(e) => setRepostBody(e.target.value)}
-            placeholder="Add a comment (optional)"
-            style={{ padding: '0.4rem 0.6rem', borderRadius: 'var(--radius)', border: 'none', background: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: '0.82rem', outline: 'none', width: '100%', boxSizing: 'border-box' as const, minHeight: 40, resize: 'vertical' as const, fontFamily: 'inherit' }}
-            maxLength={10000}
-          />
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <select value={repostVisibility} onChange={(e) => setRepostVisibility(e.target.value as PersonalVisibility)} style={{ padding: '0.25rem 0.4rem', borderRadius: 'var(--radius)', border: 'none', background: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: '0.75rem', outline: 'none' }}>
-              <option value="public">Public</option>
-              <option value="friends">Friends</option>
-              <option value="spaces">Spaces</option>
-              <option value="private">Private</option>
-            </select>
-            <button onClick={handleRepost} disabled={reposting} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0.3rem 0.6rem', borderRadius: 'var(--radius)', border: 'none', background: 'var(--accent)', color: 'white', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}>
-              {reposting ? 'Reposting...' : 'Repost'}
-            </button>
-            <button onClick={() => setRepostForm(false)} style={{ padding: '0.3rem 0.6rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Comments section */}
-      {showComments && (
-        <div style={{ marginTop: 8, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
-          {commentsLoading && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', padding: '0.5rem' }}>Loading comments...</div>}
-
-          {comments.map((comment) => {
-            const canDeleteComment = comment.userId === currentUserId || post.userId === currentUserId;
-            return (
-              <ProfileCommentRow
-                key={comment.id}
-                comment={comment}
-                currentUserId={currentUserId}
-                canDelete={canDeleteComment}
-                onDelete={() => handleDeleteComment(comment.id)}
-                onReaction={(emoji, hasReacted) => handleCommentReaction(comment.id, emoji, hasReacted)}
-              />
-            );
-          })}
-
-          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-            <input
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              placeholder="Write a comment..."
-              style={{ padding: '0.4rem 0.6rem', borderRadius: 'var(--radius)', border: 'none', background: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: '0.82rem', outline: 'none', width: '100%', boxSizing: 'border-box' as const }}
-              maxLength={4000}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(); } }}
-            />
-            <button onClick={handleAddComment} disabled={!commentText.trim()} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0.3rem 0.6rem', borderRadius: 'var(--radius)', border: 'none', background: 'var(--accent)', color: 'white', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
-              Post
-            </button>
-          </div>
-        </div>
-      )}
-
-      {sharePickerOpen && (
-        <ShareToSpacePicker
-          contentType="post"
-          itemId={post.id}
-          onClose={() => setSharePickerOpen(false)}
-          onShared={() => setSharePickerOpen(false)}
-        />
-      )}
-    </div>
-  );
-}
-
-// ─── Profile Comment Row ───
-
-function ProfileCommentRow({ comment, currentUserId, canDelete, onDelete, onReaction }: {
-  comment: UserPostComment;
-  currentUserId: string;
-  canDelete: boolean;
-  onDelete: () => void;
-  onReaction: (emoji: string, hasReacted: boolean) => void;
-}) {
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-
-  return (
-    <div style={{ display: 'flex', gap: 8, padding: '6px 0', fontSize: '0.82rem' }}>
-      <Avatar src={comment.author?.avatarUrl || null} name={comment.author?.displayName || '?'} size={24} baseColor={comment.author?.baseColor} accentColor={comment.author?.accentColor} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontWeight: 600, fontSize: '0.8rem' }}>{comment.author?.displayName}</span>
-          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-            {new Date(comment.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-          </span>
-          {canDelete && (
-            <button onClick={onDelete} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, marginLeft: 'auto', display: 'flex' }} title="Delete comment">
-              <X size={12} />
-            </button>
-          )}
-        </div>
-        <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.4, marginTop: 2 }}>{comment.body}</div>
-
-        {comment.reactions && comment.reactions.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
-            {comment.reactions.map((reaction) => {
-              const hasReacted = reaction.users.some((u) => u.id === currentUserId);
-              return (
-                <button
-                  key={reaction.emoji}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 3,
-                    padding: '1px 6px', borderRadius: 10, border: `1px solid ${hasReacted ? 'var(--accent)' : 'var(--border)'}`,
-                    background: hasReacted ? 'rgba(88, 101, 242, 0.15)' : 'var(--bg-tertiary)',
-                    cursor: 'pointer', fontSize: '0.75rem',
-                  }}
-                  onClick={() => onReaction(reaction.emoji, hasReacted)}
-                  title={reaction.users.map((u) => u.username).join(', ')}
-                >
-                  <span>{reaction.emoji}</span>
-                  <span style={{ color: hasReacted ? 'var(--accent)' : 'var(--text-secondary)' }}>{reaction.count}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        <div style={{ position: 'relative', display: 'inline-block', marginTop: 2 }}>
-          <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, display: 'flex' }}>
-            <SmilePlus size={12} />
-          </button>
-          {showEmojiPicker && (
-            <EmojiPicker onSelect={(emoji) => { onReaction(emoji, false); setShowEmojiPicker(false); }} onClose={() => setShowEmojiPicker(false)} />
-          )}
-        </div>
       </div>
     </div>
   );
@@ -1051,6 +750,63 @@ function ReadOnlyEventsTab({ items }: { items: PersonalEvent[] }) {
 // ─── Styles ───
 
 const styles: Record<string, React.CSSProperties> = {
+  outerContainer: {
+    display: 'flex',
+    height: '100vh',
+    overflow: 'hidden',
+  },
+  sidebar: {
+    width: 200,
+    flexShrink: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    borderRight: '1px solid var(--border)',
+    background: 'var(--bg-secondary)',
+    overflowY: 'auto',
+  },
+  sidebarLink: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '10px 16px',
+    border: 'none',
+    cursor: 'pointer',
+    color: 'var(--text-primary)',
+    fontSize: '0.85rem',
+    fontWeight: 600,
+    borderRadius: 0,
+    textAlign: 'left',
+    width: '100%',
+    position: 'relative' as const,
+  },
+  unreadBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 18,
+    height: 18,
+    padding: '0 5px',
+    borderRadius: 9,
+    background: 'var(--danger, #ed4245)',
+    color: '#fff',
+    fontSize: '0.65rem',
+    fontWeight: 700,
+    marginLeft: 'auto',
+  },
+  editBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '0.3rem 0.6rem',
+    borderRadius: 'var(--radius)',
+    border: '1px solid var(--border)',
+    background: 'transparent',
+    color: 'var(--text-secondary)',
+    fontSize: '0.72rem',
+    fontWeight: 600,
+    cursor: 'pointer',
+    flexShrink: 0,
+  },
   profileSection: {
     display: 'flex',
     alignItems: 'center',
@@ -1063,7 +819,10 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     gap: 8,
     marginTop: 16,
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
+    overflowX: 'auto',
+    scrollbarWidth: 'none',
+    msOverflowStyle: 'none',
   },
   summaryBadge: {
     display: 'flex',
@@ -1075,6 +834,8 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     fontSize: '0.8rem',
     flex: 1,
+    minWidth: 0,
+    flexShrink: 0,
     justifyContent: 'center',
   },
   actionBtn: {
@@ -1168,18 +929,5 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--text-muted)',
     padding: '2rem',
     fontSize: '0.9rem',
-  },
-  postIconBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 28,
-    height: 28,
-    borderRadius: 'var(--radius)',
-    border: 'none',
-    background: 'var(--bg-tertiary)',
-    color: 'var(--text-secondary)',
-    cursor: 'pointer',
-    padding: 0,
   },
 };

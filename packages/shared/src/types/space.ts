@@ -9,10 +9,12 @@ export interface Space {
   updatedAt: string;
   calendarEnabled?: boolean;
   blogEnabled?: boolean;
+  newsletterEnabled?: boolean;
   isPublic?: boolean;
   baseColor?: string | null;
   accentColor?: string | null;
   textColor?: string | null;
+  publicTheme?: string | null;
 }
 
 export interface CreateSpaceRequest {
@@ -59,14 +61,21 @@ export interface SpaceAdminSettings {
   calendarEnabled: boolean;
   blogEnabled: boolean;
   allowPublicBlog: boolean;
+  newsletterEnabled: boolean;
+  allowPublicNewsletter: boolean;
+  allowPublicNewsletterSubscription: boolean;
+  newsletterTrackingEnabled: boolean;
   isPublic: boolean;
   requireVerifiedEmail: boolean;
   isFeatured: boolean;
   baseColor: string | null;
   accentColor: string | null;
   textColor: string | null;
+  publicTheme: string | null;
   webhooksEnabled: boolean;
   webhookSecret: string | null;
+  publicNavLinks: { label: string; url: string }[];
+  publicNavDisabledFeatures: string[];
 }
 
 export interface PublicSpaceCard {

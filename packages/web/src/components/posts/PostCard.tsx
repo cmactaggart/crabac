@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trash2, Edit3, Eye, MapPin, Users, SmilePlus, MessageCircle, Repeat2, Forward, X } from 'lucide-react';
+import { Trash2, Edit3, Eye, MapPin, SmilePlus, MessageCircle, Repeat2, Forward, X } from 'lucide-react';
 import { Avatar } from '../common/Avatar.js';
 import { EmojiPicker } from '../messages/EmojiPicker.js';
 import { ShareToSpacePicker } from '../common/ShareToSpacePicker.js';
+import { SpaceLinkEmbed, extractSpaceLinks } from '../spaces/SpaceLinkEmbed.js';
 import { usePersonalCollectionsStore } from '../../stores/personalCollections.js';
 import type { UserPost, UserPostComment, PersonalVisibility } from '@crabac/shared';
 
@@ -33,6 +34,83 @@ export function VisibilityBadge({ visibility }: { visibility: PersonalVisibility
       {VISIBILITY_LABELS[visibility]}
     </span>
   );
+}
+
+function renderTextWithMentions(text: string, navigate: (path: string) => void): React.ReactNode {
+  const origin = window.location.origin;
+  const escapedOrigin = origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Matches: markdown links [text](/space/...), @username, full space URLs, or bare /space/... paths
+  // Supports both /space/{id} and /space/slug/{slug}
+  const pattern = new RegExp(
+    `(\\[[^\\]]+\\]\\(\\/space\\/(?:slug\\/[a-zA-Z0-9_-]+|\\d+)\\))|(@[a-zA-Z0-9_-]+)|(${escapedOrigin}\\/space\\/(?:slug\\/[a-zA-Z0-9_-]+|\\d+))|\\/space\\/(?:slug\\/[a-zA-Z0-9_-]+|\\d+)`,
+    'g',
+  );
+
+  const result: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    // Push text before match
+    if (match.index > lastIndex) {
+      result.push(text.slice(lastIndex, match.index));
+    }
+
+    const full = match[0];
+
+    if (match[1]) {
+      // Markdown link [text](/space/{id}) or [text](/space/slug/{slug})
+      const inner = full.match(/^\[([^\]]+)\]\((\/space\/(?:slug\/[a-zA-Z0-9_-]+|\d+))\)$/);
+      if (inner) {
+        result.push(
+          <span
+            key={match.index}
+            style={{ color: 'var(--accent)', fontWeight: 600, cursor: 'pointer' }}
+            onClick={() => navigate(inner[2])}
+          >
+            {inner[1]}
+          </span>,
+        );
+      }
+    } else if (match[2]) {
+      // @username mention
+      const username = full.slice(1);
+      result.push(
+        <span
+          key={match.index}
+          style={{ color: 'var(--accent)', fontWeight: 600, cursor: 'pointer' }}
+          onClick={() => navigate(`/p/${username}`)}
+        >
+          {full}
+        </span>,
+      );
+    } else {
+      // Full or bare space URL — extract the /space/... path
+      const pathMatch = full.match(/(\/space\/(?:slug\/[a-zA-Z0-9_-]+|\d+))/);
+      if (pathMatch) {
+        result.push(
+          <span
+            key={match.index}
+            style={{ color: 'var(--accent)', cursor: 'pointer' }}
+            onClick={() => navigate(pathMatch[1])}
+          >
+            {full}
+          </span>,
+        );
+      } else {
+        result.push(full);
+      }
+    }
+
+    lastIndex = match.index + full.length;
+  }
+
+  // Push remaining text
+  if (lastIndex < text.length) {
+    result.push(text.slice(lastIndex));
+  }
+
+  return result;
 }
 
 export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, editVisibility, onEditBodyChange, onEditVisibilityChange, onStartEdit, onSaveEdit, onCancelEdit, onDelete, onReaction, onFetchComments, onAddComment, onDeleteComment, onCommentReaction, onRepost, onShare, showAuthorLink }: {
@@ -144,10 +222,13 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
         <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '0.75rem', marginBottom: 8, background: 'var(--bg-tertiary)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <Avatar src={post.repostOf.author?.avatarUrl || null} name={post.repostOf.author?.displayName || '?'} size={24} baseColor={post.repostOf.author?.baseColor} accentColor={post.repostOf.author?.accentColor} />
-            <span style={{ fontWeight: 600, fontSize: '0.82rem' }}>{post.repostOf.author?.displayName}</span>
+            <span
+              style={{ fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer' }}
+              onClick={() => post.repostOf?.author?.username && navigate(`/p/${post.repostOf.author.username}`)}
+            >{post.repostOf.author?.displayName}</span>
             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{new Date(post.repostOf.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
           </div>
-          {post.repostOf.body && <div style={{ fontSize: '0.85rem', lineHeight: 1.4, marginBottom: 6, whiteSpace: 'pre-wrap' }}>{post.repostOf.body}</div>}
+          {post.repostOf.body && <div style={{ fontSize: '0.85rem', lineHeight: 1.4, marginBottom: 6, whiteSpace: 'pre-wrap' }}>{renderTextWithMentions(post.repostOf.body, navigate)}</div>}
           {post.repostOf.attachments.filter((a) => a.type === 'image' || a.type === 'video').length > 0 && (
             <div style={{
               display: 'grid',
@@ -193,7 +274,10 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
             </div>
             <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
               {showAuthorLink && post.author?.username && (
-                <span style={{ marginRight: 6 }}>@{post.author.username}</span>
+                <span
+                  style={{ marginRight: 6, color: 'var(--accent)', fontWeight: 600, cursor: 'pointer' }}
+                  onClick={(e) => { e.stopPropagation(); navigate(`/p/${post.author!.username}`); }}
+                >@{post.author.username}</span>
               )}
               {dateStr} at {timeStr}
             </div>
@@ -225,7 +309,7 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
       ) : (
         post.body && (
           <div style={{ fontSize: '0.9rem', lineHeight: 1.5, marginBottom: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-            {post.body}
+            {renderTextWithMentions(post.body, navigate)}
           </div>
         )
       )}
@@ -260,21 +344,13 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
         </div>
       ))}
 
-      {/* Tagged friends */}
-      {post.tags.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 6, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-          <Users size={12} />
-          {post.tags.map((t, i) => (
-            <span key={t.userId}>
-              <span
-                style={{ fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }}
-                onClick={() => navigate(`/p/${t.username}`)}
-              >@{t.username}</span>
-              {i < post.tags.length - 1 && ', '}
-            </span>
-          ))}
-        </div>
-      )}
+      {/* Space link embeds */}
+      {(() => {
+        const spaceRefs = extractSpaceLinks(post.body || '');
+        return spaceRefs.length > 0 && spaceRefs.map((ref) => (
+          <SpaceLinkEmbed key={ref.key} spaceId={ref.type === 'id' ? ref.value : undefined} spaceSlug={ref.type === 'slug' ? ref.value : undefined} />
+        ));
+      })()}
 
       {/* Reaction chips */}
       {post.reactions && post.reactions.length > 0 && (
@@ -432,6 +508,7 @@ export function CommentRow({ comment, currentUserId, postOwnerId, onDelete, onRe
   onDelete: () => void;
   onReaction: (emoji: string, hasReacted: boolean) => void;
 }) {
+  const navigate = useNavigate();
   const canDelete = comment.userId === currentUserId || postOwnerId === currentUserId;
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
@@ -440,7 +517,10 @@ export function CommentRow({ comment, currentUserId, postOwnerId, onDelete, onRe
       <Avatar src={comment.author?.avatarUrl || null} name={comment.author?.displayName || '?'} size={24} baseColor={comment.author?.baseColor} accentColor={comment.author?.accentColor} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontWeight: 600, fontSize: '0.8rem' }}>{comment.author?.displayName}</span>
+          <span
+            style={{ fontWeight: 600, fontSize: '0.8rem', cursor: comment.author?.username ? 'pointer' : undefined, color: comment.author?.username ? 'var(--text-primary)' : undefined }}
+            onClick={comment.author?.username ? () => navigate(`/p/${comment.author!.username}`) : undefined}
+          >{comment.author?.displayName}</span>
           <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
             {new Date(comment.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
           </span>
@@ -450,7 +530,7 @@ export function CommentRow({ comment, currentUserId, postOwnerId, onDelete, onRe
             </button>
           )}
         </div>
-        <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.4, marginTop: 2 }}>{comment.body}</div>
+        <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.4, marginTop: 2 }}>{renderTextWithMentions(comment.body, navigate)}</div>
 
         {/* Comment reactions */}
         {comment.reactions && comment.reactions.length > 0 && (

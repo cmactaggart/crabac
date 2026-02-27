@@ -6,6 +6,7 @@ const DEFAULTS: UserPreferences = {
   defaultVisibility: 'private',
   profileVisibility: 'spaces',
   onboardingCompleted: false,
+  newsletterEnabled: false,
 };
 
 export async function getPreferences(userId: string): Promise<UserPreferences> {
@@ -20,6 +21,7 @@ export async function getPreferences(userId: string): Promise<UserPreferences> {
     defaultVisibility: row.default_visibility || 'private',
     profileVisibility: row.profile_visibility || 'spaces',
     onboardingCompleted: !!row.onboarding_completed,
+    newsletterEnabled: !!row.newsletter_enabled,
   };
 }
 
@@ -32,6 +34,7 @@ export async function updatePreferences(
   if (data.defaultVisibility !== undefined) updates.default_visibility = data.defaultVisibility;
   if (data.profileVisibility !== undefined) updates.profile_visibility = data.profileVisibility;
   if (data.onboardingCompleted !== undefined) updates.onboarding_completed = data.onboardingCompleted;
+  if (data.newsletterEnabled !== undefined) updates.newsletter_enabled = data.newsletterEnabled;
 
   if (Object.keys(updates).length > 0) {
     await db('user_preferences')

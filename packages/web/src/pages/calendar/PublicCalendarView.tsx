@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { boardApi } from '../../lib/boardApi.js';
+import { usePublicTheme } from '../../contexts/PublicThemeContext.js';
 import type { CalendarCategory, CalendarEvent } from '@crabac/shared';
 
 interface SpaceInfo {
@@ -43,8 +44,237 @@ function formatDateStr(d: Date): string {
   return formatDateKey(d);
 }
 
+function useStyles() {
+  const theme = usePublicTheme();
+  const c = theme.colors;
+
+  return useMemo((): Record<string, React.CSSProperties> => ({
+    status: { textAlign: 'center', padding: 40, color: c.mutedText },
+    error: { textAlign: 'center', padding: 40, color: '#c53030' },
+    banner: { marginBottom: 24 },
+    spaceName: { margin: 0, fontSize: '1.5rem', color: c.headingColor, fontWeight: 700 },
+    description: { margin: '6px 0 0', color: c.secondaryText, fontSize: '0.9rem' },
+
+    calContainer: {
+      background: c.contentBg,
+      borderRadius: 10,
+      border: `1px solid ${c.contentBorder}`,
+      overflow: 'hidden',
+    },
+    calHeader: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: '12px 16px',
+      borderBottom: `1px solid ${c.contentBorder}`,
+    },
+    calTitle: { margin: 0, fontSize: '1.1rem', fontWeight: 700, color: c.headingColor },
+    navBtn: {
+      background: 'none',
+      border: `1px solid ${c.inputBorder}`,
+      borderRadius: 6,
+      color: c.secondaryText,
+      cursor: 'pointer',
+      padding: '4px 8px',
+      display: 'flex',
+      alignItems: 'center',
+    },
+    todayBtn: {
+      background: '#f5f5f5',
+      border: `1px solid ${c.inputBorder}`,
+      borderRadius: 6,
+      color: c.pageText,
+      cursor: 'pointer',
+      padding: '4px 12px',
+      fontSize: '0.8rem',
+      fontWeight: 600,
+    },
+    weekdayRow: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(7, 1fr)',
+      borderBottom: `1px solid ${c.contentBorder}`,
+    },
+    weekdayCell: {
+      padding: '6px 0',
+      textAlign: 'center',
+      fontSize: '0.75rem',
+      fontWeight: 700,
+      color: c.mutedText,
+      textTransform: 'uppercase',
+    },
+    grid: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(7, 1fr)',
+      position: 'relative',
+    },
+    loadingOverlay: {
+      position: 'absolute',
+      inset: 0,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'rgba(255,255,255,0.6)',
+      zIndex: 1,
+    },
+    cell: {
+      minHeight: 80,
+      padding: 4,
+      cursor: 'pointer',
+      border: '2px solid transparent',
+      borderRadius: 4,
+      display: 'flex',
+      flexDirection: 'column',
+      transition: 'background 0.1s',
+    },
+    dayNum: {
+      fontSize: '0.75rem',
+      fontWeight: 600,
+      color: c.pageText,
+      marginBottom: 2,
+      lineHeight: 1,
+    },
+    eventList: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 1,
+      flex: 1,
+      minWidth: 0,
+      overflow: 'hidden',
+    },
+    eventBar: {
+      fontSize: '0.65rem',
+      color: '#fff',
+      padding: '1px 4px',
+      borderRadius: 3,
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
+      lineHeight: 1.4,
+    },
+    overflow: {
+      fontSize: '0.6rem',
+      color: c.mutedText,
+      padding: '0 4px',
+    },
+
+    // Overlay shared
+    overlay: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0,0,0,0.4)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 200,
+    },
+    panel: {
+      background: c.contentBg,
+      borderRadius: 10,
+      width: 380,
+      maxWidth: '90vw',
+      maxHeight: '60vh',
+      display: 'flex',
+      flexDirection: 'column',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+    },
+    panelHeader: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: '14px 16px',
+      borderBottom: `1px solid ${c.contentBorder}`,
+      gap: 12,
+    },
+    closeBtn: {
+      background: 'none',
+      border: 'none',
+      color: c.mutedText,
+      cursor: 'pointer',
+      padding: 4,
+      borderRadius: 6,
+      flexShrink: 0,
+    },
+    panelBody: {
+      padding: '8px 12px 12px',
+      overflowY: 'auto',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 4,
+    },
+    eventRow: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      padding: '8px 10px',
+      background: 'none',
+      border: 'none',
+      borderRadius: 6,
+      cursor: 'pointer',
+      textAlign: 'left',
+      width: '100%',
+      color: c.pageText,
+    },
+    dot: {
+      width: 10,
+      height: 10,
+      borderRadius: '50%',
+      flexShrink: 0,
+    },
+    eventRowName: {
+      fontSize: '0.9rem',
+      fontWeight: 600,
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
+      color: c.headingColor,
+    },
+    eventRowMeta: {
+      display: 'flex',
+      gap: 8,
+      fontSize: '0.75rem',
+      color: c.mutedText,
+    },
+
+    // Detail modal
+    detailModal: {
+      background: c.contentBg,
+      borderRadius: 10,
+      width: 480,
+      maxWidth: '90vw',
+      maxHeight: '80vh',
+      display: 'flex',
+      flexDirection: 'column',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+    },
+    detailBody: {
+      padding: '16px',
+      overflowY: 'auto',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8,
+    },
+    detailRow: {
+      display: 'flex',
+      gap: 12,
+      fontSize: '0.9rem',
+      color: c.pageText,
+    },
+    detailLabel: {
+      fontSize: '0.7rem',
+      fontWeight: 700,
+      textTransform: 'uppercase',
+      color: c.mutedText,
+      letterSpacing: '0.05em',
+      minWidth: 80,
+    },
+  }), [c]);
+}
+
 export function PublicCalendarView() {
   const { spaceSlug } = useParams();
+  const theme = usePublicTheme();
+  const c = theme.colors;
+  const s = useStyles();
 
   const [space, setSpace] = useState<SpaceInfo | null>(null);
   const [categories, setCategories] = useState<CalendarCategory[]>([]);
@@ -182,7 +412,7 @@ export function PublicCalendarView() {
         <div style={s.grid}>
           {eventsLoading && (
             <div style={s.loadingOverlay}>
-              <span style={{ color: '#999' }}>Loading...</span>
+              <span style={{ color: c.mutedText }}>Loading...</span>
             </div>
           )}
           {dates.map((date, i) => {
@@ -199,14 +429,14 @@ export function PublicCalendarView() {
                 style={{
                   ...s.cell,
                   opacity: isCurrentMonth ? 1 : 0.35,
-                  background: isSelected ? '#e8f0fe' : '#fff',
-                  borderColor: isToday ? '#4f46e5' : 'transparent',
+                  background: isSelected ? '#e8f0fe' : c.contentBg,
+                  borderColor: isToday ? c.accent : 'transparent',
                 }}
               >
                 <span style={{
                   ...s.dayNum,
                   ...(isToday ? {
-                    background: '#4f46e5',
+                    background: c.accent,
                     color: '#fff',
                     borderRadius: '50%',
                     width: 24,
@@ -224,7 +454,7 @@ export function PublicCalendarView() {
                       key={ev.id}
                       style={{
                         ...s.eventBar,
-                        background: ev.category?.color || '#4f46e5',
+                        background: ev.category?.color || c.accent,
                       }}
                       title={ev.name}
                     >
@@ -273,6 +503,10 @@ function DayPanel({ date, events, onClose, onEventClick }: {
   onClose: () => void;
   onEventClick: (ev: CalendarEvent) => void;
 }) {
+  const theme = usePublicTheme();
+  const c = theme.colors;
+  const s = useStyles();
+
   const d = new Date(date + 'T00:00:00');
   const label = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
@@ -280,12 +514,12 @@ function DayPanel({ date, events, onClose, onEventClick }: {
     <div style={s.overlay} onClick={onClose}>
       <div style={s.panel} onClick={(e) => e.stopPropagation()}>
         <div style={s.panelHeader}>
-          <h3 style={{ margin: 0, fontSize: '1rem', color: '#111' }}>{label}</h3>
+          <h3 style={{ margin: 0, fontSize: '1rem', color: c.headingColor }}>{label}</h3>
           <button onClick={onClose} style={s.closeBtn}><X size={18} /></button>
         </div>
         <div style={s.panelBody}>
           {events.length === 0 ? (
-            <p style={{ color: '#999', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>
+            <p style={{ color: c.mutedText, fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>
               No events on this day
             </p>
           ) : (
@@ -295,7 +529,7 @@ function DayPanel({ date, events, onClose, onEventClick }: {
                 onClick={() => onEventClick(ev)}
                 style={s.eventRow}
               >
-                <span style={{ ...s.dot, background: ev.category?.color || '#4f46e5' }} />
+                <span style={{ ...s.dot, background: ev.category?.color || c.accent }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={s.eventRowName}>{ev.name}</div>
                   <div style={s.eventRowMeta}>
@@ -318,6 +552,10 @@ function EventDetail({ event, onClose }: {
   event: CalendarEvent;
   onClose: () => void;
 }) {
+  const theme = usePublicTheme();
+  const c = theme.colors;
+  const s = useStyles();
+
   const d = new Date(event.eventDate + 'T00:00:00');
   const dateLabel = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
@@ -326,7 +564,7 @@ function EventDetail({ event, onClose }: {
       <div style={s.detailModal} onClick={(e) => e.stopPropagation()}>
         <div style={s.panelHeader}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#111' }}>{event.name}</h3>
+            <h3 style={{ margin: 0, fontSize: '1.1rem', color: c.headingColor }}>{event.name}</h3>
             {event.category && (
               <span style={{
                 display: 'inline-block',
@@ -347,24 +585,24 @@ function EventDetail({ event, onClose }: {
         <div style={s.detailBody}>
           <div style={s.detailRow}>
             <span style={s.detailLabel}>Date</span>
-            <span style={{ color: '#333' }}>{dateLabel}</span>
+            <span style={{ color: c.pageText }}>{dateLabel}</span>
           </div>
           {event.eventTime && (
             <div style={s.detailRow}>
               <span style={s.detailLabel}>Time</span>
-              <span style={{ color: '#333' }}>{event.eventTime}</span>
+              <span style={{ color: c.pageText }}>{event.eventTime}</span>
             </div>
           )}
           {event.creator && (
             <div style={s.detailRow}>
               <span style={s.detailLabel}>Created by</span>
-              <span style={{ color: '#333' }}>{event.creator.displayName}</span>
+              <span style={{ color: c.pageText }}>{event.creator.displayName}</span>
             </div>
           )}
           {event.description && (
             <div style={{ marginTop: 8 }}>
               <span style={s.detailLabel}>Description</span>
-              <p style={{ margin: '4px 0 0', fontSize: '0.9rem', color: '#555', whiteSpace: 'pre-wrap' }}>
+              <p style={{ margin: '4px 0 0', fontSize: '0.9rem', color: c.secondaryText, whiteSpace: 'pre-wrap' }}>
                 {event.description}
               </p>
             </div>
@@ -374,226 +612,3 @@ function EventDetail({ event, onClose }: {
     </div>
   );
 }
-
-// ─── Styles ───
-
-const s: Record<string, React.CSSProperties> = {
-  status: { textAlign: 'center', padding: 40, color: '#999' },
-  error: { textAlign: 'center', padding: 40, color: '#c53030' },
-  banner: { marginBottom: 24 },
-  spaceName: { margin: 0, fontSize: '1.5rem', color: '#111', fontWeight: 700 },
-  description: { margin: '6px 0 0', color: '#666', fontSize: '0.9rem' },
-
-  calContainer: {
-    background: '#fff',
-    borderRadius: 10,
-    border: '1px solid #e5e7eb',
-    overflow: 'hidden',
-  },
-  calHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '12px 16px',
-    borderBottom: '1px solid #e5e7eb',
-  },
-  calTitle: { margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#111' },
-  navBtn: {
-    background: 'none',
-    border: '1px solid #ddd',
-    borderRadius: 6,
-    color: '#555',
-    cursor: 'pointer',
-    padding: '4px 8px',
-    display: 'flex',
-    alignItems: 'center',
-  },
-  todayBtn: {
-    background: '#f5f5f5',
-    border: '1px solid #ddd',
-    borderRadius: 6,
-    color: '#333',
-    cursor: 'pointer',
-    padding: '4px 12px',
-    fontSize: '0.8rem',
-    fontWeight: 600,
-  },
-  weekdayRow: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(7, 1fr)',
-    borderBottom: '1px solid #e5e7eb',
-  },
-  weekdayCell: {
-    padding: '6px 0',
-    textAlign: 'center',
-    fontSize: '0.75rem',
-    fontWeight: 700,
-    color: '#999',
-    textTransform: 'uppercase',
-  },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(7, 1fr)',
-    position: 'relative',
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    inset: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: 'rgba(255,255,255,0.6)',
-    zIndex: 1,
-  },
-  cell: {
-    minHeight: 80,
-    padding: 4,
-    cursor: 'pointer',
-    border: '2px solid transparent',
-    borderRadius: 4,
-    display: 'flex',
-    flexDirection: 'column',
-    transition: 'background 0.1s',
-  },
-  dayNum: {
-    fontSize: '0.75rem',
-    fontWeight: 600,
-    color: '#333',
-    marginBottom: 2,
-    lineHeight: 1,
-  },
-  eventList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 1,
-    flex: 1,
-    minWidth: 0,
-    overflow: 'hidden',
-  },
-  eventBar: {
-    fontSize: '0.65rem',
-    color: '#fff',
-    padding: '1px 4px',
-    borderRadius: 3,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    lineHeight: 1.4,
-  },
-  overflow: {
-    fontSize: '0.6rem',
-    color: '#999',
-    padding: '0 4px',
-  },
-
-  // Overlay shared
-  overlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,0.4)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 200,
-  },
-  panel: {
-    background: '#fff',
-    borderRadius: 10,
-    width: 380,
-    maxWidth: '90vw',
-    maxHeight: '60vh',
-    display: 'flex',
-    flexDirection: 'column',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
-  },
-  panelHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '14px 16px',
-    borderBottom: '1px solid #e5e7eb',
-    gap: 12,
-  },
-  closeBtn: {
-    background: 'none',
-    border: 'none',
-    color: '#999',
-    cursor: 'pointer',
-    padding: 4,
-    borderRadius: 6,
-    flexShrink: 0,
-  },
-  panelBody: {
-    padding: '8px 12px 12px',
-    overflowY: 'auto',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
-  },
-  eventRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    padding: '8px 10px',
-    background: 'none',
-    border: 'none',
-    borderRadius: 6,
-    cursor: 'pointer',
-    textAlign: 'left',
-    width: '100%',
-    color: '#333',
-  },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: '50%',
-    flexShrink: 0,
-  },
-  eventRowName: {
-    fontSize: '0.9rem',
-    fontWeight: 600,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    color: '#111',
-  },
-  eventRowMeta: {
-    display: 'flex',
-    gap: 8,
-    fontSize: '0.75rem',
-    color: '#999',
-  },
-
-  // Detail modal
-  detailModal: {
-    background: '#fff',
-    borderRadius: 10,
-    width: 480,
-    maxWidth: '90vw',
-    maxHeight: '80vh',
-    display: 'flex',
-    flexDirection: 'column',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
-  },
-  detailBody: {
-    padding: '16px',
-    overflowY: 'auto',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-  },
-  detailRow: {
-    display: 'flex',
-    gap: 12,
-    fontSize: '0.9rem',
-    color: '#333',
-  },
-  detailLabel: {
-    fontSize: '0.7rem',
-    fontWeight: 700,
-    textTransform: 'uppercase',
-    color: '#999',
-    letterSpacing: '0.05em',
-    minWidth: 80,
-  },
-};

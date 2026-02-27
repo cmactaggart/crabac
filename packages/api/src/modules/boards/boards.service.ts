@@ -2,6 +2,60 @@ import { db } from '../../database/connection.js';
 import { NotFoundError } from '../../lib/errors.js';
 import * as calendarService from '../calendar/calendar.service.js';
 
+export async function getPublicSiteConfig(slug: string) {
+  const space = await db('spaces').where('slug', slug).first();
+  if (!space) throw new NotFoundError('Space');
+
+  const settings = await db('space_settings').where('space_id', space.id).first();
+
+  const enabledFeatures: string[] = [];
+  if (settings?.allow_public_boards) enabledFeatures.push('boards');
+  if (settings?.allow_public_galleries) enabledFeatures.push('gallery');
+  if (settings?.allow_public_routes) enabledFeatures.push('routes');
+  if (settings?.allow_public_calendar) enabledFeatures.push('calendar');
+  if (settings?.allow_public_blog) enabledFeatures.push('blog');
+  if (settings?.allow_public_newsletter) enabledFeatures.push('newsletter');
+
+  if (enabledFeatures.length === 0) throw new NotFoundError('Space');
+
+  let navLinks: { label: string; url: string }[] = [];
+  if (settings?.public_nav_links) {
+    try {
+      const parsed = typeof settings.public_nav_links === 'string'
+        ? JSON.parse(settings.public_nav_links)
+        : settings.public_nav_links;
+      navLinks = Array.isArray(parsed) ? parsed : [];
+    } catch { /* ignore */ }
+  }
+
+  let disabledFeatures: string[] = [];
+  if (settings?.public_nav_disabled_features) {
+    try {
+      const parsed = typeof settings.public_nav_disabled_features === 'string'
+        ? JSON.parse(settings.public_nav_disabled_features)
+        : settings.public_nav_disabled_features;
+      disabledFeatures = Array.isArray(parsed) ? parsed : [];
+    } catch { /* ignore */ }
+  }
+
+  // navFeatures = enabled features minus those the admin has hidden from the navbar
+  const navFeatures = enabledFeatures.filter((f) => !disabledFeatures.includes(f));
+
+  return {
+    space: {
+      id: space.id,
+      name: space.name,
+      slug: space.slug,
+      description: space.description,
+      iconUrl: space.icon_url,
+      publicTheme: settings?.public_theme || null,
+    },
+    enabledFeatures,
+    navFeatures,
+    navLinks,
+  };
+}
+
 export async function getPublicSpace(slug: string) {
   const space = await db('spaces').where('slug', slug).first();
   if (!space) throw new NotFoundError('Space');
@@ -16,6 +70,7 @@ export async function getPublicSpace(slug: string) {
     slug: space.slug,
     description: space.description,
     iconUrl: space.icon_url,
+    publicTheme: settings?.public_theme || null,
   };
 }
 
@@ -408,6 +463,7 @@ export async function getPublicCalendarSpace(slug: string) {
       slug: space.slug,
       description: space.description,
       iconUrl: space.icon_url,
+      publicTheme: settings?.public_theme || null,
     },
     categories,
     allowAnonymousBrowsing: !!settings.allow_anonymous_browsing,

@@ -10,6 +10,7 @@ import { ReportModal } from '../moderation/ReportModal.js';
 import { Avatar } from '../common/Avatar.js';
 import { Markdown } from '../common/Markdown.js';
 import { MessageLinkEmbed, extractMessageLinks } from './MessageLinkEmbed.js';
+import { SpaceLinkEmbed, extractSpaceLinks } from '../spaces/SpaceLinkEmbed.js';
 import { EmojiPicker } from './EmojiPicker.js';
 import { ContextMenu, useLongPress, type ContextMenuItem } from '../common/ContextMenu.js';
 import type { Message, Attachment, GpxTrackMetadata } from '@crabac/shared';
@@ -277,6 +278,7 @@ function MessageItem({
 
   const navigate = useNavigate();
   const linkedMessageIds = extractMessageLinks(message.content);
+  const linkedSpaceRefs = extractSpaceLinks(message.content);
 
   const handleContentClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
@@ -447,6 +449,9 @@ function MessageItem({
                         <Markdown content={message.content} />
                         {linkedMessageIds.map((mid) => (
                           <MessageLinkEmbed key={mid} messageId={mid} />
+                        ))}
+                        {linkedSpaceRefs.map((ref) => (
+                          <SpaceLinkEmbed key={ref.key} spaceId={ref.type === 'id' ? ref.value : undefined} spaceSlug={ref.type === 'slug' ? ref.value : undefined} />
                         ))}
                       </>
                     );

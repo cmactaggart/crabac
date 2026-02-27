@@ -41,4 +41,11 @@ export const config = {
   adminEmails: (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean),
 
   plugins: (process.env.PLUGINS || '').split(',').map(p => p.trim()).filter(Boolean),
+
+  newsletter: {
+    sesRateLimit: parseInt(process.env.NEWSLETTER_SES_RATE_LIMIT || '14', 10),
+    dailyDigestHour: parseInt(process.env.NEWSLETTER_DAILY_DIGEST_HOUR || '8', 10),
+    weeklyDigestDay: parseInt(process.env.NEWSLETTER_WEEKLY_DIGEST_DAY || '1', 10), // Monday
+    eventHorizonDays: parseInt(process.env.NEWSLETTER_EVENT_HORIZON_DAYS || '14', 10),
+  },
 } as const;

@@ -94,6 +94,20 @@ spacesRoutes.post(
   },
 );
 
+// Get space embed data (member or public access)
+spacesRoutes.get(
+  '/:spaceId/embed',
+  requireMemberOrPublicAccess,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const embed = await spacesService.getSpaceEmbed(req.params.spaceId);
+      res.json(embed);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // Get space details (member or public access)
 spacesRoutes.get(
   '/:spaceId',

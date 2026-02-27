@@ -103,4 +103,5 @@ export interface UserPreferences {
   defaultVisibility: import('./personal-collection.js').PersonalVisibility;
   profileVisibility: import('./personal-collection.js').PersonalVisibility;
   onboardingCompleted: boolean;
+  newsletterEnabled: boolean;
 }

@@ -13,7 +13,7 @@ interface Props {
   onClose: () => void;
 }
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 9;
 
 const SUGGESTED_CHANNELS = ['introductions', 'off-topic', 'help', 'links', 'announcements'];
 
@@ -57,7 +57,11 @@ export function NewSpaceOnboardingModal({ onClose }: Props) {
   const [blogEnabled, setBlogEnabled] = useState(false);
   const [allowPublicBlog, setAllowPublicBlog] = useState(false);
 
-  // Step 7: Specialty Channels
+  // Step 7: Newsletter
+  const [newsletterEnabled, setNewsletterEnabled] = useState(false);
+  const [allowPublicNewsletter, setAllowPublicNewsletter] = useState(false);
+
+  // Step 8: Specialty Channels
   const [galleryExpanded, setGalleryExpanded] = useState(false);
   const [forumExpanded, setForumExpanded] = useState(false);
   const [routeExpanded, setRouteExpanded] = useState(false);
@@ -248,6 +252,26 @@ export function NewSpaceOnboardingModal({ onClose }: Props) {
     setLoading(true);
     setError('');
     try {
+      if (newsletterEnabled) {
+        await api(`/spaces/${space.id}/admin-settings`, {
+          method: 'PUT',
+          body: JSON.stringify({ newsletterEnabled: true, allowPublicNewsletter }),
+        });
+        addFeature('Newsletter');
+      }
+      setStep(8);
+    } catch (err: any) {
+      setError(err.message || 'Failed to save newsletter settings');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStep8 = async () => {
+    if (!space) return;
+    setLoading(true);
+    setError('');
+    try {
       const adminUpdate: Record<string, boolean> = {};
 
       // Fetch existing channels to avoid duplicate creation on retry
@@ -307,7 +331,7 @@ export function NewSpaceOnboardingModal({ onClose }: Props) {
       if (forums.length > 0) addFeature(`${forums.length} forum channel${forums.length > 1 ? 's' : ''}`);
       if (routes.length > 0) addFeature(`${routes.length} route channel${routes.length > 1 ? 's' : ''}`);
 
-      setStep(8);
+      setStep(9);
     } catch (err: any) {
       setError(err.message || 'Failed to create specialty channels');
     } finally {
@@ -315,7 +339,7 @@ export function NewSpaceOnboardingModal({ onClose }: Props) {
     }
   };
 
-  const handleStep8 = async () => {
+  const handleStep9 = async () => {
     if (!space) return;
     setLoading(true);
     setError('');
@@ -340,7 +364,7 @@ export function NewSpaceOnboardingModal({ onClose }: Props) {
         });
         addFeature('Welcome message workflow');
       }
-      setStep(9); // Done screen
+      setStep(10); // Done screen
     } catch (err: any) {
       setError(err.message || 'Failed to create workflow');
     } finally {
@@ -396,6 +420,7 @@ export function NewSpaceOnboardingModal({ onClose }: Props) {
       case 6: handleStep6(); break;
       case 7: handleStep7(); break;
       case 8: handleStep8(); break;
+      case 9: handleStep9(); break;
     }
   };
 
@@ -458,7 +483,8 @@ export function NewSpaceOnboardingModal({ onClose }: Props) {
       case 6: return renderStep6();
       case 7: return renderStep7();
       case 8: return renderStep8();
-      case 9: return renderDone();
+      case 9: return renderStep9();
+      case 10: return renderDone();
       default: return null;
     }
   };
@@ -885,6 +911,37 @@ export function NewSpaceOnboardingModal({ onClose }: Props) {
 
   const renderStep7 = () => (
     <div style={s.stepContent}>
+      <h2 style={s.stepTitle}>Newsletter</h2>
+      <p style={s.stepDesc}>Send email newsletters to your community and public subscribers.</p>
+
+      <label style={s.toggleRow}>
+        <input
+          type="checkbox"
+          checked={newsletterEnabled}
+          onChange={(e) => setNewsletterEnabled(e.target.checked)}
+          style={s.checkbox}
+        />
+        Enable Newsletter
+      </label>
+
+      {newsletterEnabled && (
+        <>
+          <label style={s.toggleRow}>
+            <input
+              type="checkbox"
+              checked={allowPublicNewsletter}
+              onChange={(e) => setAllowPublicNewsletter(e.target.checked)}
+              style={s.checkbox}
+            />
+            Allow public newsletter page
+          </label>
+        </>
+      )}
+    </div>
+  );
+
+  const renderStep8 = () => (
+    <div style={s.stepContent}>
       <h2 style={s.stepTitle}>Specialty Channels</h2>
       <p style={s.stepDesc}>Add galleries, forums, or route libraries.</p>
 
@@ -894,7 +951,7 @@ export function NewSpaceOnboardingModal({ onClose }: Props) {
     </div>
   );
 
-  const renderStep8 = () => (
+  const renderStep9 = () => (
     <div style={s.stepContent}>
       <h2 style={s.stepTitle}>Welcome Message</h2>
       <p style={s.stepDesc}>Automatically greet new members when they join.</p>

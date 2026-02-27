@@ -111,6 +111,19 @@ boardsRoutes.get(
   },
 );
 
+// Public site config (features, nav links, theme) for all public page types
+boardsRoutes.get(
+  '/site-config/:spaceSlug',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const data = await boardsService.getPublicSiteConfig(req.params.spaceSlug);
+      res.json(data);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // List public channels for a space
 boardsRoutes.get(
   '/:spaceSlug',
@@ -127,6 +140,7 @@ boardsRoutes.get(
           slug: space.slug,
           description: space.description,
           iconUrl: space.icon_url,
+          publicTheme: (req as any).boardSettings?.public_theme || null,
         },
         channels,
       });

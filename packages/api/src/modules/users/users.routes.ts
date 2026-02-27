@@ -171,7 +171,8 @@ usersRoutes.get('/by-username/:username', async (req: Request, res: Response, ne
     // Check if viewer can see this profile
     const { canViewProfile } = await import('../personal-collections/privacy.service.js');
     const canView = await canViewProfile(user.id, req.user!.userId);
-    res.json({ ...user, canViewProfile: canView });
+    const prefs = await preferencesService.getPreferences(user.id);
+    res.json({ ...user, canViewProfile: canView, newsletterEnabled: prefs.newsletterEnabled });
   } catch (err) {
     next(err);
   }

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { boardApi } from '../../lib/boardApi.js';
+import { usePublicTheme } from '../../contexts/PublicThemeContext.js';
 
 interface BoardChannel {
   id: string;
   name: string;
   topic: string | null;
+  type?: string;
 }
 
 interface SpaceInfo {
@@ -18,6 +20,9 @@ interface SpaceInfo {
 
 export function BoardHome() {
   const { spaceSlug } = useParams();
+  const navigate = useNavigate();
+  const theme = usePublicTheme();
+  const c = theme.colors;
   const [space, setSpace] = useState<SpaceInfo | null>(null);
   const [channels, setChannels] = useState<BoardChannel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +35,12 @@ export function BoardHome() {
       .then((data) => {
         setSpace(data.space);
         setChannels(data.channels);
+        // Auto-redirect when only one board channel exists
+        const forumChannels = data.channels.filter((ch) => !ch.type || ch.type === 'forum');
+        if (forumChannels.length === 1) {
+          navigate(`/boards/${spaceSlug}/${forumChannels[0].name}`, { replace: true });
+          return;
+        }
         setLoading(false);
       })
       .catch((err) => {
@@ -38,95 +49,110 @@ export function BoardHome() {
       });
   }, [spaceSlug]);
 
-  if (loading) return <div style={styles.loading}>Loading...</div>;
-  if (error) return <div style={styles.error}>{error}</div>;
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: c.mutedText }}>Loading...</div>;
+  if (error) return <div style={{ textAlign: 'center', padding: 40, color: '#c53030' }}>{error}</div>;
+
+  const isTable = theme.layout.forumChannelList === 'table';
 
   return (
     <div>
-      <div style={styles.banner}>
-        <h1 style={styles.spaceName}>{space?.name}</h1>
-        {space?.description && <p style={styles.description}>{space.description}</p>}
+      <div style={{
+        marginBottom: 20,
+        padding: '16px 20px',
+        background: c.contentBg,
+        border: `1px solid ${c.contentBorder}`,
+        borderRadius: c.contentRadius,
+      }}>
+        <h1 style={{ margin: 0, fontSize: '1.4rem', color: c.headingColor }}>{space?.name}</h1>
+        {space?.description && <p style={{ margin: '8px 0 0', color: c.secondaryText, fontSize: '0.9rem' }}>{space.description}</p>}
       </div>
 
-      <table style={styles.table}>
-        <thead>
-          <tr>
-            <th style={styles.th}>Forum</th>
-            <th style={{ ...styles.th, width: 200 }}>Description</th>
-          </tr>
-        </thead>
-        <tbody>
-          {channels.map((ch) => (
-            <tr key={ch.id}>
-              <td style={styles.td}>
-                <Link to={`/boards/${spaceSlug}/${ch.name}`} style={styles.forumLink}>
-                  {ch.name}
-                </Link>
-              </td>
-              <td style={{ ...styles.td, color: '#666', fontSize: '0.85rem' }}>
-                {ch.topic || '-'}
-              </td>
-            </tr>
-          ))}
-          {channels.length === 0 && (
+      {isTable ? (
+        <table style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          background: c.contentBg,
+          border: `1px solid ${c.contentBorder}`,
+          borderRadius: c.contentRadius,
+          overflow: 'hidden',
+        }}>
+          <thead>
             <tr>
-              <td colSpan={2} style={{ ...styles.td, textAlign: 'center', color: '#999' }}>
-                No public forums available
-              </td>
+              <th style={{
+                textAlign: 'left',
+                padding: '10px 14px',
+                background: c.tableHeaderBg,
+                color: c.tableHeaderColor,
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}>Forum</th>
+              <th style={{
+                textAlign: 'left',
+                padding: '10px 14px',
+                background: c.tableHeaderBg,
+                color: c.tableHeaderColor,
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                width: 200,
+              }}>Description</th>
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {channels.map((ch) => (
+              <tr key={ch.id}>
+                <td style={{ padding: '10px 14px', borderBottom: `1px solid ${c.contentBorder}` }}>
+                  <Link to={`/boards/${spaceSlug}/${ch.name}`} style={{ color: c.linkColor, fontWeight: 600, textDecoration: 'none', fontSize: '0.95rem' }}>
+                    {ch.name}
+                  </Link>
+                </td>
+                <td style={{ padding: '10px 14px', borderBottom: `1px solid ${c.contentBorder}`, color: c.secondaryText, fontSize: '0.85rem' }}>
+                  {ch.topic || '-'}
+                </td>
+              </tr>
+            ))}
+            {channels.length === 0 && (
+              <tr>
+                <td colSpan={2} style={{ padding: '10px 14px', borderBottom: `1px solid ${c.contentBorder}`, textAlign: 'center', color: c.mutedText }}>
+                  No public forums available
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      ) : (
+        channels.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 40, color: c.mutedText, fontSize: '0.9rem' }}>
+            No public forums available
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
+            {channels.map((ch) => (
+              <Link
+                key={ch.id}
+                to={`/boards/${spaceSlug}/${ch.name}`}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  padding: '20px 16px',
+                  background: c.contentBg,
+                  border: `1px solid ${c.contentBorder}`,
+                  borderRadius: c.contentRadius,
+                  textDecoration: 'none',
+                  color: 'inherit',
+                  transition: 'box-shadow 0.15s',
+                }}
+              >
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: c.headingColor }}>{ch.name}</h3>
+                {ch.topic && <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: c.mutedText }}>{ch.topic}</p>}
+              </Link>
+            ))}
+          </div>
+        )
+      )}
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  loading: { textAlign: 'center', padding: 40, color: '#999' },
-  error: { textAlign: 'center', padding: 40, color: '#c53030' },
-  banner: {
-    marginBottom: 20,
-    padding: '16px 20px',
-    background: '#fff',
-    border: '1px solid #ccc',
-    borderRadius: 4,
-  },
-  spaceName: {
-    margin: 0,
-    fontSize: '1.4rem',
-    color: '#2d3748',
-  },
-  description: {
-    margin: '8px 0 0',
-    color: '#666',
-    fontSize: '0.9rem',
-  },
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    background: '#fff',
-    border: '1px solid #ccc',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  th: {
-    textAlign: 'left',
-    padding: '10px 14px',
-    background: '#4a5568',
-    color: '#fff',
-    fontSize: '0.8rem',
-    fontWeight: 700,
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-  },
-  td: {
-    padding: '10px 14px',
-    borderBottom: '1px solid #e2e8f0',
-  },
-  forumLink: {
-    color: '#2b6cb0',
-    fontWeight: 600,
-    textDecoration: 'none',
-    fontSize: '0.95rem',
-  },
-};

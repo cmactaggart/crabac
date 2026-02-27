@@ -3,11 +3,14 @@ import { Link, useParams } from 'react-router-dom';
 import { Pin, Lock, Send } from 'lucide-react';
 import { boardApi } from '../../lib/boardApi.js';
 import { useBoardAuthStore } from '../../stores/boardAuth.js';
+import { usePublicTheme } from '../../contexts/PublicThemeContext.js';
 import type { ForumThread, Message } from '@crabac/shared';
 
 export function BoardThreadDetail() {
   const { spaceSlug, channelName, threadId } = useParams();
   const user = useBoardAuthStore((s) => s.user);
+  const theme = usePublicTheme();
+  const c = theme.colors;
   const [thread, setThread] = useState<ForumThread | null>(null);
   const [posts, setPosts] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,61 +50,77 @@ export function BoardThreadDetail() {
     }
   };
 
-  if (loading) return <div style={styles.loading}>Loading...</div>;
-  if (error) return <div style={styles.error}>{error}</div>;
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: c.mutedText }}>Loading...</div>;
+  if (error) return <div style={{ textAlign: 'center', padding: 40, color: '#c53030' }}>{error}</div>;
   if (!thread) return null;
+
+  const isSidebar = theme.layout.forumPostLayout === 'sidebar';
 
   return (
     <div>
-      <div style={styles.breadcrumbs}>
-        <Link to={`/boards/${spaceSlug}`} style={styles.crumbLink}>Board</Link>
+      <div style={{ fontSize: '0.85rem', marginBottom: 16, color: c.mutedText }}>
+        <Link to={`/boards/${spaceSlug}`} style={{ color: c.linkColor, textDecoration: 'none' }}>Board</Link>
         {' / '}
-        <Link to={`/boards/${spaceSlug}/${channelName}`} style={styles.crumbLink}>{channelName}</Link>
+        <Link to={`/boards/${spaceSlug}/${channelName}`} style={{ color: c.linkColor, textDecoration: 'none' }}>{channelName}</Link>
         {' / '}
-        <span style={{ color: '#666' }}>{thread.title}</span>
+        <span style={{ color: c.secondaryText }}>{thread.title}</span>
       </div>
 
-      <div style={styles.threadHeader}>
+      <div style={{
+        background: c.contentBg,
+        border: `1px solid ${c.contentBorder}`,
+        borderRadius: `${c.contentRadius}px ${c.contentRadius}px 0 0`,
+        padding: '16px 20px',
+        borderBottom: `2px solid ${c.accent}`,
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {thread.isPinned && <Pin size={16} style={{ color: '#e2a33e' }} />}
-          {thread.isLocked && <Lock size={16} style={{ color: '#999' }} />}
-          <h2 style={styles.threadTitle}>{thread.title}</h2>
+          {thread.isPinned && <Pin size={16} style={{ color: c.accent }} />}
+          {thread.isLocked && <Lock size={16} style={{ color: c.mutedText }} />}
+          <h2 style={{ margin: 0, fontSize: '1.2rem', color: c.headingColor }}>{thread.title}</h2>
         </div>
-        <div style={styles.threadMeta}>
+        <div style={{ fontSize: '0.8rem', color: c.mutedText, marginTop: 4 }}>
           Started by <strong>{thread.author?.displayName}</strong> on{' '}
           {new Date(thread.createdAt).toLocaleDateString()}
         </div>
       </div>
 
-      <div style={styles.postsContainer}>
+      <div style={{
+        border: `1px solid ${c.contentBorder}`,
+        borderTop: 'none',
+        borderRadius: `0 0 ${c.contentRadius}px ${c.contentRadius}px`,
+        overflow: 'hidden',
+      }}>
         {posts.map((post, i) => (
-          <div key={post.id} style={{ ...styles.post, ...(i === 0 ? styles.firstPost : {}) }}>
-            <div style={styles.postSidebar}>
-              <div style={styles.postAvatar}>
-                {post.author?.displayName?.charAt(0).toUpperCase() || '?'}
-              </div>
-              <div style={styles.postAuthor}>{post.author?.displayName}</div>
-              <div style={styles.postUsername}>@{post.author?.username}</div>
-            </div>
-            <div style={styles.postBody}>
-              <div style={styles.postDate}>
-                {formatPostDate(post.id)}
-                {post.editedAt && <span style={{ fontStyle: 'italic', marginLeft: 8 }}>(edited)</span>}
-              </div>
-              <div style={styles.postContent}>{post.content}</div>
-            </div>
-          </div>
+          isSidebar
+            ? <SidebarPost key={post.id} post={post} isFirst={i === 0} colors={c} />
+            : <StackedPost key={post.id} post={post} isFirst={i === 0} colors={c} contentRadius={c.contentRadius} />
         ))}
       </div>
 
       {!thread.isLocked && user && (
-        <div style={styles.replySection}>
-          <h4 style={styles.replyTitle}>Post a Reply</h4>
+        <div style={{
+          marginTop: 20,
+          background: c.contentBg,
+          border: `1px solid ${c.contentBorder}`,
+          borderRadius: c.contentRadius,
+          padding: '16px 20px',
+        }}>
+          <h4 style={{ margin: '0 0 8px', fontSize: '0.9rem', color: c.headingColor }}>Post a Reply</h4>
           <textarea
             value={replyContent}
             onChange={(e) => setReplyContent(e.target.value)}
             placeholder="Write your reply..."
-            style={styles.replyTextarea}
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              border: `1px solid ${c.inputBorder}`,
+              borderRadius: c.contentRadius > 4 ? 6 : 4,
+              fontSize: '0.9rem',
+              fontFamily: 'inherit',
+              resize: 'vertical',
+              boxSizing: 'border-box',
+              background: c.inputBg,
+            }}
             rows={4}
             maxLength={4000}
           />
@@ -109,7 +128,18 @@ export function BoardThreadDetail() {
             onClick={handleReply}
             disabled={!replyContent.trim() || sending}
             style={{
-              ...styles.replyBtn,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              marginTop: 8,
+              padding: '6px 16px',
+              background: c.accent,
+              border: 'none',
+              color: '#fff',
+              borderRadius: c.contentRadius > 4 ? 6 : 4,
+              cursor: 'pointer',
+              fontSize: '0.85rem',
+              fontWeight: 600,
               opacity: !replyContent.trim() || sending ? 0.5 : 1,
             }}
           >
@@ -120,19 +150,144 @@ export function BoardThreadDetail() {
       )}
 
       {!thread.isLocked && !user && (
-        <div style={styles.loginPrompt}>
-          <Link to={`/boards/${spaceSlug}/login`} style={styles.crumbLink}>Log in</Link>
+        <div style={{
+          marginTop: 20,
+          padding: '16px 20px',
+          background: c.contentBg,
+          border: `1px solid ${c.contentBorder}`,
+          borderRadius: c.contentRadius,
+          textAlign: 'center',
+          color: c.secondaryText,
+          fontSize: '0.9rem',
+        }}>
+          <Link to={`/boards/${spaceSlug}/login`} style={{ color: c.linkColor, textDecoration: 'none' }}>Log in</Link>
           {' or '}
-          <Link to={`/boards/${spaceSlug}/register`} style={styles.crumbLink}>register</Link>
+          <Link to={`/boards/${spaceSlug}/register`} style={{ color: c.linkColor, textDecoration: 'none' }}>register</Link>
           {' to reply'}
         </div>
       )}
 
       {thread.isLocked && (
-        <div style={styles.lockedNotice}>
+        <div style={{
+          marginTop: 20,
+          padding: '12px 20px',
+          background: c.contentBg,
+          border: `1px solid ${c.contentBorder}`,
+          borderRadius: c.contentRadius,
+          textAlign: 'center',
+          color: c.mutedText,
+          fontSize: '0.85rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 6,
+        }}>
           <Lock size={14} /> This thread is locked
         </div>
       )}
+    </div>
+  );
+}
+
+function SidebarPost({ post, isFirst, colors: c }: { post: Message; isFirst: boolean; colors: any }) {
+  return (
+    <div style={{
+      display: 'flex',
+      borderBottom: `1px solid ${c.contentBorder}`,
+      background: isFirst ? (c.accent === '#e2a33e' ? '#fffff0' : c.contentBg) : c.contentBg,
+    }}>
+      <div style={{
+        width: 120,
+        padding: '12px 16px',
+        borderRight: `1px solid ${c.contentBorder}`,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 4,
+        flexShrink: 0,
+        background: 'rgba(0,0,0,0.02)',
+      }}>
+        <div style={{
+          width: 48,
+          height: 48,
+          borderRadius: '50%',
+          background: c.tableHeaderBg === '#4a5568' ? '#4a5568' : c.accent,
+          color: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '1.2rem',
+          fontWeight: 700,
+        }}>
+          {post.author?.displayName?.charAt(0).toUpperCase() || '?'}
+        </div>
+        <div style={{ fontSize: '0.8rem', fontWeight: 600, color: c.headingColor, textAlign: 'center', wordBreak: 'break-word' }}>
+          {post.author?.displayName}
+        </div>
+        <div style={{ fontSize: '0.7rem', color: c.mutedText }}>@{post.author?.username}</div>
+      </div>
+      <div style={{ flex: 1, padding: '12px 16px', minWidth: 0 }}>
+        <div style={{ fontSize: '0.75rem', color: c.mutedText, marginBottom: 8 }}>
+          {formatPostDate(post.id)}
+          {post.editedAt && <span style={{ fontStyle: 'italic', marginLeft: 8 }}>(edited)</span>}
+        </div>
+        <div style={{ fontSize: '0.9rem', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: c.pageText }}>
+          {post.content}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StackedPost({ post, isFirst, colors: c, contentRadius }: { post: Message; isFirst: boolean; colors: any; contentRadius: number }) {
+  return (
+    <div style={{
+      padding: '16px 20px',
+      borderBottom: `1px solid ${c.contentBorder}`,
+      background: c.contentBg,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <div style={{
+          width: 32,
+          height: 32,
+          borderRadius: '50%',
+          background: c.accent,
+          color: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '0.85rem',
+          fontWeight: 700,
+          flexShrink: 0,
+        }}>
+          {post.author?.displayName?.charAt(0).toUpperCase() || '?'}
+        </div>
+        <div>
+          <span style={{ fontWeight: 600, fontSize: '0.85rem', color: c.headingColor }}>
+            {post.author?.displayName}
+          </span>
+          <span style={{ fontSize: '0.75rem', color: c.mutedText, marginLeft: 8 }}>
+            {formatPostDate(post.id)}
+            {post.editedAt && <span style={{ fontStyle: 'italic', marginLeft: 4 }}>(edited)</span>}
+          </span>
+        </div>
+        {isFirst && (
+          <span style={{
+            fontSize: '0.65rem',
+            padding: '1px 6px',
+            background: c.accent,
+            color: '#fff',
+            borderRadius: 8,
+            fontWeight: 600,
+            marginLeft: 'auto',
+          }}>
+            OP
+          </span>
+        )}
+      </div>
+      <div style={{ fontSize: '0.9rem', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: c.pageText }}>
+        {post.content}
+      </div>
     </div>
   );
 }
@@ -143,159 +298,3 @@ function formatPostDate(id: string): string {
   const d = new Date(timestamp);
   return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  loading: { textAlign: 'center', padding: 40, color: '#999' },
-  error: { textAlign: 'center', padding: 40, color: '#c53030' },
-  breadcrumbs: {
-    fontSize: '0.85rem',
-    marginBottom: 16,
-    color: '#999',
-  },
-  crumbLink: {
-    color: '#2b6cb0',
-    textDecoration: 'none',
-  },
-  threadHeader: {
-    background: '#fff',
-    border: '1px solid #ccc',
-    borderRadius: '4px 4px 0 0',
-    padding: '16px 20px',
-    borderBottom: '2px solid #e2a33e',
-  },
-  threadTitle: {
-    margin: 0,
-    fontSize: '1.2rem',
-    color: '#2d3748',
-  },
-  threadMeta: {
-    fontSize: '0.8rem',
-    color: '#999',
-    marginTop: 4,
-  },
-  postsContainer: {
-    border: '1px solid #ccc',
-    borderTop: 'none',
-    borderRadius: '0 0 4px 4px',
-    overflow: 'hidden',
-  },
-  post: {
-    display: 'flex',
-    borderBottom: '1px solid #e2e8f0',
-    background: '#fff',
-  },
-  firstPost: {
-    background: '#fffff0',
-  },
-  postSidebar: {
-    width: 120,
-    padding: '12px 16px',
-    borderRight: '1px solid #e2e8f0',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 4,
-    flexShrink: 0,
-    background: 'rgba(0,0,0,0.02)',
-  },
-  postAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: '50%',
-    background: '#4a5568',
-    color: '#fff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '1.2rem',
-    fontWeight: 700,
-  },
-  postAuthor: {
-    fontSize: '0.8rem',
-    fontWeight: 600,
-    color: '#2d3748',
-    textAlign: 'center',
-    wordBreak: 'break-word',
-  },
-  postUsername: {
-    fontSize: '0.7rem',
-    color: '#999',
-  },
-  postBody: {
-    flex: 1,
-    padding: '12px 16px',
-    minWidth: 0,
-  },
-  postDate: {
-    fontSize: '0.75rem',
-    color: '#999',
-    marginBottom: 8,
-  },
-  postContent: {
-    fontSize: '0.9rem',
-    lineHeight: 1.6,
-    whiteSpace: 'pre-wrap',
-    wordBreak: 'break-word',
-    color: '#333',
-  },
-  replySection: {
-    marginTop: 20,
-    background: '#fff',
-    border: '1px solid #ccc',
-    borderRadius: 4,
-    padding: '16px 20px',
-  },
-  replyTitle: {
-    margin: '0 0 8px',
-    fontSize: '0.9rem',
-    color: '#2d3748',
-  },
-  replyTextarea: {
-    width: '100%',
-    padding: '8px 12px',
-    border: '1px solid #ccc',
-    borderRadius: 4,
-    fontSize: '0.9rem',
-    fontFamily: 'inherit',
-    resize: 'vertical',
-    boxSizing: 'border-box',
-  },
-  replyBtn: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-    padding: '6px 16px',
-    background: '#e2a33e',
-    border: 'none',
-    color: '#fff',
-    borderRadius: 4,
-    cursor: 'pointer',
-    fontSize: '0.85rem',
-    fontWeight: 600,
-  },
-  loginPrompt: {
-    marginTop: 20,
-    padding: '16px 20px',
-    background: '#fff',
-    border: '1px solid #ccc',
-    borderRadius: 4,
-    textAlign: 'center',
-    color: '#666',
-    fontSize: '0.9rem',
-  },
-  lockedNotice: {
-    marginTop: 20,
-    padding: '12px 20px',
-    background: '#f7f7f7',
-    border: '1px solid #ccc',
-    borderRadius: 4,
-    textAlign: 'center',
-    color: '#999',
-    fontSize: '0.85rem',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-};

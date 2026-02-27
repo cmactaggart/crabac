@@ -15,6 +15,7 @@ export * from './types/blog.js';
 export * from './types/mobile-bundle.js';
 export * from './types/moderation.js';
 export * from './types/workflow.js';
+export * from './types/newsletter.js';
 export * from './types/personal-collection.js';
 export * from './permissions.js';
 export * as validation from './validation/index.js';

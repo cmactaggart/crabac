@@ -16,10 +16,11 @@ import { EmojiPicker } from '../components/messages/EmojiPicker.js';
 import { PostCard as SharedPostCard, VisibilityBadge } from '../components/posts/PostCard.js';
 import { useFollowsStore } from '../stores/follows.js';
 import { FeedView } from '../pages/FeedPage.js';
+import { PersonalNewsletterView } from '../components/newsletter/PersonalNewsletterView.js';
 import { api } from '../lib/api.js';
 import type { PersonalGalleryItem, PersonalRouteItem, PersonalEvent, PersonalEventCategory, PersonalVisibility, UserPost, UserPostComment, Notification, MentionNotificationData, ReplyNotificationData, FollowUser } from '@crabac/shared';
 
-type SubTab = 'feed' | 'photos' | 'routes' | 'events';
+type SubTab = 'feed' | 'photos' | 'routes' | 'events' | 'newsletter';
 type SidebarView = 'home' | 'notifications' | 'feed';
 
 const VISIBILITY_LABELS: Record<PersonalVisibility, string> = {
@@ -45,6 +46,7 @@ export function YouPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [shareItem, setShareItem] = useState<{ type: 'gallery' | 'route' | 'event' | 'post'; id: string } | null>(null);
   const [defaultVisibility, setDefaultVisibility] = useState<PersonalVisibility>('private');
+  const [newsletterEnabled, setNewsletterEnabled] = useState(false);
 
   const {
     galleryItems, routeItems, events, eventCategories, posts, postsLoading, postsHasMore, summary, loading,
@@ -66,6 +68,7 @@ export function YouPage() {
     if (user?.id) fetchFollowCounts(user.id);
     api('/users/preferences').then((prefs: any) => {
       if (prefs.defaultVisibility) setDefaultVisibility(prefs.defaultVisibility);
+      if (prefs.newsletterEnabled) setNewsletterEnabled(true);
     }).catch(() => {});
   }, []);
 
@@ -116,6 +119,7 @@ export function YouPage() {
               <SummaryBadge icon={<Image size={14} />} label="Photos" count={summary.galleryCount} active={activeTab === 'photos'} onClick={() => setActiveTab('photos')} />
               <SummaryBadge icon={<Map size={14} />} label="Routes" count={summary.routeCount} active={activeTab === 'routes'} onClick={() => setActiveTab('routes')} />
               <SummaryBadge icon={<CalendarDays size={14} />} label="Events" count={summary.eventCount} active={activeTab === 'events'} onClick={() => setActiveTab('events')} />
+              {newsletterEnabled && <SummaryBadge icon={<Newspaper size={14} />} label="Newsletter" count={0} active={activeTab === 'newsletter'} onClick={() => setActiveTab('newsletter')} />}
             </div>
           )}
 
@@ -169,6 +173,7 @@ export function YouPage() {
                 onFetchRoutes={fetchRoutes}
               />
             )}
+            {activeTab === 'newsletter' && <PersonalNewsletterView />}
           </div>
         </div>
 
@@ -307,6 +312,7 @@ export function YouPage() {
                 <SummaryBadge icon={<Image size={14} />} label="Photos" count={summary.galleryCount} active={activeTab === 'photos'} onClick={() => setActiveTab('photos')} />
                 <SummaryBadge icon={<Map size={14} />} label="Routes" count={summary.routeCount} active={activeTab === 'routes'} onClick={() => setActiveTab('routes')} />
                 <SummaryBadge icon={<CalendarDays size={14} />} label="Events" count={summary.eventCount} active={activeTab === 'events'} onClick={() => setActiveTab('events')} />
+                {newsletterEnabled && <SummaryBadge icon={<Newspaper size={14} />} label="Newsletter" count={0} active={activeTab === 'newsletter'} onClick={() => setActiveTab('newsletter')} />}
               </div>
             )}
 
@@ -364,6 +370,7 @@ export function YouPage() {
                   onFetchRoutes={fetchRoutes}
                 />
               )}
+              {activeTab === 'newsletter' && <PersonalNewsletterView />}
             </div>
           </div>
         )}
@@ -1158,25 +1165,39 @@ function FeedTab({ posts, loading, hasMore, defaultVisibility = 'private', onCre
     setMentionQuery(match ? match[1] : null);
   };
 
-  const handleMentionSelect = useCallback((username: string, userId: string) => {
+  const handleMentionSelect = useCallback((name: string, id: string, type?: 'user' | 'space') => {
     const ta = textareaRef.current;
     if (!ta) return;
     const cursorPos = ta.selectionStart ?? body.length;
     const textBeforeCursor = body.slice(0, cursorPos);
     const matchIdx = textBeforeCursor.lastIndexOf('@');
     if (matchIdx === -1) return;
-    const newBody = body.slice(0, matchIdx) + `@${username} ` + body.slice(cursorPos);
-    setBody(newBody);
-    setMentionQuery(null);
-    if (!taggedIds.includes(userId)) {
-      setTaggedIds((prev) => [...prev, userId]);
+
+    if (type === 'space') {
+      // Insert markdown link for space
+      const insertion = `[${name}](/space/${id}) `;
+      const newBody = body.slice(0, matchIdx) + insertion + body.slice(cursorPos);
+      setBody(newBody);
+      setMentionQuery(null);
+      requestAnimationFrame(() => {
+        const newPos = matchIdx + insertion.length;
+        ta.focus();
+        ta.setSelectionRange(newPos, newPos);
+      });
+    } else {
+      // Insert @username for user
+      const newBody = body.slice(0, matchIdx) + `@${name} ` + body.slice(cursorPos);
+      setBody(newBody);
+      setMentionQuery(null);
+      if (!taggedIds.includes(id)) {
+        setTaggedIds((prev) => [...prev, id]);
+      }
+      requestAnimationFrame(() => {
+        const newPos = matchIdx + name.length + 2; // @ + username + space
+        ta.focus();
+        ta.setSelectionRange(newPos, newPos);
+      });
     }
-    // Restore focus after React re-render
-    requestAnimationFrame(() => {
-      const newPos = matchIdx + username.length + 2; // @ + username + space
-      ta.focus();
-      ta.setSelectionRange(newPos, newPos);
-    });
   }, [body, taggedIds]);
 
   const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1464,9 +1485,15 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     gap: 8,
     marginTop: '1rem',
+    overflowX: 'auto',
+    flexWrap: 'nowrap',
+    scrollbarWidth: 'none',
+    msOverflowStyle: 'none',
   },
   summaryBadge: {
     flex: 1,
+    minWidth: 0,
+    flexShrink: 0,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',

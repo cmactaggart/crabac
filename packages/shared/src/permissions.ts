@@ -22,6 +22,7 @@ export const Permissions = {
   MANAGE_ROUTE_CATEGORIES:  1n << 20n,
   MANAGE_BLOG:              1n << 21n,
   MANAGE_WORKFLOWS:         1n << 22n,
+  MANAGE_NEWSLETTER:        1n << 23n,
 } as const;
 
 export type PermissionKey = keyof typeof Permissions;

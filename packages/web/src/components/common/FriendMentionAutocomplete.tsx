@@ -1,15 +1,22 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useFriendsStore } from '../../stores/friends.js';
+import { useSpacesStore } from '../../stores/spaces.js';
 import { Avatar } from './Avatar.js';
+import { LetterIcon } from '../icons/LetterIcon.js';
 
 interface Props {
   query: string;
-  onSelect: (username: string, userId: string) => void;
+  onSelect: (name: string, id: string, type?: 'user' | 'space') => void;
   onClose: () => void;
 }
 
+type Entry =
+  | { kind: 'user'; id: string; username: string; displayName: string; avatarUrl: string | null; baseColor: string | null; accentColor: string | null }
+  | { kind: 'space'; id: string; name: string; slug: string; iconUrl: string | null; baseColor: string | null; accentColor: string | null };
+
 export function FriendMentionAutocomplete({ query, onSelect, onClose }: Props) {
   const { friends, fetchFriends } = useFriendsStore();
+  const spaces = useSpacesStore((s) => s.spaces);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   useEffect(() => {
@@ -18,17 +25,54 @@ export function FriendMentionAutocomplete({ query, onSelect, onClose }: Props) {
 
   const lowerQuery = query.toLowerCase();
 
-  const entries = friends
+  const friendEntries: Entry[] = friends
     .filter((f) => {
       const uname = f.user.username.toLowerCase();
       const dname = f.user.displayName.toLowerCase();
       return uname.includes(lowerQuery) || dname.includes(lowerQuery);
     })
-    .slice(0, 8);
+    .slice(0, 6)
+    .map((f) => ({
+      kind: 'user',
+      id: f.user.id,
+      username: f.user.username,
+      displayName: f.user.displayName,
+      avatarUrl: f.user.avatarUrl ?? null,
+      baseColor: f.user.baseColor ?? null,
+      accentColor: f.user.accentColor ?? null,
+    }));
+
+  const spaceEntries: Entry[] = spaces
+    .filter((s) => s.isPublic)
+    .filter((s) => {
+      const sname = s.name.toLowerCase();
+      const sslug = s.slug.toLowerCase();
+      return sname.includes(lowerQuery) || sslug.includes(lowerQuery);
+    })
+    .slice(0, 4)
+    .map((s) => ({
+      kind: 'space',
+      id: s.id,
+      name: s.name,
+      slug: s.slug,
+      iconUrl: s.iconUrl ?? null,
+      baseColor: s.baseColor ?? null,
+      accentColor: s.accentColor ?? null,
+    }));
+
+  const entries = [...friendEntries, ...spaceEntries];
 
   useEffect(() => {
     setSelectedIndex(0);
   }, [query]);
+
+  const handleSelect = useCallback((entry: Entry) => {
+    if (entry.kind === 'user') {
+      onSelect(entry.username, entry.id, 'user');
+    } else {
+      onSelect(entry.name, entry.id, 'space');
+    }
+  }, [onSelect]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (entries.length === 0) return;
@@ -42,12 +86,12 @@ export function FriendMentionAutocomplete({ query, onSelect, onClose }: Props) {
     } else if (e.key === 'Tab' || e.key === 'Enter') {
       e.preventDefault();
       const entry = entries[selectedIndex];
-      if (entry) onSelect(entry.user.username, entry.user.id);
+      if (entry) handleSelect(entry);
     } else if (e.key === 'Escape') {
       e.preventDefault();
       onClose();
     }
-  }, [entries, selectedIndex, onSelect, onClose]);
+  }, [entries, selectedIndex, handleSelect, onClose]);
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown, true);
@@ -60,7 +104,7 @@ export function FriendMentionAutocomplete({ query, onSelect, onClose }: Props) {
     <div style={styles.container}>
       {entries.map((entry, i) => (
         <button
-          key={entry.user.id}
+          key={entry.kind + ':' + entry.id}
           style={{
             ...styles.item,
             background: i === selectedIndex ? 'var(--bg-tertiary)' : 'transparent',
@@ -68,19 +112,40 @@ export function FriendMentionAutocomplete({ query, onSelect, onClose }: Props) {
           onMouseEnter={() => setSelectedIndex(i)}
           onMouseDown={(e) => {
             e.preventDefault();
-            onSelect(entry.user.username, entry.user.id);
+            handleSelect(entry);
           }}
         >
-          <Avatar
-            src={entry.user.avatarUrl ?? null}
-            name={entry.user.displayName}
-            size={24}
-            baseColor={entry.user.baseColor ?? null}
-            accentColor={entry.user.accentColor ?? null}
-          />
-          <span style={styles.username}>@{entry.user.username}</span>
-          {entry.user.displayName !== entry.user.username && (
-            <span style={styles.displayName}>{entry.user.displayName}</span>
+          {entry.kind === 'user' ? (
+            <>
+              <Avatar
+                src={entry.avatarUrl}
+                name={entry.displayName}
+                size={24}
+                baseColor={entry.baseColor}
+                accentColor={entry.accentColor}
+              />
+              <span style={styles.username}>@{entry.username}</span>
+              {entry.displayName !== entry.username && (
+                <span style={styles.displayName}>{entry.displayName}</span>
+              )}
+            </>
+          ) : (
+            <>
+              {entry.iconUrl ? (
+                <div style={{ width: 24, height: 24, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}>
+                  <img src={entry.iconUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+              ) : (
+                <LetterIcon
+                  letter={entry.name.charAt(0)}
+                  size={24}
+                  bg={entry.baseColor || 'var(--accent)'}
+                  gradient={entry.baseColor && entry.accentColor ? { base: entry.baseColor, accent: entry.accentColor } : undefined}
+                />
+              )}
+              <span style={styles.username}>{entry.name}</span>
+              <span style={styles.displayName}>/{entry.slug}</span>
+            </>
           )}
         </button>
       ))}

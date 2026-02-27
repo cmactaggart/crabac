@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { ChevronLeft, Star, Download, Search, X, List, LayoutGrid, MapPin, Mountain, TrendingUp, Copy } from 'lucide-react';
 import { boardApi } from '../../lib/boardApi.js';
 import { RouteDetailOverlay } from './PublicRoutesHome.js';
+import { usePublicTheme } from '../../contexts/PublicThemeContext.js';
 
 type ViewMode = 'card' | 'table';
 type SortField = 'newest' | 'name' | 'distance' | 'elevation' | 'flatness';
@@ -91,6 +92,8 @@ function generateMiniMapPoints(geojson: any, width: number, height: number): str
 
 export function PublicRoutesView() {
   const { spaceSlug, channelName } = useParams();
+  const theme = usePublicTheme();
+  const c = theme.colors;
   const [items, setItems] = useState<RouteItem[]>([]);
   const [categories, setCategories] = useState<RouteCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -177,63 +180,63 @@ export function PublicRoutesView() {
     }
   };
 
-  if (error) return <div style={pubStyles.error}>{error}</div>;
+  if (error) return <div style={{ textAlign: 'center', padding: 40, color: '#c53030' }}>{error}</div>;
 
   const sortArrow = (field: SortField) => sortField === field ? (sortOrder === 'asc' ? ' \u25B2' : ' \u25BC') : '';
 
   return (
     <div>
-      <div style={pubStyles.breadcrumb}>
-        <Link to={`/routes/${spaceSlug}`} style={pubStyles.breadcrumbLink}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+        <Link to={`/routes/${spaceSlug}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: c.accent, textDecoration: 'none', fontSize: '0.85rem' }}>
           <ChevronLeft size={16} /> All Routes
         </Link>
-        <span style={pubStyles.breadcrumbCurrent}>{channelName}</span>
+        <span style={{ fontSize: '0.85rem', color: c.secondaryText }}>{channelName}</span>
       </div>
 
       {/* Filters */}
-      <div style={pubStyles.filterBar}>
-        <div style={pubStyles.searchWrap}>
-          <Search size={14} style={{ color: '#999', flexShrink: 0 }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: c.contentBg, border: `1px solid ${c.contentBorder}`, borderRadius: 6, flex: '1 1 150px', minWidth: 120 }}>
+          <Search size={14} style={{ color: c.mutedText, flexShrink: 0 }} />
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search routes..."
-            style={pubStyles.searchInput}
+            style={{ flex: 1, background: 'none', border: 'none', color: c.pageText, fontSize: '0.85rem', outline: 'none' }}
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery('')} style={pubStyles.clearBtn}><X size={14} /></button>
+            <button onClick={() => setSearchQuery('')} style={{ background: 'none', border: 'none', color: c.mutedText, cursor: 'pointer', padding: 2, display: 'flex' }}><X size={14} /></button>
           )}
         </div>
         {categories.length > 0 && (
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
-            style={pubStyles.filterSelect}
+            style={{ padding: '6px 10px', background: c.contentBg, border: `1px solid ${c.contentBorder}`, borderRadius: 6, color: c.pageText, fontSize: '0.85rem', outline: 'none' }}
           >
             <option value="">All categories</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.id}>{cat.name}</option>
             ))}
           </select>
         )}
         <select
           value={filterType}
           onChange={(e) => setFilterType(e.target.value)}
-          style={pubStyles.filterSelect}
+          style={{ padding: '6px 10px', background: c.contentBg, border: `1px solid ${c.contentBorder}`, borderRadius: 6, color: c.pageText, fontSize: '0.85rem', outline: 'none' }}
         >
           <option value="">All types</option>
           <option value="ride">Ride</option>
           <option value="run">Run</option>
           <option value="walk">Walk</option>
         </select>
-        <div style={pubStyles.viewToggle}>
+        <div style={{ display: 'flex', background: '#f3f4f6', borderRadius: 6, padding: 2, gap: 1 }}>
           <button
             onClick={() => setViewMode('card')}
-            style={{ ...pubStyles.toggleBtn, background: viewMode === 'card' ? '#e5e7eb' : 'transparent', color: viewMode === 'card' ? '#111' : '#999' }}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', borderRadius: 4, cursor: 'pointer', padding: '4px 8px', background: viewMode === 'card' ? c.contentBorder : 'transparent', color: viewMode === 'card' ? c.headingColor : c.mutedText }}
           ><LayoutGrid size={15} /></button>
           <button
             onClick={() => setViewMode('table')}
-            style={{ ...pubStyles.toggleBtn, background: viewMode === 'table' ? '#e5e7eb' : 'transparent', color: viewMode === 'table' ? '#111' : '#999' }}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', borderRadius: 4, cursor: 'pointer', padding: '4px 8px', background: viewMode === 'table' ? c.contentBorder : 'transparent', color: viewMode === 'table' ? c.headingColor : c.mutedText }}
           ><List size={15} /></button>
         </div>
       </div>
@@ -241,47 +244,47 @@ export function PublicRoutesView() {
       {/* Content */}
       <div ref={scrollRef} onScroll={handleScroll} style={{ marginTop: 16 }}>
         {loading && items.length === 0 ? (
-          <div style={pubStyles.status}>Loading...</div>
+          <div style={{ textAlign: 'center', padding: 40, color: c.mutedText }}>Loading...</div>
         ) : items.length === 0 ? (
-          <div style={pubStyles.status}>No public routes in this library</div>
+          <div style={{ textAlign: 'center', padding: 40, color: c.mutedText }}>No public routes in this library</div>
         ) : viewMode === 'card' ? (
-          <div style={pubStyles.cardGrid}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
             {items.map((item) => (
               <PublicRouteCard key={item.id} item={item} onStar={() => handleStar(item.id, !!item.starred)} onClick={() => setSelectedRoute(item)} />
             ))}
           </div>
         ) : (
-          <table style={pubStyles.table}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', background: c.contentBg, borderRadius: 8, overflow: 'hidden' }}>
             <thead>
               <tr>
-                <th style={pubStyles.th}></th>
-                <th style={{ ...pubStyles.th, cursor: 'pointer' }} onClick={() => handleSort('name')}>Name{sortArrow('name')}</th>
-                <th style={pubStyles.th}>Author</th>
-                <th style={pubStyles.th}>Category</th>
-                <th style={pubStyles.th}>Type</th>
-                <th style={{ ...pubStyles.th, cursor: 'pointer', textAlign: 'right' }} onClick={() => handleSort('distance')}>Distance{sortArrow('distance')}</th>
-                <th style={{ ...pubStyles.th, cursor: 'pointer', textAlign: 'right' }} onClick={() => handleSort('elevation')}>Elevation{sortArrow('elevation')}</th>
-                <th style={{ ...pubStyles.th, cursor: 'pointer', textAlign: 'right' }} onClick={() => handleSort('flatness')}>Flatness{sortArrow('flatness')}</th>
-                <th style={pubStyles.th}></th>
+                <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: `2px solid ${c.contentBorder}`, fontSize: '0.75rem', fontWeight: 600, color: c.mutedText, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}></th>
+                <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: `2px solid ${c.contentBorder}`, fontSize: '0.75rem', fontWeight: 600, color: c.mutedText, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', cursor: 'pointer' }} onClick={() => handleSort('name')}>Name{sortArrow('name')}</th>
+                <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: `2px solid ${c.contentBorder}`, fontSize: '0.75rem', fontWeight: 600, color: c.mutedText, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>Author</th>
+                <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: `2px solid ${c.contentBorder}`, fontSize: '0.75rem', fontWeight: 600, color: c.mutedText, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>Category</th>
+                <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: `2px solid ${c.contentBorder}`, fontSize: '0.75rem', fontWeight: 600, color: c.mutedText, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>Type</th>
+                <th style={{ textAlign: 'right', padding: '10px 12px', borderBottom: `2px solid ${c.contentBorder}`, fontSize: '0.75rem', fontWeight: 600, color: c.mutedText, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', cursor: 'pointer' }} onClick={() => handleSort('distance')}>Distance{sortArrow('distance')}</th>
+                <th style={{ textAlign: 'right', padding: '10px 12px', borderBottom: `2px solid ${c.contentBorder}`, fontSize: '0.75rem', fontWeight: 600, color: c.mutedText, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', cursor: 'pointer' }} onClick={() => handleSort('elevation')}>Elevation{sortArrow('elevation')}</th>
+                <th style={{ textAlign: 'right', padding: '10px 12px', borderBottom: `2px solid ${c.contentBorder}`, fontSize: '0.75rem', fontWeight: 600, color: c.mutedText, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', cursor: 'pointer' }} onClick={() => handleSort('flatness')}>Flatness{sortArrow('flatness')}</th>
+                <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: `2px solid ${c.contentBorder}`, fontSize: '0.75rem', fontWeight: 600, color: c.mutedText, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}></th>
               </tr>
             </thead>
             <tbody>
               {items.map((item) => (
-                <tr key={item.id} style={{ ...pubStyles.tableRow, cursor: 'pointer' }} onClick={() => setSelectedRoute(item)}>
-                  <td style={pubStyles.td}>
-                    <button onClick={() => handleStar(item.id, !!item.starred)} style={pubStyles.starBtn}>
+                <tr key={item.id} style={{ borderBottom: '1px solid #f3f4f6', cursor: 'pointer' }} onClick={() => setSelectedRoute(item)}>
+                  <td style={{ padding: '10px 12px', color: c.pageText, whiteSpace: 'nowrap' }}>
+                    <button onClick={() => handleStar(item.id, !!item.starred)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex' }}>
                       <Star size={14} fill={item.starred ? '#f0b232' : 'none'} color={item.starred ? '#f0b232' : '#ccc'} />
                     </button>
                   </td>
-                  <td style={{ ...pubStyles.td, fontWeight: 500 }}>{item.name}</td>
-                  <td style={pubStyles.td}>{item.author?.displayName || ''}</td>
-                  <td style={pubStyles.td}>{item.category?.name || ''}</td>
-                  <td style={pubStyles.td}>{activityLabel(item.activityType) || ''}</td>
-                  <td style={{ ...pubStyles.td, textAlign: 'right' }}>{formatDistance(item.distanceKm)}</td>
-                  <td style={{ ...pubStyles.td, textAlign: 'right' }}>{item.elevationGainM != null ? `+${formatElevation(item.elevationGainM)}` : '--'}</td>
-                  <td style={{ ...pubStyles.td, textAlign: 'right' }}>{item.flatness != null ? formatFlatness(item.flatness) : '--'}</td>
-                  <td style={{ ...pubStyles.td, textAlign: 'right' }}>
-                    <a href={item.url} download={item.originalName} style={pubStyles.downloadLink}><Download size={13} /></a>
+                  <td style={{ padding: '10px 12px', color: c.pageText, whiteSpace: 'nowrap', fontWeight: 500 }}>{item.name}</td>
+                  <td style={{ padding: '10px 12px', color: c.pageText, whiteSpace: 'nowrap' }}>{item.author?.displayName || ''}</td>
+                  <td style={{ padding: '10px 12px', color: c.pageText, whiteSpace: 'nowrap' }}>{item.category?.name || ''}</td>
+                  <td style={{ padding: '10px 12px', color: c.pageText, whiteSpace: 'nowrap' }}>{activityLabel(item.activityType) || ''}</td>
+                  <td style={{ padding: '10px 12px', color: c.pageText, whiteSpace: 'nowrap', textAlign: 'right' }}>{formatDistance(item.distanceKm)}</td>
+                  <td style={{ padding: '10px 12px', color: c.pageText, whiteSpace: 'nowrap', textAlign: 'right' }}>{item.elevationGainM != null ? `+${formatElevation(item.elevationGainM)}` : '--'}</td>
+                  <td style={{ padding: '10px 12px', color: c.pageText, whiteSpace: 'nowrap', textAlign: 'right' }}>{item.flatness != null ? formatFlatness(item.flatness) : '--'}</td>
+                  <td style={{ padding: '10px 12px', color: c.pageText, whiteSpace: 'nowrap', textAlign: 'right' }}>
+                    <a href={item.url} download={item.originalName} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.78rem', color: c.accent, textDecoration: 'none' }}><Download size={13} /></a>
                   </td>
                 </tr>
               ))}
@@ -304,47 +307,49 @@ export function PublicRoutesView() {
 }
 
 function PublicRouteCard({ item, onStar, onClick }: { item: RouteItem; onStar: () => void; onClick: () => void }) {
+  const theme = usePublicTheme();
+  const c = theme.colors;
   const polyline = useMemo(() => generateMiniMapPoints(item.geojson, 200, 120), [item.geojson]);
 
   return (
-    <div style={{ ...pubStyles.card, cursor: 'pointer' }} onClick={onClick} role="button" tabIndex={0}>
-      <div style={pubStyles.cardMap}>
+    <div style={{ background: c.contentBg, border: `1px solid ${c.contentBorder}`, borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column' as const, cursor: 'pointer' }} onClick={onClick} role="button" tabIndex={0}>
+      <div style={{ height: 120, background: '#f3f4f6', overflow: 'hidden' }}>
         <svg viewBox="0 0 200 120" style={{ width: '100%', height: '100%' }}>
           <polyline
             points={polyline}
             fill="none"
-            stroke="#5865F2"
+            stroke={c.accent}
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
         </svg>
       </div>
-      <div style={pubStyles.cardBody}>
-        <div style={pubStyles.cardTitleRow}>
-          <span style={pubStyles.cardTitle}>{item.name}</span>
-          <button onClick={(e) => { e.stopPropagation(); onStar(); }} style={pubStyles.starBtn}>
+      <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column' as const, gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontWeight: 600, fontSize: '0.9rem', color: c.headingColor, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+          <button onClick={(e) => { e.stopPropagation(); onStar(); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex' }}>
             <Star size={16} fill={item.starred ? '#f0b232' : 'none'} color={item.starred ? '#f0b232' : '#ccc'} />
           </button>
         </div>
         {item.author?.displayName && (
-          <span style={{ fontSize: '0.75rem', color: '#999' }}>by {item.author.displayName}</span>
+          <span style={{ fontSize: '0.75rem', color: c.mutedText }}>by {item.author.displayName}</span>
         )}
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-          {item.category && <span style={pubStyles.categoryBadge}>{item.category.name}</span>}
+          {item.category && <span style={{ display: 'inline-block', fontSize: '0.7rem', padding: '1px 8px', background: '#f3f4f6', borderRadius: 10, color: c.secondaryText, width: 'fit-content' }}>{item.category.name}</span>}
           {activityLabel(item.activityType) && (
-            <span style={{ ...pubStyles.categoryBadge, background: '#5865F2', color: '#fff' }}>
+            <span style={{ display: 'inline-block', fontSize: '0.7rem', padding: '1px 8px', background: c.accent, borderRadius: 10, color: c.contentBg, width: 'fit-content' }}>
               {activityLabel(item.activityType)}
             </span>
           )}
         </div>
-        <div style={pubStyles.cardStats}>
-          <span style={pubStyles.statItem}><MapPin size={13} /> {formatDistance(item.distanceKm)}</span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 10px', fontSize: '0.78rem', color: c.secondaryText }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><MapPin size={13} /> {formatDistance(item.distanceKm)}</span>
           {item.elevationGainM != null && (
-            <span style={pubStyles.statItem}><Mountain size={13} /> +{formatElevation(item.elevationGainM)}</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Mountain size={13} /> +{formatElevation(item.elevationGainM)}</span>
           )}
           {item.flatness != null && (
-            <span style={pubStyles.statItem}><TrendingUp size={13} /> {formatFlatness(item.flatness)}</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><TrendingUp size={13} /> {formatFlatness(item.flatness)}</span>
           )}
         </div>
         {item.description && (
@@ -352,45 +357,10 @@ function PublicRouteCard({ item, onStar, onClick }: { item: RouteItem; onStar: (
             {item.description}
           </p>
         )}
-        <a href={item.url} download={item.originalName} style={pubStyles.downloadLink}>
+        <a href={item.url} download={item.originalName} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.78rem', color: c.accent, textDecoration: 'none' }}>
           <Download size={13} /> Download GPX
         </a>
       </div>
     </div>
   );
 }
-
-const pubStyles: Record<string, React.CSSProperties> = {
-  status: { textAlign: 'center', padding: 40, color: '#999' },
-  error: { textAlign: 'center', padding: 40, color: '#c53030' },
-  breadcrumb: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 },
-  breadcrumbLink: { display: 'inline-flex', alignItems: 'center', gap: 2, color: '#5865F2', textDecoration: 'none', fontSize: '0.85rem' },
-  breadcrumbCurrent: { fontSize: '0.85rem', color: '#666' },
-
-  filterBar: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  searchWrap: { display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, flex: '1 1 150px', minWidth: 120 },
-  searchInput: { flex: 1, background: 'none', border: 'none', color: '#333', fontSize: '0.85rem', outline: 'none' },
-  clearBtn: { background: 'none', border: 'none', color: '#999', cursor: 'pointer', padding: 2, display: 'flex' },
-  filterSelect: { padding: '6px 10px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, color: '#333', fontSize: '0.85rem', outline: 'none' },
-  viewToggle: { display: 'flex', background: '#f3f4f6', borderRadius: 6, padding: 2, gap: 1 },
-  toggleBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', borderRadius: 4, cursor: 'pointer', padding: '4px 8px' },
-
-  // Card view
-  cardGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 },
-  card: { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column' },
-  cardMap: { height: 120, background: '#f3f4f6', overflow: 'hidden' },
-  cardBody: { padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 },
-  cardTitleRow: { display: 'flex', alignItems: 'center', gap: 6 },
-  cardTitle: { fontWeight: 600, fontSize: '0.9rem', color: '#111', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  categoryBadge: { display: 'inline-block', fontSize: '0.7rem', padding: '1px 8px', background: '#f3f4f6', borderRadius: 10, color: '#666', width: 'fit-content' },
-  cardStats: { display: 'flex', flexWrap: 'wrap', gap: '2px 10px', fontSize: '0.78rem', color: '#666' },
-  statItem: { display: 'inline-flex', alignItems: 'center', gap: 3 },
-  downloadLink: { display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.78rem', color: '#5865F2', textDecoration: 'none' },
-  starBtn: { background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex' },
-
-  // Table view
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', background: '#fff', borderRadius: 8, overflow: 'hidden' },
-  th: { textAlign: 'left', padding: '10px 12px', borderBottom: '2px solid #e5e7eb', fontSize: '0.75rem', fontWeight: 600, color: '#999', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' },
-  tableRow: { borderBottom: '1px solid #f3f4f6' },
-  td: { padding: '10px 12px', color: '#333', whiteSpace: 'nowrap' },
-};

@@ -20,14 +20,21 @@ export async function getSpaceAdminSettings(spaceId: string) {
       calendarEnabled: false,
       blogEnabled: false,
       allowPublicBlog: false,
+      newsletterEnabled: false,
+      allowPublicNewsletter: false,
+      allowPublicNewsletterSubscription: false,
+      newsletterTrackingEnabled: true,
       isPublic: false,
       requireVerifiedEmail: false,
       isFeatured: false,
       baseColor: null,
       accentColor: null,
       textColor: null,
+      publicTheme: null,
       webhooksEnabled: false,
       webhookSecret: null,
+      publicNavLinks: [],
+      publicNavDisabledFeatures: [],
     };
   }
 
@@ -42,6 +49,10 @@ export async function updateSpaceAdminSettings(
     allowPublicCalendar?: boolean;
     allowPublicRoutes?: boolean;
     allowPublicBlog?: boolean;
+    newsletterEnabled?: boolean;
+    allowPublicNewsletter?: boolean;
+    allowPublicNewsletterSubscription?: boolean;
+    newsletterTrackingEnabled?: boolean;
     allowAnonymousBrowsing?: boolean;
     calendarEnabled?: boolean;
     blogEnabled?: boolean;
@@ -50,7 +61,10 @@ export async function updateSpaceAdminSettings(
     baseColor?: string | null;
     accentColor?: string | null;
     textColor?: string | null;
+    publicTheme?: string | null;
     webhooksEnabled?: boolean;
+    publicNavLinks?: { label: string; url: string }[];
+    publicNavDisabledFeatures?: string[];
   },
 ) {
   const existing = await db('space_settings').where('space_id', spaceId).first();
@@ -65,11 +79,16 @@ export async function updateSpaceAdminSettings(
     if (data.calendarEnabled !== undefined) updates.calendar_enabled = data.calendarEnabled;
     if (data.blogEnabled !== undefined) updates.blog_enabled = data.blogEnabled;
     if (data.allowPublicBlog !== undefined) updates.allow_public_blog = data.allowPublicBlog;
+    if (data.newsletterEnabled !== undefined) updates.newsletter_enabled = data.newsletterEnabled;
+    if (data.allowPublicNewsletter !== undefined) updates.allow_public_newsletter = data.allowPublicNewsletter;
+    if (data.allowPublicNewsletterSubscription !== undefined) updates.allow_public_newsletter_subscription = data.allowPublicNewsletterSubscription;
+    if (data.newsletterTrackingEnabled !== undefined) updates.newsletter_tracking_enabled = data.newsletterTrackingEnabled;
     if (data.isPublic !== undefined) updates.is_public = data.isPublic;
     if (data.requireVerifiedEmail !== undefined) updates.require_verified_email = data.requireVerifiedEmail;
     if (data.baseColor !== undefined) updates.base_color = data.baseColor;
     if (data.accentColor !== undefined) updates.accent_color = data.accentColor;
     if (data.textColor !== undefined) updates.text_color = data.textColor;
+    if (data.publicTheme !== undefined) updates.public_theme = data.publicTheme;
     if (data.webhooksEnabled !== undefined) {
       updates.webhooks_enabled = data.webhooksEnabled;
       // Auto-generate secret when webhooks are first enabled and no secret exists
@@ -77,6 +96,8 @@ export async function updateSpaceAdminSettings(
         updates.webhook_secret = crypto.randomBytes(32).toString('hex');
       }
     }
+    if (data.publicNavLinks !== undefined) updates.public_nav_links = JSON.stringify(data.publicNavLinks);
+    if (data.publicNavDisabledFeatures !== undefined) updates.public_nav_disabled_features = JSON.stringify(data.publicNavDisabledFeatures);
 
     if (Object.keys(updates).length > 0) {
       await db('space_settings').where('space_id', spaceId).update(updates);
@@ -93,13 +114,20 @@ export async function updateSpaceAdminSettings(
       calendar_enabled: data.calendarEnabled ?? false,
       blog_enabled: data.blogEnabled ?? false,
       allow_public_blog: data.allowPublicBlog ?? false,
+      newsletter_enabled: data.newsletterEnabled ?? false,
+      allow_public_newsletter: data.allowPublicNewsletter ?? false,
+      allow_public_newsletter_subscription: data.allowPublicNewsletterSubscription ?? false,
+      newsletter_tracking_enabled: data.newsletterTrackingEnabled ?? true,
       is_public: data.isPublic ?? false,
       require_verified_email: data.requireVerifiedEmail ?? false,
       base_color: data.baseColor ?? null,
       accent_color: data.accentColor ?? null,
       text_color: data.textColor ?? null,
+      public_theme: data.publicTheme ?? null,
       webhooks_enabled: data.webhooksEnabled ?? false,
       webhook_secret: webhookSecret,
+      public_nav_links: data.publicNavLinks ? JSON.stringify(data.publicNavLinks) : null,
+      public_nav_disabled_features: data.publicNavDisabledFeatures ? JSON.stringify(data.publicNavDisabledFeatures) : null,
     });
   }
 
@@ -164,6 +192,22 @@ export async function rotateWebhookSecret(spaceId: string) {
   return getSpaceAdminSettings(spaceId);
 }
 
+function parseNavLinks(raw: any): { label: string; url: string }[] {
+  if (!raw) return [];
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+}
+
+function parseJsonArray(raw: any): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+}
+
 function formatSettings(row: any) {
   return {
     spaceId: row.space_id,
@@ -175,13 +219,20 @@ function formatSettings(row: any) {
     calendarEnabled: !!row.calendar_enabled,
     blogEnabled: !!row.blog_enabled,
     allowPublicBlog: !!row.allow_public_blog,
+    newsletterEnabled: !!row.newsletter_enabled,
+    allowPublicNewsletter: !!row.allow_public_newsletter,
+    allowPublicNewsletterSubscription: !!row.allow_public_newsletter_subscription,
+    newsletterTrackingEnabled: row.newsletter_tracking_enabled !== undefined ? !!row.newsletter_tracking_enabled : true,
     isPublic: !!row.is_public,
     requireVerifiedEmail: !!row.require_verified_email,
     isFeatured: !!row.is_featured,
     baseColor: row.base_color || null,
     accentColor: row.accent_color || null,
     textColor: row.text_color || null,
+    publicTheme: row.public_theme || null,
     webhooksEnabled: !!row.webhooks_enabled,
     webhookSecret: row.webhook_secret || null,
+    publicNavLinks: parseNavLinks(row.public_nav_links),
+    publicNavDisabledFeatures: parseJsonArray(row.public_nav_disabled_features),
   };
 }

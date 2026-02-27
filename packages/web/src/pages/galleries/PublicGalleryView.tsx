@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, X, Layers, Image } from 'lucide-react';
 import { boardApi } from '../../lib/boardApi.js';
+import { usePublicTheme } from '../../contexts/PublicThemeContext.js';
 
 type ViewMode = 'grouped' | 'all';
 
@@ -29,6 +30,8 @@ interface GalleryItem {
 
 export function PublicGalleryView() {
   const { spaceSlug, channelName } = useParams();
+  const theme = usePublicTheme();
+  const c = theme.colors;
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
@@ -81,6 +84,97 @@ export function PublicGalleryView() {
     setLightboxIndex(attachmentIndex);
   };
 
+  const styles: Record<string, React.CSSProperties> = {
+    status: { textAlign: 'center', padding: 40, color: c.mutedText },
+    error: { textAlign: 'center', padding: 40, color: '#c53030' },
+    empty: { textAlign: 'center', padding: 40, color: c.mutedText, fontSize: '0.9rem' },
+    topBar: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 20,
+    },
+    viewToggle: {
+      display: 'flex',
+      background: '#f3f4f6',
+      borderRadius: 6,
+      padding: 2,
+      gap: 1,
+    },
+    toggleBtn: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      border: 'none',
+      borderRadius: 5,
+      cursor: 'pointer',
+      padding: '5px 9px',
+      transition: 'background 0.15s, color 0.15s',
+    },
+    breadcrumb: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
+      fontSize: '0.85rem',
+    },
+    breadcrumbLink: {
+      color: c.linkColor,
+      textDecoration: 'none',
+      fontWeight: 500,
+    },
+    breadcrumbCurrent: {
+      color: c.pageText,
+      fontWeight: 600,
+    },
+    gridWrap: {
+      maxHeight: 'calc(100vh - 180px)',
+      overflowY: 'auto',
+    },
+    grid: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+      gap: 10,
+    },
+    cell: {
+      position: 'relative',
+      aspectRatio: '1',
+      border: 'none',
+      borderRadius: 8,
+      overflow: 'hidden',
+      cursor: 'pointer',
+      padding: 0,
+      background: c.contentBorder,
+    },
+    thumb: {
+      width: '100%',
+      height: '100%',
+      objectFit: 'cover',
+      display: 'block',
+    },
+    badge: {
+      position: 'absolute',
+      top: 6,
+      right: 6,
+      background: 'rgba(0,0,0,0.7)',
+      color: '#fff',
+      fontSize: '0.7rem',
+      fontWeight: 700,
+      padding: '2px 6px',
+      borderRadius: 8,
+    },
+    captionOverlay: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      padding: '14px 8px 6px',
+      background: 'linear-gradient(transparent, rgba(0,0,0,0.55))',
+      color: '#fff',
+      fontSize: '0.72rem',
+      lineHeight: 1.3,
+    },
+  };
+
   if (loading && items.length === 0) return <div style={styles.status}>Loading...</div>;
   if (error) return <div style={styles.error}>{error}</div>;
 
@@ -89,7 +183,7 @@ export function PublicGalleryView() {
       <div style={styles.topBar}>
         <div style={styles.breadcrumb}>
           <Link to={`/gallery/${spaceSlug}`} style={styles.breadcrumbLink}>Galleries</Link>
-          <span style={{ color: '#999' }}>/</span>
+          <span style={{ color: c.mutedText }}>/</span>
           <span style={styles.breadcrumbCurrent}>{channelName}</span>
         </div>
         <div style={styles.viewToggle}>
@@ -97,8 +191,8 @@ export function PublicGalleryView() {
             onClick={() => setViewMode('grouped')}
             style={{
               ...styles.toggleBtn,
-              background: viewMode === 'grouped' ? '#e5e7eb' : 'transparent',
-              color: viewMode === 'grouped' ? '#111' : '#999',
+              background: viewMode === 'grouped' ? c.contentBorder : 'transparent',
+              color: viewMode === 'grouped' ? c.headingColor : c.mutedText,
             }}
             title="Grouped by upload"
           >
@@ -108,8 +202,8 @@ export function PublicGalleryView() {
             onClick={() => setViewMode('all')}
             style={{
               ...styles.toggleBtn,
-              background: viewMode === 'all' ? '#e5e7eb' : 'transparent',
-              color: viewMode === 'all' ? '#111' : '#999',
+              background: viewMode === 'all' ? c.contentBorder : 'transparent',
+              color: viewMode === 'all' ? c.headingColor : c.mutedText,
             }}
             title="All photos"
           >
@@ -281,97 +375,6 @@ function Lightbox({
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  status: { textAlign: 'center', padding: 40, color: '#999' },
-  error: { textAlign: 'center', padding: 40, color: '#c53030' },
-  empty: { textAlign: 'center', padding: 40, color: '#999', fontSize: '0.9rem' },
-  topBar: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  viewToggle: {
-    display: 'flex',
-    background: '#f3f4f6',
-    borderRadius: 6,
-    padding: 2,
-    gap: 1,
-  },
-  toggleBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    border: 'none',
-    borderRadius: 5,
-    cursor: 'pointer',
-    padding: '5px 9px',
-    transition: 'background 0.15s, color 0.15s',
-  },
-  breadcrumb: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    fontSize: '0.85rem',
-  },
-  breadcrumbLink: {
-    color: '#2563eb',
-    textDecoration: 'none',
-    fontWeight: 500,
-  },
-  breadcrumbCurrent: {
-    color: '#333',
-    fontWeight: 600,
-  },
-  gridWrap: {
-    maxHeight: 'calc(100vh - 180px)',
-    overflowY: 'auto',
-  },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-    gap: 10,
-  },
-  cell: {
-    position: 'relative',
-    aspectRatio: '1',
-    border: 'none',
-    borderRadius: 8,
-    overflow: 'hidden',
-    cursor: 'pointer',
-    padding: 0,
-    background: '#e5e7eb',
-  },
-  thumb: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
-    display: 'block',
-  },
-  badge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    background: 'rgba(0,0,0,0.7)',
-    color: '#fff',
-    fontSize: '0.7rem',
-    fontWeight: 700,
-    padding: '2px 6px',
-    borderRadius: 8,
-  },
-  captionOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: '14px 8px 6px',
-    background: 'linear-gradient(transparent, rgba(0,0,0,0.55))',
-    color: '#fff',
-    fontSize: '0.72rem',
-    lineHeight: 1.3,
-  },
-};
 
 const lbStyles: Record<string, React.CSSProperties> = {
   overlay: {

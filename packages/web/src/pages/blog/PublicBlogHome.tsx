@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { boardApi } from '../../lib/boardApi.js';
+import { usePublicTheme } from '../../contexts/PublicThemeContext.js';
 import type { BlogPost } from '@crabac/shared';
 
 interface SpaceInfo {
@@ -15,6 +16,8 @@ interface SpaceInfo {
 
 export function PublicBlogHome() {
   const { spaceSlug } = useParams();
+  const theme = usePublicTheme();
+  const c = theme.colors;
   const [space, setSpace] = useState<SpaceInfo | null>(null);
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,7 +57,7 @@ export function PublicBlogHome() {
   };
 
   if (loading) {
-    return <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>Loading...</div>;
+    return <div style={{ textAlign: 'center', padding: 40, color: c.mutedText }}>Loading...</div>;
   }
 
   if (error) {
@@ -64,27 +67,27 @@ export function PublicBlogHome() {
   return (
     <div>
       {space && (
-        <div style={styles.spaceHeader}>
-          {space.iconUrl && <img src={space.iconUrl} alt="" style={styles.spaceIcon} />}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32 }}>
+          {space.iconUrl && <img src={space.iconUrl} alt="" style={{ width: 48, height: 48, borderRadius: 12, objectFit: 'cover' }} />}
           <div>
-            <h1 style={styles.spaceName}>{space.name}</h1>
-            {space.description && <p style={styles.spaceDesc}>{space.description}</p>}
+            <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: c.headingColor }}>{space.name}</h1>
+            {space.description && <p style={{ margin: '4px 0 0', fontSize: '0.9rem', color: c.secondaryText }}>{space.description}</p>}
           </div>
         </div>
       )}
 
       {posts.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>No blog posts yet</div>
+        <div style={{ textAlign: 'center', padding: 40, color: c.mutedText }}>No blog posts yet</div>
       ) : (
-        <div style={styles.postList}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
           {posts.map((post) => (
-            <article key={post.id} style={styles.postCard}>
-              <Link to={`/blog/${spaceSlug}/${post.id}`} style={styles.titleLink}>
-                <h2 style={styles.postTitle}>{post.title}</h2>
+            <article key={post.id} style={{ background: c.contentBg, border: `1px solid ${c.contentBorder}`, borderRadius: c.contentRadius, padding: '32px 36px' }}>
+              <Link to={`/blog/${spaceSlug}/${post.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: c.headingColor, lineHeight: 1.3 }}>{post.title}</h2>
               </Link>
-              <div style={styles.postMeta}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', color: c.mutedText, marginTop: 8 }}>
                 <span style={{ fontWeight: 600 }}>{post.author?.displayName}</span>
-                <span style={{ color: '#bbb' }}>&middot;</span>
+                <span style={{ color: c.mutedText }}>&middot;</span>
                 <span>
                   {post.publishedAt
                     ? new Date(post.publishedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
@@ -92,9 +95,11 @@ export function PublicBlogHome() {
                 </span>
               </div>
               {post.summary && (
-                <p style={styles.postSummary}>{post.summary}</p>
+                <p style={{ margin: '16px 0 0', fontSize: '1.05rem', color: c.secondaryText, lineHeight: 1.6, fontStyle: 'italic', borderLeft: `3px solid ${c.contentBorder}`, paddingLeft: 16 }}>
+                  {post.summary}
+                </p>
               )}
-              <div style={styles.postBody}>
+              <div style={{ marginTop: 20, fontSize: '1rem', lineHeight: 1.8, color: c.pageText }}>
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {post.content}
                 </ReactMarkdown>
@@ -102,7 +107,7 @@ export function PublicBlogHome() {
             </article>
           ))}
           {hasMore && (
-            <button onClick={loadMore} style={styles.loadMore}>
+            <button onClick={loadMore} style={{ background: 'none', border: 'none', color: c.linkColor, cursor: 'pointer', fontSize: '0.85rem', padding: 12, textAlign: 'center' }}>
               {loadingMore ? 'Loading...' : 'Load more'}
             </button>
           )}
@@ -111,18 +116,3 @@ export function PublicBlogHome() {
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  spaceHeader: { display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32 },
-  spaceIcon: { width: 48, height: 48, borderRadius: 12, objectFit: 'cover' },
-  spaceName: { margin: 0, fontSize: '1.5rem', fontWeight: 700, color: '#111' },
-  spaceDesc: { margin: '4px 0 0', fontSize: '0.9rem', color: '#666' },
-  postList: { display: 'flex', flexDirection: 'column', gap: 32 },
-  postCard: { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '32px 36px' },
-  titleLink: { textDecoration: 'none', color: 'inherit' },
-  postTitle: { margin: 0, fontSize: '1.5rem', fontWeight: 700, color: '#111', lineHeight: 1.3 },
-  postMeta: { display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', color: '#999', marginTop: 8 },
-  postSummary: { margin: '16px 0 0', fontSize: '1.05rem', color: '#666', lineHeight: 1.6, fontStyle: 'italic', borderLeft: '3px solid #e5e7eb', paddingLeft: 16 },
-  postBody: { marginTop: 20, fontSize: '1rem', lineHeight: 1.8, color: '#333' },
-  loadMore: { background: 'none', border: 'none', color: '#5865f2', cursor: 'pointer', fontSize: '0.85rem', padding: 12, textAlign: 'center' },
-};

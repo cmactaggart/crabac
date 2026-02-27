@@ -96,7 +96,7 @@ export async function listUserSpaces(userId: string) {
     .join('space_members', 'spaces.id', 'space_members.space_id')
     .leftJoin('space_settings', 'spaces.id', 'space_settings.space_id')
     .where('space_members.user_id', userId)
-    .select('spaces.*', 'space_settings.calendar_enabled', 'space_settings.blog_enabled', 'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color');
+    .select('spaces.*', 'space_settings.calendar_enabled', 'space_settings.blog_enabled', 'space_settings.newsletter_enabled', 'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color', 'space_settings.public_theme');
 
   return spaces.map(formatSpace);
 }
@@ -105,7 +105,7 @@ export async function getSpace(spaceId: string) {
   const space = await db('spaces')
     .leftJoin('space_settings', 'spaces.id', 'space_settings.space_id')
     .where('spaces.id', spaceId)
-    .select('spaces.*', 'space_settings.calendar_enabled', 'space_settings.blog_enabled', 'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color')
+    .select('spaces.*', 'space_settings.calendar_enabled', 'space_settings.blog_enabled', 'space_settings.newsletter_enabled', 'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color', 'space_settings.public_theme')
     .first();
   if (!space) throw new NotFoundError('Space');
   return formatSpace(space);
@@ -115,7 +115,7 @@ export async function getSpaceBySlug(slug: string) {
   const space = await db('spaces')
     .leftJoin('space_settings', 'spaces.id', 'space_settings.space_id')
     .where('spaces.slug', slug)
-    .select('spaces.*', 'space_settings.calendar_enabled', 'space_settings.blog_enabled', 'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color')
+    .select('spaces.*', 'space_settings.calendar_enabled', 'space_settings.blog_enabled', 'space_settings.newsletter_enabled', 'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color', 'space_settings.public_theme')
     .first();
   if (!space) throw new NotFoundError('Space');
   return formatSpace(space);
@@ -577,6 +577,39 @@ export async function isBanned(spaceId: string, userId: string): Promise<boolean
   return !!row;
 }
 
+function buildSpaceEmbedQuery() {
+  return db('spaces')
+    .leftJoin('space_settings', 'spaces.id', 'space_settings.space_id')
+    .select(
+      'spaces.*',
+      'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color',
+      db.raw('(SELECT COUNT(*) FROM space_members WHERE space_id = spaces.id) as member_count'),
+      db.raw('(SELECT COUNT(*) FROM channels WHERE space_id = spaces.id) as channel_count'),
+    );
+}
+
+function formatSpaceEmbed(row: any) {
+  return {
+    id: row.id, name: row.name, slug: row.slug, description: row.description,
+    iconUrl: row.icon_url, memberCount: Number(row.member_count),
+    channelCount: Number(row.channel_count),
+    baseColor: row.base_color || null, accentColor: row.accent_color || null,
+    textColor: row.text_color || null, isPublic: !!row.is_public,
+  };
+}
+
+export async function getSpaceEmbed(spaceId: string) {
+  const row = await buildSpaceEmbedQuery().where('spaces.id', spaceId).first();
+  if (!row) throw new NotFoundError('Space');
+  return formatSpaceEmbed(row);
+}
+
+export async function getSpaceEmbedBySlug(slug: string) {
+  const row = await buildSpaceEmbedQuery().where('spaces.slug', slug).first();
+  if (!row) throw new NotFoundError('Space');
+  return formatSpaceEmbed(row);
+}
+
 function formatSpace(row: any) {
   return {
     id: row.id,
@@ -589,9 +622,11 @@ function formatSpace(row: any) {
     updatedAt: row.updated_at,
     calendarEnabled: !!row.calendar_enabled,
     blogEnabled: !!row.blog_enabled,
+    newsletterEnabled: !!row.newsletter_enabled,
     isPublic: !!row.is_public,
     baseColor: row.base_color || null,
     accentColor: row.accent_color || null,
     textColor: row.text_color || null,
+    publicTheme: row.public_theme || null,
   };
 }

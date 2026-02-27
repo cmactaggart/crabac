@@ -21,7 +21,21 @@ publicSpacesRoutes.get(
         description: space.description,
         iconUrl: space.iconUrl,
         isPublic: space.isPublic,
+        publicTheme: space.publicTheme,
       });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Get space embed by slug (NO auth required — for link embeds)
+publicSpacesRoutes.get(
+  '/by-slug/:slug/embed',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const embed = await spacesService.getSpaceEmbedBySlug(req.params.slug);
+      res.json(embed);
     } catch (err) {
       next(err);
     }

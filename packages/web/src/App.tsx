@@ -26,23 +26,25 @@ import { OnboardingModal } from './components/common/OnboardingModal.js';
 import { api } from './lib/api.js';
 import { BottomTabBar } from './components/layout/BottomTabBar.js';
 import { PublicSpaceLanding } from './pages/PublicSpaceLanding.js';
-import { BoardLayout } from './pages/boards/BoardLayout.js';
+import { PublicLayout } from './components/public/PublicLayout.js';
 import { BoardHome } from './pages/boards/BoardHome.js';
 import { BoardThreadList } from './pages/boards/BoardThreadList.js';
 import { BoardThreadDetail } from './pages/boards/BoardThreadDetail.js';
 import { BoardRegister } from './pages/boards/BoardRegister.js';
 import { BoardLogin } from './pages/boards/BoardLogin.js';
-import { GalleryLayout } from './pages/galleries/GalleryLayout.js';
 import { PublicGalleryHome } from './pages/galleries/PublicGalleryHome.js';
 import { PublicGalleryView } from './pages/galleries/PublicGalleryView.js';
-import { CalendarLayout } from './pages/calendar/CalendarLayout.js';
 import { PublicCalendarView } from './pages/calendar/PublicCalendarView.js';
-import { RoutesLayout } from './pages/routes/RoutesLayout.js';
 import { PublicRoutesHome } from './pages/routes/PublicRoutesHome.js';
 import { PublicRoutesView } from './pages/routes/PublicRoutesView.js';
-import { BlogLayout } from './pages/blog/BlogLayout.js';
 import { PublicBlogHome } from './pages/blog/PublicBlogHome.js';
 import { PublicBlogPost } from './pages/blog/PublicBlogPost.js';
+import { PublicNewsletterHome } from './pages/newsletter/PublicNewsletterHome.js';
+import { PublicNewsletterDetail } from './pages/newsletter/PublicNewsletterDetail.js';
+import { PublicPersonalNewsletterHome } from './pages/newsletter/PublicPersonalNewsletterHome.js';
+import { PublicPersonalNewsletterDetail } from './pages/newsletter/PublicPersonalNewsletterDetail.js';
+import { NewsletterPreferences } from './pages/newsletter/NewsletterPreferences.js';
+import { NewsletterVerify } from './pages/newsletter/NewsletterVerify.js';
 
 export function App() {
   const { user, loading, restore } = useAuthStore();
@@ -100,7 +102,7 @@ export function App() {
         <Route path="/space/slug/:slug" element={<PublicSpaceLanding />} />
         <Route path="/" element={user ? <Home /> : <Navigate to="/login" />} />
         {/* Public board routes (no auth guard) */}
-        <Route path="/boards/:spaceSlug" element={<BoardLayout />}>
+        <Route path="/boards/:spaceSlug" element={<PublicLayout pageType="boards" />}>
           <Route index element={<BoardHome />} />
           <Route path="register" element={<BoardRegister />} />
           <Route path="login" element={<BoardLogin />} />
@@ -108,23 +110,34 @@ export function App() {
           <Route path=":channelName/:threadId" element={<BoardThreadDetail />} />
         </Route>
         {/* Public gallery routes (no auth guard) */}
-        <Route path="/gallery/:spaceSlug" element={<GalleryLayout />}>
+        <Route path="/gallery/:spaceSlug" element={<PublicLayout pageType="gallery" />}>
           <Route index element={<PublicGalleryHome />} />
           <Route path=":channelName" element={<PublicGalleryView />} />
         </Route>
         {/* Public route library (no auth guard) */}
-        <Route path="/routes/:spaceSlug" element={<RoutesLayout />}>
+        <Route path="/routes/:spaceSlug" element={<PublicLayout pageType="routes" />}>
           <Route index element={<PublicRoutesHome />} />
           <Route path=":channelName" element={<PublicRoutesView />} />
         </Route>
         {/* Public calendar routes (no auth guard) */}
-        <Route path="/calendar/:spaceSlug" element={<CalendarLayout />}>
+        <Route path="/calendar/:spaceSlug" element={<PublicLayout pageType="calendar" />}>
           <Route index element={<PublicCalendarView />} />
         </Route>
         {/* Public blog routes (no auth guard) */}
-        <Route path="/blog/:spaceSlug" element={<BlogLayout />}>
+        <Route path="/blog/:spaceSlug" element={<PublicLayout pageType="blog" />}>
           <Route index element={<PublicBlogHome />} />
           <Route path=":postId" element={<PublicBlogPost />} />
+        </Route>
+        {/* Newsletter standalone pages (no layout wrapper) */}
+        <Route path="/newsletter/preferences/:token" element={<NewsletterPreferences />} />
+        <Route path="/newsletter/verify/:token" element={<NewsletterVerify />} />
+        {/* Personal newsletter routes */}
+        <Route path="/newsletter/u/:username/:newsletterId" element={<PublicPersonalNewsletterDetail />} />
+        <Route path="/newsletter/u/:username" element={<PublicPersonalNewsletterHome />} />
+        {/* Public newsletter routes (space) */}
+        <Route path="/newsletter/:spaceSlug" element={<PublicLayout pageType="newsletter" />}>
+          <Route index element={<PublicNewsletterHome />} />
+          <Route path=":newsletterId" element={<PublicNewsletterDetail />} />
         </Route>
       </Routes>
       {isMobile && user && <BottomTabBar />}

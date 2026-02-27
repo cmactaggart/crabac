@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.5.0
+## API Version 0.6.0
 
 Base URL: `https://app.crab.ac/api`
 
@@ -205,13 +205,20 @@ Upload user avatar. Requires auth. Multipart form data with `avatar` field.
 
 Get user preferences. Requires auth.
 
-**Response:** `{ distanceUnits }`
+**Response:** `{ distanceUnits, defaultVisibility, profileVisibility, onboardingCompleted, newsletterEnabled }`
 
 ### PUT /users/preferences
 
 Update user preferences. Requires auth.
 
-**Body:** `{ distanceUnits?: 'metric' | 'imperial' }`
+**Body:**
+| Field | Type | Required |
+|-------|------|----------|
+| `distanceUnits` | string | no | `metric` or `imperial` |
+| `defaultVisibility` | string | no | `public`, `private`, `friends`, or `spaces` |
+| `profileVisibility` | string | no | `public`, `private`, `friends`, or `spaces` |
+| `onboardingCompleted` | boolean | no | |
+| `newsletterEnabled` | boolean | no | Opt in to personal newsletter emails |
 
 ### GET /users/mutes
 
@@ -341,17 +348,24 @@ Get space admin settings. Requires `MANAGE_SPACE`.
   "allowPublicCalendar": false,
   "allowPublicRoutes": false,
   "allowPublicBlog": false,
+  "allowPublicNewsletter": false,
+  "allowPublicNewsletterSubscription": false,
+  "newsletterTrackingEnabled": true,
   "allowAnonymousBrowsing": false,
   "calendarEnabled": false,
   "blogEnabled": false,
+  "newsletterEnabled": false,
   "isPublic": false,
   "requireVerifiedEmail": false,
   "isFeatured": false,
   "baseColor": null,
   "accentColor": null,
   "textColor": null,
+  "publicTheme": null,
   "webhooksEnabled": false,
-  "webhookSecret": null
+  "webhookSecret": null,
+  "publicNavLinks": [],
+  "publicNavDisabledFeatures": []
 }
 ```
 
@@ -360,6 +374,12 @@ Get space admin settings. Requires `MANAGE_SPACE`.
 Update space admin settings. Requires `MANAGE_SPACE`.
 
 **Body:** Any subset of the settings fields above (including `webhooksEnabled`). When enabling webhooks for the first time, a webhook secret is auto-generated.
+
+Additional fields:
+| Field | Type | Description |
+|-------|------|-------------|
+| `publicNavLinks` | array | Custom external links for the public page navbar. Each item: `{ label: string, url: string }`. Max 20. |
+| `publicNavDisabledFeatures` | array | Feature keys to hide from the public page navbar (e.g. `["gallery", "blog"]`). Valid keys: `boards`, `gallery`, `routes`, `calendar`, `blog`, `newsletter`. |
 
 ### POST /spaces/:spaceId/admin-settings/rotate-webhook-secret
 
@@ -1718,6 +1738,37 @@ Log in as a board user.
 
 **Body:** `{ login, password }`
 
+### Site Config
+
+#### GET /boards/site-config/:spaceSlug
+
+Get public site configuration for a space, including enabled features, navbar settings, and theme. Used by the frontend to render cross-page navigation. No auth required.
+
+**Response:**
+```json
+{
+  "space": {
+    "id": "...",
+    "name": "My Space",
+    "slug": "my-space",
+    "description": null,
+    "iconUrl": null,
+    "publicTheme": null
+  },
+  "enabledFeatures": ["boards", "gallery", "routes"],
+  "navFeatures": ["boards", "routes"],
+  "navLinks": [
+    { "label": "Our Website", "url": "https://example.com" }
+  ]
+}
+```
+
+- `enabledFeatures` — all public features enabled in admin settings
+- `navFeatures` — features shown in the navbar (`enabledFeatures` minus `publicNavDisabledFeatures`)
+- `navLinks` — custom external links configured by the admin
+
+Returns `404` if no public features are enabled.
+
 ### Board Endpoints
 
 #### GET /boards/:spaceSlug
@@ -1807,6 +1858,192 @@ List public published blog posts. Requires `allowPublicBlog` in space settings. 
 Get a single public blog post. Same access requirements as listing.
 
 **Response:** `{ space, post: BlogPost }`
+
+---
+
+## Newsletter
+
+### Space Newsletters
+
+All space newsletter endpoints require auth + space membership unless noted.
+
+#### GET /spaces/:spaceId/newsletters
+
+List space newsletters. Requires membership.
+
+**Query:**
+| Param | Type | Default |
+|-------|------|---------|
+| `limit` | number | 20 |
+| `before` | string | - |
+| `status` | string | - | `draft` or `published` |
+
+#### GET /spaces/:spaceId/newsletters/:id
+
+Get a single space newsletter. Requires membership.
+
+#### POST /spaces/:spaceId/newsletters
+
+Create a space newsletter. Requires `MANAGE_NEWSLETTER`.
+
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `subject` | string | yes | Max 500 chars |
+| `summary` | string \| null | no | Max 500 chars |
+| `headerImageUrl` | string \| null | no | Max 512 chars |
+| `blocks` | array | yes | Block editor content (max 100 blocks) |
+| `status` | string | no | `draft` (default) or `published` |
+| `isPublic` | boolean | no | Visible on public newsletter page |
+
+Block types: `text`, `image`, `image_gallery`, `quote`, `divider`, `embed`, `section_heading`.
+
+If `status` is `published`, email sends are enqueued automatically.
+
+#### PATCH /spaces/:spaceId/newsletters/:id
+
+Update a newsletter. Author can edit own; otherwise requires `MANAGE_NEWSLETTER`. Enqueues sends when transitioning from draft to published.
+
+#### DELETE /spaces/:spaceId/newsletters/:id
+
+Delete a newsletter. Requires `MANAGE_NEWSLETTER`.
+
+#### POST /spaces/:spaceId/newsletters/upload-image
+
+Upload an image for newsletter content. Requires `MANAGE_NEWSLETTER`. Multipart form data with `image` field (max 5MB, images only).
+
+**Response:** `{ url: string }`
+
+#### GET /spaces/:spaceId/newsletters/:id/stats
+
+Get analytics for a specific newsletter. Requires `MANAGE_NEWSLETTER`.
+
+#### GET /spaces/:spaceId/newsletter-analytics
+
+Get analytics summary for all space newsletters. Requires `MANAGE_NEWSLETTER`.
+
+#### GET /spaces/:spaceId/newsletter-subscribers/count
+
+Get subscriber counts for space newsletters. Requires `MANAGE_NEWSLETTER`.
+
+### Personal Newsletters
+
+All personal newsletter endpoints require auth.
+
+#### GET /users/me/newsletters
+
+List own personal newsletters.
+
+**Query:** Same as space newsletters.
+
+#### POST /users/me/newsletters
+
+Create a personal newsletter. Same body as space newsletters.
+
+#### PATCH /users/me/newsletters/:id
+
+Update own personal newsletter. Author only.
+
+#### DELETE /users/me/newsletters/:id
+
+Delete own personal newsletter. Author only.
+
+#### POST /users/me/newsletters/upload-image
+
+Upload an image for personal newsletter content. Multipart form data with `image` field.
+
+### Newsletter Subscriptions (Authenticated)
+
+#### GET /newsletter-subscriptions
+
+List own active subscriptions. Requires auth.
+
+#### GET /newsletter-subscriptions/check?sourceType=...&sourceId=...
+
+Check subscription status for a specific source. Requires auth.
+
+#### POST /newsletter-subscriptions
+
+Subscribe to a newsletter. Requires auth.
+
+**Body:**
+| Field | Type | Required |
+|-------|------|----------|
+| `sourceType` | string | yes | `space` or `user` |
+| `sourceId` | string | yes | Space ID or user ID |
+| `frequency` | string | no | `immediate` (default), `daily_digest`, or `weekly_digest` |
+
+#### PATCH /newsletter-subscriptions/:id
+
+Update subscription preferences. Requires auth (must own subscription).
+
+**Body:** `{ frequency?, isActive? }`
+
+#### DELETE /newsletter-subscriptions/:id
+
+Unsubscribe. Requires auth (must own subscription).
+
+### Newsletter Public Endpoints (No Auth)
+
+#### POST /newsletter-public/subscribe
+
+Anonymous email subscription.
+
+**Body:**
+| Field | Type | Required |
+|-------|------|----------|
+| `email` | string | yes | Max 255 chars |
+| `sourceType` | string | yes | `space` or `user` |
+| `sourceId` | string | yes | |
+| `frequency` | string | no | `immediate` (default), `daily_digest`, or `weekly_digest` |
+
+#### GET /newsletter-public/verify/:token
+
+Verify anonymous subscription via email link.
+
+#### GET /newsletter-public/unsubscribe/:token
+
+Unsubscribe via email link.
+
+#### GET /newsletter-public/preferences/:token
+
+Get subscription preferences via token.
+
+#### PATCH /newsletter-public/preferences/:token
+
+Update preferences via token.
+
+**Body:** `{ frequency?, isActive? }`
+
+#### GET /newsletter-public/space/:spaceSlug
+
+List published public newsletters for a space. Requires `allowPublicNewsletter` in space settings.
+
+**Response:** `{ space, newsletters }`
+
+#### GET /newsletter-public/space/:spaceSlug/:newsletterId
+
+Read a single published public space newsletter.
+
+#### GET /newsletter-public/user/:username
+
+List published public personal newsletters for a user.
+
+**Response:** `{ user, newsletters }`
+
+#### GET /newsletter-public/user/:username/:newsletterId
+
+Read a single published personal newsletter.
+
+### Newsletter Tracking (No Auth)
+
+#### GET /newsletter-track/open/:trackingToken
+
+Open tracking pixel. Returns a 1x1 GIF.
+
+#### GET /newsletter-track/click/:trackingToken?url=...
+
+Click tracking redirect. Records the click and 302 redirects to the provided URL.
 
 ---
 
