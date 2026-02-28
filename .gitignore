@@ -23,5 +23,17 @@ key.txt
 # Uploads
 packages/api/uploads/
 
+# Mobile app
+packages/mobile/ios/Pods/
+packages/mobile/ios/build/
+packages/mobile/android/app/build/
+packages/mobile/android/build/
+packages/mobile/android/.gradle/
+*.apk
+*.aab
+*.ipa
+*.dSYM.zip
+*.dSYM
+
 # Plugins (loaded dynamically, not part of core)
 plugins/

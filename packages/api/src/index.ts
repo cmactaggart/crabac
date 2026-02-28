@@ -53,6 +53,8 @@ import { newsletterRoutes, personalNewsletterRoutes } from './modules/newsletter
 import { newsletterSubscriptionRoutes } from './modules/newsletter/newsletter-subscription.routes.js';
 import { newsletterPublicRoutes } from './modules/newsletter/newsletter-public.routes.js';
 import { newsletterTrackingRoutes } from './modules/newsletter/newsletter-tracking.routes.js';
+import { devicesRoutes } from './modules/notifications/devices.routes.js';
+import { initApnProvider } from './modules/notifications/push.service.js';
 import { redis } from './lib/redis.js';
 import { loadPlugins, getLoadedPlugins } from './plugins/loader.js';
 import { db } from './database/connection.js';
@@ -122,6 +124,7 @@ app.use('/api/mobile', mobileRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/spaces', workflowRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/devices', devicesRoutes);
 
 // Unified message lookup (for embeds)
 app.get('/api/messages/:messageId', authenticate, async (req, res, next) => {
@@ -176,6 +179,7 @@ registerWorkflowListener();
 // Load plugins, connect Redis, and start server
 async function start() {
   await loadPlugins(app, eventBus, db);
+  initApnProvider();
 
   try {
     await redis.connect();

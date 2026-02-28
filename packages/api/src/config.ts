@@ -48,4 +48,12 @@ export const config = {
     weeklyDigestDay: parseInt(process.env.NEWSLETTER_WEEKLY_DIGEST_DAY || '1', 10), // Monday
     eventHorizonDays: parseInt(process.env.NEWSLETTER_EVENT_HORIZON_DAYS || '14', 10),
   },
+
+  apns: {
+    keyPath: process.env.APNS_KEY_PATH || '',
+    keyId: process.env.APNS_KEY_ID || '',
+    teamId: process.env.APNS_TEAM_ID || '',
+    bundleId: process.env.APNS_BUNDLE_ID || 'ac.crab.app',
+    production: process.env.APNS_PRODUCTION === 'true',
+  },
 } as const;
