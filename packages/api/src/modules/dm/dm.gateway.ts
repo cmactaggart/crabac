@@ -1,11 +1,38 @@
 import { eventBus } from '../../lib/event-bus.js';
 import { io } from '../../websocket/socket-server.js';
 import { createNotification } from '../notifications/notifications.service.js';
+import { db } from '../../database/connection.js';
+import { sendPushNotification } from '../notifications/push.service.js';
 
 export function registerDMGateway() {
-  eventBus.on('dm.created', ({ message, conversationId }) => {
+  eventBus.on('dm.created', async ({ message, conversationId }) => {
     if (!io) return;
     io.to(`dm:${conversationId}`).emit('dm:new', message);
+
+    // Send push notifications to participants not connected to this conversation room
+    try {
+      const members = await db('conversation_members')
+        .where({ conversation_id: conversationId, status: 'accepted' })
+        .whereNot('user_id', message.authorId)
+        .select('user_id');
+
+      const connectedSockets = await io.in(`dm:${conversationId}`).fetchSockets();
+      const connectedUserIds = new Set(connectedSockets.map(s => s.data.userId));
+
+      for (const member of members) {
+        const recipientId = member.user_id.toString();
+        if (!connectedUserIds.has(recipientId)) {
+          const senderName = message.author?.displayName || message.author?.username || 'Someone';
+          const preview = message.content?.length > 100 ? message.content.slice(0, 100) + '...' : message.content;
+          sendPushNotification(recipientId, senderName, preview || 'sent you a message', {
+            type: 'dm_message',
+            conversationId,
+          });
+        }
+      }
+    } catch {
+      // ignore push errors
+    }
   });
 
   eventBus.on('dm.updated', ({ message, conversationId }) => {
