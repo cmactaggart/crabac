@@ -2,7 +2,7 @@ import { eventBus } from '../../lib/event-bus.js';
 import { io } from '../../websocket/socket-server.js';
 
 export function registerMessageGateway() {
-  eventBus.on('message.created', ({ message, channelId }) => {
+  eventBus.on('message.created', ({ message, channelId, spaceId }) => {
     if (!io) return;
     const room = `channel:${channelId}`;
     if (message.metadata?.workflowId) {
@@ -10,6 +10,15 @@ export function registerMessageGateway() {
       console.log(`[Gateway] Emitting workflow message ${message.id} to room ${room} (${roomSockets?.size ?? 0} sockets)`);
     }
     io.to(room).emit('message:new', message);
+
+    // Notify the space room so channel lists can update unreads in real time
+    if (spaceId) {
+      io.to(`space:${spaceId}`).emit('channel:activity', {
+        channelId,
+        authorId: message.authorId,
+        messageId: message.id,
+      });
+    }
   });
 
   eventBus.on('message.updated', ({ message, channelId }) => {
