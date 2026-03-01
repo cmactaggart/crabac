@@ -15,8 +15,8 @@ export function createSocketServer(httpServer: HttpServer): Server {
       origin: '*',
       methods: ['GET', 'POST'],
     },
-    pingInterval: 25000,
-    pingTimeout: 20000,
+    pingInterval: 30000,
+    pingTimeout: 120000,
   });
 
   // Redis adapter for horizontal scaling

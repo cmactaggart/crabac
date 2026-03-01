@@ -55,14 +55,24 @@ export function useDMUnreadSocket(active: boolean) {
       useDMStore.getState().fetchConversations();
     };
 
+    // Re-fetch unreads when tab becomes visible (catches anything missed while backgrounded)
+    const onVisible = () => {
+      if (!document.hidden) {
+        useDMStore.getState().fetchDMUnreads();
+        useDMStore.getState().fetchConversations();
+      }
+    };
+
     socket.on('dm:new', onNewDM);
     socket.on('conversation:created', onConversationCreated);
     socket.on('connect', onReconnect);
+    document.addEventListener('visibilitychange', onVisible);
 
     return () => {
       socket.off('dm:new', onNewDM);
       socket.off('conversation:created', onConversationCreated);
       socket.off('connect', onReconnect);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [active]);
 }

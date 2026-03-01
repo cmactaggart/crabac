@@ -31,12 +31,21 @@ export function useChannelUnreadSocket(spaceId: string | undefined) {
       useChannelsStore.getState().fetchUnreads(spaceId);
     };
 
+    // Re-fetch unreads when tab becomes visible (catches anything missed while backgrounded)
+    const onVisible = () => {
+      if (!document.hidden) {
+        useChannelsStore.getState().fetchUnreads(spaceId);
+      }
+    };
+
     socket.on('channel:activity', onActivity);
     socket.on('connect', onReconnect);
+    document.addEventListener('visibilitychange', onVisible);
 
     return () => {
       socket.off('channel:activity', onActivity);
       socket.off('connect', onReconnect);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [spaceId]);
 }
