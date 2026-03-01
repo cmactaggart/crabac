@@ -45,6 +45,20 @@ usersRoutes.get('/me', async (req: Request, res: Response, next: NextFunction) =
   }
 });
 
+usersRoutes.delete('/me', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { password } = req.body;
+    if (!password) {
+      res.status(400).json({ error: 'Password is required' });
+      return;
+    }
+    await usersService.deleteAccount(req.user!.userId, password);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 usersRoutes.patch(
   '/me',
   validate(validation.updateUserSchema),

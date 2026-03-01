@@ -27,7 +27,7 @@ export function SpaceView() {
   const { spaces, fetchSpaces, setActiveSpace, members, fetchMembers, updateMemberStatus } = useSpacesStore();
   const { channels, categories, enterSpace, fetchMuted, setActiveChannel } = useChannelsStore();
 
-  useChannelUnreadSocket();
+  useChannelUnreadSocket(spaceId);
 
   useEffect(() => {
     fetchSpaces();

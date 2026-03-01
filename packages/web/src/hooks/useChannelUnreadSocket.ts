@@ -4,37 +4,39 @@ import { useChannelsStore } from '../stores/channels.js';
 import { useAuthStore } from '../stores/auth.js';
 
 /**
- * Listens for `channel:activity` socket events (emitted to the space room
- * whenever a new message is created) and increments the unread badge for
- * channels the user is NOT currently viewing.
+ * Listens for `channel:activity` socket events and increments unread badges
+ * for channels the user is NOT currently viewing.
  *
- * Should be mounted once inside SpaceView.
+ * Also re-fetches unreads on socket reconnect to catch up on missed events.
  */
-export function useChannelUnreadSocket() {
+export function useChannelUnreadSocket(spaceId: string | undefined) {
   useEffect(() => {
     const socket = getSocket();
-    if (!socket) return;
+    if (!socket || !spaceId) return;
 
     const onActivity = (payload: { channelId: string; authorId: string; messageId: string }) => {
       const userId = useAuthStore.getState().user?.id;
-      // Ignore own messages
       if (payload.authorId === userId) return;
 
       const { activeChannelId, channels, mutedChannels, incrementUnread } = useChannelsStore.getState();
-      // Ignore if user is currently viewing this channel
       if (payload.channelId === activeChannelId) return;
-      // Ignore if channel is muted
       if (mutedChannels.has(payload.channelId)) return;
-      // Only update if the channel belongs to the current space's channel list
       if (!channels.some((c) => c.id === payload.channelId)) return;
 
       incrementUnread(payload.channelId);
     };
 
+    // Re-fetch unreads on reconnect to catch up on events missed while disconnected
+    const onReconnect = () => {
+      useChannelsStore.getState().fetchUnreads(spaceId);
+    };
+
     socket.on('channel:activity', onActivity);
+    socket.on('connect', onReconnect);
 
     return () => {
       socket.off('channel:activity', onActivity);
+      socket.off('connect', onReconnect);
     };
-  }, []);
+  }, [spaceId]);
 }

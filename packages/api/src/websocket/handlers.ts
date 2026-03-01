@@ -271,11 +271,13 @@ async function joinUserSpaces(socket: Socket, userId: string) {
       .where('user_id', userId)
       .select('space_id');
 
+    console.log(`[Rooms] joinUserSpaces: user ${userId} has ${memberships.length} space memberships`);
     for (const m of memberships) {
       socket.join(`space:${m.space_id}`);
+      console.log(`[Rooms] Socket ${socket.id} joined space:${m.space_id}`);
     }
-  } catch {
-    // ignore
+  } catch (err) {
+    console.error(`[Rooms] joinUserSpaces failed for user ${userId}:`, err);
   }
 }
 
@@ -285,11 +287,12 @@ async function joinUserConversations(socket: Socket, userId: string) {
       .where('user_id', userId)
       .select('conversation_id');
 
+    console.log(`[Rooms] joinUserConversations: user ${userId} has ${memberships.length} conversations`);
     for (const m of memberships) {
       socket.join(`dm:${m.conversation_id}`);
     }
-  } catch {
-    // ignore
+  } catch (err) {
+    console.error(`[Rooms] joinUserConversations failed for user ${userId}:`, err);
   }
 }
 

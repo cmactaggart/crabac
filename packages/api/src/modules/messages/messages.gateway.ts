@@ -13,7 +13,10 @@ export function registerMessageGateway() {
 
     // Notify the space room so channel lists can update unreads in real time
     if (spaceId) {
-      io.to(`space:${spaceId}`).emit('channel:activity', {
+      const spaceRoom = `space:${spaceId}`;
+      const roomSockets = io.sockets.adapter.rooms.get(spaceRoom);
+      console.log(`[Gateway] Emitting channel:activity to ${spaceRoom} (${roomSockets?.size ?? 0} sockets) channelId=${channelId}`);
+      io.to(spaceRoom).emit('channel:activity', {
         channelId,
         authorId: message.authorId,
         messageId: message.id,

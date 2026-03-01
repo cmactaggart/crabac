@@ -180,6 +180,7 @@ export function Home() {
       }}>
         <h2 style={{ ...styles.sectionTitle, color: '#5a3a3a' }}>Discover Spaces</h2>
         <PublicSpaceDirectory lightTheme />
+        <a href="https://crab.ac/privacy" target="_blank" rel="noopener noreferrer" style={{ color: '#7a5a5a', fontSize: '0.8rem', textAlign: 'center', display: 'block', marginTop: '0.5rem' }}>Privacy Policy</a>
       </div>
 
       {showCreate && <NewSpaceOnboardingModal onClose={() => setShowCreate(false)} />}

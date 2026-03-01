@@ -1,6 +1,8 @@
+import bcrypt from 'bcrypt';
 import { db } from '../../database/connection.js';
-import { NotFoundError } from '../../lib/errors.js';
+import { NotFoundError, UnauthorizedError } from '../../lib/errors.js';
 import { config } from '../../config.js';
+import { Permissions } from '@crabac/shared';
 
 export async function getUser(userId: string) {
   const user = await db('users').where('id', userId).first();
@@ -51,6 +53,38 @@ function formatUser(row: any) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+export async function deleteAccount(userId: string, password: string) {
+  const user = await db('users').where('id', userId).first();
+  if (!user) throw new NotFoundError('User');
+
+  const valid = await bcrypt.compare(password, user.password_hash);
+  if (!valid) throw new UnauthorizedError('Invalid password');
+
+  // Transfer or delete owned spaces
+  const ownedSpaces = await db('spaces').where('owner_id', userId).select('id');
+  for (const space of ownedSpaces) {
+    // Find another admin member to transfer ownership
+    const candidates = await db('space_members')
+      .join('member_roles', 'space_members.id', 'member_roles.space_member_id')
+      .join('roles', 'member_roles.role_id', 'roles.id')
+      .where('space_members.space_id', space.id)
+      .whereNot('space_members.user_id', userId)
+      .select('space_members.user_id', 'roles.permissions');
+    const admin = candidates.find((c: any) => {
+      const perms = BigInt(c.permissions);
+      return (perms & Permissions.ADMINISTRATOR) !== 0n;
+    });
+
+    if (admin) {
+      await db('spaces').where('id', space.id).update({ owner_id: admin.user_id });
+    } else {
+      await db('spaces').where('id', space.id).del();
+    }
+  }
+
+  await db('users').where('id', userId).del();
 }
 
 function formatPublicUser(row: any) {

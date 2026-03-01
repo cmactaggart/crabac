@@ -7,6 +7,10 @@ import type { DirectMessage } from '@crabac/shared';
 /**
  * Global listener that increments DM unread counts when messages arrive
  * for conversations that aren't currently active/open.
+ *
+ * Also re-fetches unreads and conversations on socket reconnect to catch up
+ * on events missed while disconnected.
+ *
  * Should be mounted once at the App level.
  */
 export function useDMUnreadSocket(active: boolean) {
@@ -45,12 +49,20 @@ export function useDMUnreadSocket(active: boolean) {
       useDMStore.getState().fetchDMUnreads();
     };
 
+    // Re-fetch unreads and conversations on reconnect to catch up on missed events
+    const onReconnect = () => {
+      useDMStore.getState().fetchDMUnreads();
+      useDMStore.getState().fetchConversations();
+    };
+
     socket.on('dm:new', onNewDM);
     socket.on('conversation:created', onConversationCreated);
+    socket.on('connect', onReconnect);
 
     return () => {
       socket.off('dm:new', onNewDM);
       socket.off('conversation:created', onConversationCreated);
+      socket.off('connect', onReconnect);
     };
   }, [active]);
 }
