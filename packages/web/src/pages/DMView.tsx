@@ -433,9 +433,21 @@ function DMSidebar({
                     }}>
                       {conv.name}
                     </div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                      {conv.participants.length} members
-                    </div>
+                    {conv.lastMessage ? (
+                      <div style={{
+                        fontSize: '0.75rem',
+                        color: hasUnread ? 'var(--text-secondary)' : 'var(--text-muted)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {conv.lastMessage.content}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                        {conv.participants.length} members
+                      </div>
+                    )}
                   </div>
                   {hasUnread && (
                     <span style={styles.unreadBadge}>

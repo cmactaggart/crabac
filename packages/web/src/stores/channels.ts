@@ -41,6 +41,7 @@ interface ChannelsState {
   deleteCategory: (spaceId: string, categoryId: string) => Promise<void>;
   reorderChannels: (spaceId: string, items: { channelId: string; position: number; categoryId?: string | null }[]) => Promise<void>;
   reorderCategories: (spaceId: string, items: { categoryId: string; position: number }[]) => Promise<void>;
+  incrementUnread: (channelId: string) => void;
   fetchMuted: (spaceId: string) => Promise<void>;
   toggleMute: (spaceId: string, channelId: string) => Promise<void>;
   enterSpace: (spaceId: string, channelId?: string) => Promise<EnterSpaceResult | null>;
@@ -172,6 +173,18 @@ export const useChannelsStore = create<ChannelsState>((set, get) => ({
       const categories = await api<ChannelCategory[]>(`/spaces/${spaceId}/categories`);
       set({ categories });
     }
+  },
+
+  incrementUnread: (channelId) => {
+    set((s) => ({
+      unreads: {
+        ...s.unreads,
+        [channelId]: {
+          unreadCount: (s.unreads[channelId]?.unreadCount || 0) + 1,
+          mentionCount: s.unreads[channelId]?.mentionCount || 0,
+        },
+      },
+    }));
   },
 
   fetchMuted: async (spaceId) => {

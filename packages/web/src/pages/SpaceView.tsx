@@ -7,6 +7,7 @@ import { useMessagesStore } from '../stores/messages.js';
 import { useLayoutStore } from '../stores/layout.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 import { getSocket } from '../lib/socket.js';
+import { useChannelUnreadSocket } from '../hooks/useChannelUnreadSocket.js';
 import { SpaceSidebar } from '../components/layout/SpaceSidebar.js';
 import { ChannelSidebar } from '../components/layout/ChannelSidebar.js';
 import { MembersPanel } from '../components/layout/MembersPanel.js';
@@ -25,6 +26,8 @@ export function SpaceView() {
   const { spaceSidebarOpen, channelSidebarOpen, membersSidebarOpen, calendarOpen, blogOpen, newsletterOpen, mobileView, setMobileView, setCalendarOpen, setBlogOpen, setNewsletterOpen, toggleSpaceSidebar, toggleChannelSidebar } = useLayoutStore();
   const { spaces, fetchSpaces, setActiveSpace, members, fetchMembers, updateMemberStatus } = useSpacesStore();
   const { channels, categories, enterSpace, fetchMuted, setActiveChannel } = useChannelsStore();
+
+  useChannelUnreadSocket();
 
   useEffect(() => {
     fetchSpaces();

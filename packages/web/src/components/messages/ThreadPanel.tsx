@@ -53,20 +53,33 @@ export function ThreadPanel({ channelId }: Props) {
 
       {/* Replies */}
       <div style={styles.replies}>
-        {threadReplies.map((msg) => (
-          <div key={msg.id} style={styles.reply}>
-            <div style={styles.replyAvatar}>
-              {(msg.author?.displayName || '?').charAt(0).toUpperCase()}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={styles.msgHeader}>
-                <strong style={{ fontSize: '0.85rem' }}>{msg.author?.displayName || 'Unknown'}</strong>
-                <span style={styles.timestamp}>{formatDate(msg.id)}</span>
+        {threadReplies.map((msg, i) => {
+          const prev = threadReplies[i - 1];
+          const sameAuthor = prev?.authorId === msg.authorId;
+          const gap = sameAuthor && prev ? snowflakeTime(msg.id) - snowflakeTime(prev.id) : Infinity;
+          const compact = sameAuthor && gap < 60000;
+          const spacedSameAuthor = sameAuthor && gap >= 60000 && gap < 900000;
+          return (
+            <div key={msg.id} style={{ ...styles.reply, marginTop: compact ? 1 : spacedSameAuthor ? 4 : 12 }}>
+              {compact || spacedSameAuthor ? (
+                <div style={{ width: 28, flexShrink: 0 }} />
+              ) : (
+                <div style={styles.replyAvatar}>
+                  {(msg.author?.displayName || '?').charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {!compact && !spacedSameAuthor && (
+                  <div style={styles.msgHeader}>
+                    <strong style={{ fontSize: '0.85rem' }}>{msg.author?.displayName || 'Unknown'}</strong>
+                    <span style={styles.timestamp}>{formatDate(msg.id)}</span>
+                  </div>
+                )}
+                <div style={styles.replyContent}><Markdown content={msg.content} /></div>
               </div>
-              <div style={styles.replyContent}><Markdown content={msg.content} /></div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Reply input */}
@@ -96,8 +109,13 @@ export function ThreadPanel({ channelId }: Props) {
   );
 }
 
+const EPOCH = 1735689600000;
+
+function snowflakeTime(id: string): number {
+  try { return Number(BigInt(id) >> 22n) + EPOCH; } catch { return 0; }
+}
+
 function formatDate(snowflakeId: string): string {
-  const EPOCH = 1735689600000;
   try {
     const id = BigInt(snowflakeId);
     const timestamp = Number(id >> 22n) + EPOCH;
@@ -173,7 +191,6 @@ const styles: Record<string, React.CSSProperties> = {
   reply: {
     display: 'flex',
     gap: 8,
-    marginBottom: 12,
   },
   replyAvatar: {
     width: 28,

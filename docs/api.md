@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.6.0
+## API Version 0.7.0
 
 Base URL: `https://app.crab.ac/api`
 
@@ -55,6 +55,7 @@ Access control uses a bitfield RBAC system. Permissions are assigned to roles, a
 | `MANAGE_THREADS` | Pin/lock/delete threads |
 | `MANAGE_ROUTE_CATEGORIES` | Create/delete route library categories |
 | `MANAGE_BLOG` | Create/edit/delete blog posts and upload images |
+| `MANAGE_NEWSLETTER` | Create/edit/delete newsletters, view analytics |
 | `MANAGE_WORKFLOWS` | Create/edit/delete workflows, commands, and card templates |
 
 ### Ban Enforcement
@@ -1688,7 +1689,7 @@ Remove a reaction from a comment.
 
 List notifications (paginated). Requires auth.
 
-Notification types: `mention`, `reply`, `dm`, `friend_request`, `portal_invite`, `event_cancelled`.
+Notification types: `mention`, `reply`, `reaction`, `dm`, `dm_request`, `friend_request`, `portal_invite`, `event_cancelled`, `post_tag`, `post_comment`.
 
 ### GET /notifications/unread-count
 
@@ -1701,6 +1702,31 @@ Mark a notification as read.
 ### PUT /notifications/read-all
 
 Mark all notifications as read.
+
+---
+
+## Push Notification Devices
+
+Register device tokens for native push notifications (APNs for iOS). All endpoints require auth.
+
+### POST /devices/register
+
+Register or update a device token for push notifications.
+
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `token` | string | yes | Device push token |
+| `platform` | string | yes | `ios` or `android` |
+| `appVersion` | string | no | App version string |
+
+**Response:** `{ success: true }`
+
+### DELETE /devices/:token
+
+Unregister a device token.
+
+**Response:** `204 No Content`
 
 ---
 

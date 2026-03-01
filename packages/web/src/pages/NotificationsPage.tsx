@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCheck, AtSign, Reply, Zap, CalendarX } from 'lucide-react';
+import { CheckCheck, AtSign, Reply, Zap, CalendarX, Users, Mail, Tag } from 'lucide-react';
 import { useNotificationsStore } from '../stores/notifications.js';
 import type { Notification, MentionNotificationData, ReplyNotificationData, EventCancelledNotificationData } from '@crabac/shared';
 
@@ -17,7 +17,9 @@ export function NotificationsPage() {
       markAsRead(notification.id);
     }
     const data = notification.data as any;
-    if (data.spaceId && data.channelId) {
+    if (data.conversationId) {
+      navigate(`/dm/${data.conversationId}`);
+    } else if (data.spaceId && data.channelId) {
       navigate(`/space/${data.spaceId}/channel/${data.channelId}`);
     }
   };
@@ -55,6 +57,9 @@ export function NotificationsPage() {
               {n.type === 'mention' && <AtSign size={18} style={{ color: 'var(--accent)' }} />}
               {n.type === 'reply' && <Reply size={18} style={{ color: 'var(--accent)' }} />}
               {n.type === 'portal_invite' && <Zap size={18} style={{ color: 'var(--accent)' }} />}
+              {n.type === 'friend_request' && <Users size={18} style={{ color: 'var(--accent)' }} />}
+              {n.type === 'dm_request' && <Mail size={18} style={{ color: 'var(--accent)' }} />}
+              {n.type === 'post_tag' && <Tag size={18} style={{ color: 'var(--accent)' }} />}
               {n.type === 'event_cancelled' && <CalendarX size={18} style={{ color: 'var(--danger)' }} />}
             </div>
             <div style={styles.itemBody}>
@@ -62,7 +67,7 @@ export function NotificationsPage() {
                 {formatTitle(n)}
               </div>
               <div style={styles.itemPreview}>
-                {(n.data as any).messagePreview || ''}
+                {(n.data as any).messagePreview || (n.data as any).postPreview || ''}
               </div>
               <div style={styles.itemTime}>{formatTime(n.createdAt)}</div>
             </div>
@@ -95,6 +100,12 @@ function formatTitle(n: Notification): string {
     }
     case 'portal_invite':
       return `Portal invite from ${data.sourceSpaceName}`;
+    case 'friend_request':
+      return `${data.fromDisplayName} sent you a friend request`;
+    case 'dm_request':
+      return `${data.fromDisplayName} sent you a message`;
+    case 'post_tag':
+      return `${data.taggedByDisplayName} tagged you in a post`;
     case 'event_cancelled': {
       const d = data as EventCancelledNotificationData;
       return `Event cancelled: ${d.eventName} (${d.eventDate})`;

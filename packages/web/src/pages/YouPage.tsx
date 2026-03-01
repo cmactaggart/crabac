@@ -999,7 +999,9 @@ function NotificationsPanel() {
       // Stay on YouPage, switch to feed
       return;
     }
-    if (data.spaceId && data.channelId) {
+    if (data.conversationId) {
+      navigate(`/dm/${data.conversationId}`);
+    } else if (data.spaceId && data.channelId) {
       navigate(`/space/${data.spaceId}/channel/${data.channelId}`);
     }
   };

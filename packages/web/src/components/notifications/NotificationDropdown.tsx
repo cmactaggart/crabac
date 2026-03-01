@@ -36,7 +36,10 @@ export function NotificationDropdown({ onClose }: Props) {
       markAsRead(notification.id);
     }
     const data = notification.data as any;
-    if (data.spaceId && data.channelId) {
+    if (data.conversationId) {
+      navigate(`/dm/${data.conversationId}`);
+      onClose();
+    } else if (data.spaceId && data.channelId) {
       navigate(`/space/${data.spaceId}/channel/${data.channelId}`);
       onClose();
     }
