@@ -3,6 +3,7 @@ import { io } from '../../websocket/socket-server.js';
 import { createNotification } from '../notifications/notifications.service.js';
 import { db } from '../../database/connection.js';
 import { sendPushNotification } from '../notifications/push.service.js';
+import { config } from '../../config.js';
 
 export function registerDMGateway() {
   eventBus.on('dm.created', async ({ message, conversationId }) => {
@@ -24,10 +25,9 @@ export function registerDMGateway() {
         if (!connectedUserIds.has(recipientId)) {
           const senderName = message.author?.displayName || message.author?.username || 'Someone';
           const preview = message.content?.length > 100 ? message.content.slice(0, 100) + '...' : message.content;
-          sendPushNotification(recipientId, senderName, preview || 'sent you a message', {
-            type: 'dm_message',
-            conversationId,
-          });
+          const pushData: Record<string, string> = { type: 'dm_message', conversationId };
+          if (message.author?.avatarUrl) pushData.avatarUrl = `${config.apiUrl}${message.author.avatarUrl}`;
+          sendPushNotification(recipientId, senderName, preview || 'sent you a message', pushData);
         }
       }
     } catch {

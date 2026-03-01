@@ -1,4 +1,4 @@
-export type NotificationType = 'mention' | 'reply' | 'portal_invite' | 'friend_request' | 'dm_request' | 'event_cancelled' | 'post_tag' | 'post_comment';
+export type NotificationType = 'mention' | 'reply' | 'reaction' | 'portal_invite' | 'friend_request' | 'dm_request' | 'event_cancelled' | 'post_tag' | 'post_comment';
 
 export interface MentionNotificationData {
   messageId: string;
@@ -52,6 +52,16 @@ export interface EventCancelledNotificationData {
   spaceName: string;
 }
 
+export interface ReactionNotificationData {
+  messageId: string;
+  channelId: string;
+  spaceId: string;
+  emoji: string;
+  reactedByUsername: string;
+  channelName: string;
+  spaceName: string;
+}
+
 export interface PostTagNotificationData {
   postId: string;
   taggedByUsername: string;
@@ -72,6 +82,7 @@ export interface PostCommentNotificationData {
 export type NotificationData =
   | MentionNotificationData
   | ReplyNotificationData
+  | ReactionNotificationData
   | PortalInviteNotificationData
   | FriendRequestNotificationData
   | DMRequestNotificationData

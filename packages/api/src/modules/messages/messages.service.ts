@@ -132,13 +132,37 @@ export async function addReaction(channelId: string, messageId: string, userId: 
   if (!msg) throw new NotFoundError('Message');
 
   // Upsert — ignore duplicate
-  await db('message_reactions')
+  const result = await db('message_reactions')
     .insert({ message_id: messageId, user_id: userId, emoji })
     .onConflict(['message_id', 'user_id', 'emoji'])
     .ignore();
 
   const reactions = await getReactionsForMessage(messageId);
   eventBus.emit('message.reactions_updated', { channelId, messageId, reactions });
+
+  // Notify message author of the reaction (skip self-reactions and duplicates)
+  const authorId = String(msg.author_id);
+  if (authorId !== userId && result[0] !== 0) {
+    try {
+      const channel = await db('channels').where('id', channelId).select('name', 'space_id').first();
+      const space = channel ? await db('spaces').where('id', channel.space_id).select('name').first() : null;
+      const reactor = await db('users').where('id', userId).select('username').first();
+      if (channel && space && reactor) {
+        await notificationsService.createNotification(authorId, 'reaction', {
+          messageId,
+          channelId,
+          spaceId: String(channel.space_id),
+          emoji,
+          reactedByUsername: reactor.username,
+          channelName: channel.name,
+          spaceName: space.name,
+        });
+      }
+    } catch {
+      // ignore notification errors
+    }
+  }
+
   return reactions;
 }
 

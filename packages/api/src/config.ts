@@ -37,6 +37,7 @@ export const config = {
     from: process.env.SMTP_FROM || '',
   },
   appUrl: process.env.APP_URL || 'http://localhost:5173',
+  apiUrl: process.env.API_URL || 'http://localhost:3001',
   totpEncryptionKey: process.env.TOTP_ENCRYPTION_KEY || 'change-me-32-byte-key-for-totp!',
   adminEmails: (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean),
 

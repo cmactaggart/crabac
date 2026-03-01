@@ -62,6 +62,7 @@ export async function sendPushNotification(userId: string, title: string, body: 
   notification.sound = 'default';
   notification.badge = 1;
   notification.topic = config.apns.bundleId;
+  notification.mutableContent = true;
   if (data) {
     notification.payload = data;
   }
