@@ -17,6 +17,7 @@ export function registerMessageGateway() {
         channelId,
         authorId: message.authorId,
         messageId: message.id,
+        spaceId,
       });
     }
   });
