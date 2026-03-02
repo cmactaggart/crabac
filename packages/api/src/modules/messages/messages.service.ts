@@ -406,8 +406,8 @@ async function createReplyNotification(
     .first();
   if (muted) return;
 
-  const space = await db('spaces').where('id', spaceId).select('name').first();
-  const author = await db('users').where('id', authorId).select('username').first();
+  const space = await db('spaces').where('id', spaceId).select('name', 'icon_url').first();
+  const author = await db('users').where('id', authorId).select('username', 'avatar_url').first();
   if (!space || !author) return;
 
   const chName = channelName || (await db('channels').where('id', channelId).select('name').first())?.name || 'unknown';
@@ -421,6 +421,8 @@ async function createReplyNotification(
     channelName: chName,
     spaceName: space.name,
     messagePreview: content.slice(0, 100),
+    repliedByAvatarUrl: author.avatar_url || null,
+    spaceIconUrl: space.icon_url || null,
   });
 }
 

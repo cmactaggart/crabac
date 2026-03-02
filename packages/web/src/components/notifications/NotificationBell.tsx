@@ -29,12 +29,16 @@ export function NotificationBell() {
       switch (notification.type) {
         case 'mention': {
           const d = notification.data as MentionNotificationData;
-          fireNotification(`${d.authorUsername} in #${d.channelName}`, d.messagePreview);
+          if (d.mentionType === 'everyone' || d.mentionType === 'here') {
+            fireNotification(`@${d.mentionType} in ${d.spaceName} | #${d.channelName}`, d.messagePreview);
+          } else {
+            fireNotification(`Mention by @${d.authorUsername} in ${d.spaceName} | #${d.channelName}`, d.messagePreview);
+          }
           break;
         }
         case 'reply': {
           const d = notification.data as ReplyNotificationData;
-          fireNotification(`${d.repliedByUsername} replied`, d.messagePreview);
+          fireNotification(`Reply from @${d.repliedByUsername} in ${d.spaceName} | #${d.channelName}`, d.messagePreview);
           break;
         }
         case 'dm_request': {

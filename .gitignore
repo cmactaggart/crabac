@@ -17,6 +17,7 @@ updates/
 
 # Sensitive files
 key.txt
+keys/
 *.pem
 *.p12
 

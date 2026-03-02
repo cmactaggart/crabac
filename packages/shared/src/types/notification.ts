@@ -9,6 +9,8 @@ export interface MentionNotificationData {
   spaceName: string;
   messagePreview: string;
   mentionType: 'user' | 'everyone' | 'here';
+  authorAvatarUrl?: string | null;
+  spaceIconUrl?: string | null;
 }
 
 export interface ReplyNotificationData {
@@ -20,6 +22,8 @@ export interface ReplyNotificationData {
   channelName: string;
   spaceName: string;
   messagePreview: string;
+  repliedByAvatarUrl?: string | null;
+  spaceIconUrl?: string | null;
 }
 
 export interface PortalInviteNotificationData {

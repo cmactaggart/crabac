@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCheck, AtSign, Reply, Zap, Tag } from 'lucide-react';
+import { CheckCheck, AtSign, Reply, Zap, Tag, Users, Mail, CalendarX } from 'lucide-react';
 import { useNotificationsStore } from '../../stores/notifications.js';
+import { Avatar } from '../common/Avatar.js';
 import type { Notification, MentionNotificationData, ReplyNotificationData } from '@crabac/shared';
 
 interface Props {
@@ -65,33 +66,41 @@ export function NotificationDropdown({ onClose }: Props) {
           <div style={styles.empty}>No notifications yet</div>
         )}
 
-        {notifications.map((n) => (
-          <button
-            key={n.id}
-            style={{
-              ...styles.item,
-              background: n.read ? 'transparent' : 'rgba(88, 101, 242, 0.08)',
-            }}
-            onClick={() => handleClick(n)}
-          >
-            <div style={styles.itemIcon}>
-              {n.type === 'mention' && <AtSign size={16} style={{ color: 'var(--accent)' }} />}
-              {n.type === 'reply' && <Reply size={16} style={{ color: 'var(--accent)' }} />}
-              {n.type === 'portal_invite' && <Zap size={16} style={{ color: 'var(--accent)' }} />}
-              {n.type === 'post_tag' && <Tag size={16} style={{ color: 'var(--accent)' }} />}
-            </div>
-            <div style={styles.itemBody}>
-              <div style={styles.itemTitle}>
-                {formatTitle(n)}
+        {notifications.map((n) => {
+          const avatar = getNotificationAvatar(n);
+          return (
+            <button
+              key={n.id}
+              style={{
+                ...styles.item,
+                background: n.read ? 'transparent' : 'rgba(88, 101, 242, 0.08)',
+              }}
+              onClick={() => handleClick(n)}
+            >
+              <div style={styles.itemAvatar}>
+                {avatar.src || avatar.name ? (
+                  <Avatar src={avatar.src} name={avatar.name} size={32} />
+                ) : (
+                  <div style={styles.itemIconFallback}>
+                    {getNotificationIcon(n.type)}
+                  </div>
+                )}
               </div>
-              <div style={styles.itemPreview}>
-                {(n.data as any).messagePreview || (n.data as any).postPreview || ''}
+              <div style={styles.itemBody}>
+                <div style={styles.itemTitle}>
+                  {formatTitle(n)}
+                </div>
+                {getPreview(n) && (
+                  <div style={styles.itemPreview}>
+                    {getPreview(n)}
+                  </div>
+                )}
+                <div style={styles.itemTime}>{formatTime(n.createdAt)}</div>
               </div>
-              <div style={styles.itemTime}>{formatTime(n.createdAt)}</div>
-            </div>
-            {!n.read && <div style={styles.unreadDot} />}
-          </button>
-        ))}
+              {!n.read && <div style={styles.unreadDot} />}
+            </button>
+          );
+        })}
 
         {hasMore && notifications.length > 0 && (
           <button onClick={loadMore} style={styles.loadMore}>
@@ -108,13 +117,13 @@ function formatTitle(n: Notification): string {
   switch (n.type) {
     case 'mention': {
       const d = data as MentionNotificationData;
-      if (d.mentionType === 'everyone') return `@everyone in #${d.channelName}`;
-      if (d.mentionType === 'here') return `@here in #${d.channelName}`;
-      return `${d.authorUsername} mentioned you in #${d.channelName}`;
+      if (d.mentionType === 'everyone') return `@everyone in ${d.spaceName} | #${d.channelName}`;
+      if (d.mentionType === 'here') return `@here in ${d.spaceName} | #${d.channelName}`;
+      return `Mention by @${d.authorUsername} in ${d.spaceName} | #${d.channelName}`;
     }
     case 'reply': {
       const d = data as ReplyNotificationData;
-      return `${d.repliedByUsername} replied in #${d.channelName}`;
+      return `Reply from @${d.repliedByUsername} in ${d.spaceName} | #${d.channelName}`;
     }
     case 'portal_invite':
       return `Portal invite from ${data.sourceSpaceName}`;
@@ -126,9 +135,54 @@ function formatTitle(n: Notification): string {
       return `${data.eventName} was cancelled`;
     case 'post_tag':
       return `${data.taggedByDisplayName} tagged you in a post`;
+    case 'post_comment':
+      return `${data.commenterDisplayName} commented on your post`;
     default:
       return 'Notification';
   }
+}
+
+function getNotificationAvatar(n: Notification): { src: string | null; name: string } {
+  const data = n.data as any;
+  switch (n.type) {
+    case 'mention': {
+      const d = data as MentionNotificationData;
+      if (d.mentionType === 'user') return { src: d.authorAvatarUrl || null, name: d.authorUsername };
+      // @everyone/@here — use space icon
+      return { src: d.spaceIconUrl || null, name: d.spaceName };
+    }
+    case 'reply': {
+      const d = data as ReplyNotificationData;
+      return { src: d.repliedByAvatarUrl || null, name: d.repliedByUsername };
+    }
+    case 'friend_request':
+    case 'dm_request':
+      return { src: null, name: data.fromDisplayName || data.fromUsername || '?' };
+    case 'post_tag':
+      return { src: null, name: data.taggedByDisplayName || '?' };
+    case 'post_comment':
+      return { src: null, name: data.commenterDisplayName || '?' };
+    default:
+      return { src: null, name: '' };
+  }
+}
+
+function getNotificationIcon(type: string) {
+  switch (type) {
+    case 'mention': return <AtSign size={16} style={{ color: 'var(--accent)' }} />;
+    case 'reply': return <Reply size={16} style={{ color: 'var(--accent)' }} />;
+    case 'portal_invite': return <Zap size={16} style={{ color: 'var(--accent)' }} />;
+    case 'post_tag': return <Tag size={16} style={{ color: 'var(--accent)' }} />;
+    case 'friend_request': return <Users size={16} style={{ color: 'var(--accent)' }} />;
+    case 'dm_request': return <Mail size={16} style={{ color: 'var(--accent)' }} />;
+    case 'event_cancelled': return <CalendarX size={16} style={{ color: 'var(--danger)' }} />;
+    default: return null;
+  }
+}
+
+function getPreview(n: Notification): string {
+  const data = n.data as any;
+  return data.messagePreview || data.postPreview || data.commentPreview || '';
 }
 
 function formatTime(createdAt: string): string {
@@ -203,9 +257,18 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     color: 'var(--text-primary)',
   },
-  itemIcon: {
+  itemAvatar: {
     flexShrink: 0,
     paddingTop: 2,
+  },
+  itemIconFallback: {
+    width: 32,
+    height: 32,
+    borderRadius: '50%',
+    background: 'var(--bg-tertiary)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   itemBody: {
     flex: 1,
@@ -222,6 +285,9 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+    borderLeft: '2px solid var(--text-muted)',
+    paddingLeft: 6,
+    marginTop: 2,
   },
   itemTime: {
     fontSize: '0.7rem',

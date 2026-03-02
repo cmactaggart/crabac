@@ -94,8 +94,8 @@ export async function createMentionNotifications(
 
   // Get channel and space info for the notification
   const channel = await db('channels').where('id', channelId).select('name').first();
-  const space = await db('spaces').where('id', spaceId).select('name').first();
-  const author = await db('users').where('id', authorId).select('username').first();
+  const space = await db('spaces').where('id', spaceId).select('name', 'icon_url').first();
+  const author = await db('users').where('id', authorId).select('username', 'avatar_url').first();
   if (!channel || !space || !author) return;
 
   // Get mentioned user IDs from message_mentions
@@ -144,6 +144,8 @@ export async function createMentionNotifications(
       spaceName: space.name,
       messagePreview: preview,
       mentionType: mention.mention_type,
+      authorAvatarUrl: author.avatar_url || null,
+      spaceIconUrl: space.icon_url || null,
     });
   }
 }
