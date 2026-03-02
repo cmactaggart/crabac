@@ -1,17 +1,32 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCheck, AtSign, Reply, Zap, CalendarX, Users, Mail, Tag } from 'lucide-react';
+import { useAuthStore } from '../stores/auth.js';
+import { useSpacesStore } from '../stores/spaces.js';
 import { useNotificationsStore } from '../stores/notifications.js';
+import { useFollowsStore } from '../stores/follows.js';
+import { useLayoutStore } from '../stores/layout.js';
+import { useIsMobile } from '../hooks/useIsMobile.js';
+import { SpaceSidebar } from '../components/layout/SpaceSidebar.js';
+import { ProfileSidebar } from '../components/layout/ProfileSidebar.js';
 import { Avatar } from '../components/common/Avatar.js';
 import type { Notification, MentionNotificationData, ReplyNotificationData, EventCancelledNotificationData } from '@crabac/shared';
 
 export function NotificationsPage() {
-  const { notifications, loading, hasMore, fetchNotifications, markAsRead, markAllAsRead } = useNotificationsStore();
+  const { notifications, loading, hasMore, fetchNotifications, fetchUnreadCount, markAsRead, markAllAsRead } = useNotificationsStore();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
+  const user = useAuthStore((s) => s.user);
+  const { spaces, fetchSpaces } = useSpacesStore();
+  const { spaceSidebarOpen, channelSidebarOpen } = useLayoutStore();
+  const { counts: followCounts, fetchCounts: fetchFollowCounts } = useFollowsStore();
 
   useEffect(() => {
     fetchNotifications();
-  }, [fetchNotifications]);
+    fetchUnreadCount();
+    fetchSpaces();
+    if (user?.id) fetchFollowCounts(user.id);
+  }, []);
 
   const handleClick = (notification: Notification) => {
     if (!notification.read) {
@@ -31,7 +46,7 @@ export function NotificationsPage() {
     }
   };
 
-  return (
+  const notifContent = (
     <div style={styles.container}>
       <div style={styles.header}>
         <h2 style={styles.title}>Notifications</h2>
@@ -86,6 +101,39 @@ export function NotificationsPage() {
             {loading ? 'Loading...' : 'Load more'}
           </button>
         )}
+      </div>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 56, overflow: 'hidden' }}>
+        {notifContent}
+      </div>
+    );
+  }
+
+  // Desktop: Rail | ProfileSidebar | Notification list
+  return (
+    <div style={styles.layout}>
+      <div style={{ ...styles.sidebarWrap, width: spaceSidebarOpen ? 72 : 0 }}>
+        <SpaceSidebar spaces={spaces} activeSpaceId={null} />
+      </div>
+      <div style={{ ...styles.sidebarWrap, width: channelSidebarOpen ? 240 : 0 }}>
+        <ProfileSidebar
+          avatarUrl={user?.avatarUrl ?? null}
+          displayName={user?.displayName || '?'}
+          username={user?.username || ''}
+          baseColor={user?.baseColor}
+          accentColor={user?.accentColor}
+          followingCount={followCounts.followingCount}
+          followerCount={followCounts.followerCount}
+        />
+      </div>
+      <div style={styles.main}>
+        <div style={{ width: '100%', maxWidth: 700 }}>
+          {notifContent}
+        </div>
       </div>
     </div>
   );
@@ -180,11 +228,28 @@ function formatTime(createdAt: string): string {
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  layout: {
+    display: 'flex',
+    height: '100vh',
+    overflow: 'hidden',
+  },
+  sidebarWrap: {
+    overflow: 'hidden',
+    flexShrink: 0,
+    transition: 'width 0.2s ease',
+    height: '100%',
+  },
+  main: {
+    flex: 1,
+    overflowY: 'auto',
+    padding: '2rem',
+    display: 'flex',
+    justifyContent: 'center',
+  },
   container: {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
-    paddingBottom: 56,
     background: 'var(--bg-primary)',
   },
   header: {

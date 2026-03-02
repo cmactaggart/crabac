@@ -1,8 +1,9 @@
 import { useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Mail, ChevronsLeft, User } from 'lucide-react';
+import { Mail, ChevronsLeft, User, Bell, Newspaper } from 'lucide-react';
 import { useLayoutStore } from '../../stores/layout.js';
 import { useDMStore } from '../../stores/dm.js';
+import { useNotificationsStore } from '../../stores/notifications.js';
 import { useChannelsStore } from '../../stores/channels.js';
 import { CrabIcon } from '../icons/CrabIcon.js';
 import { getContrastColor } from '../spaces/SpaceBrandedCard.js';
@@ -12,14 +13,16 @@ import type { Space } from '@crabac/shared';
 interface Props {
   spaces: Space[];
   activeSpaceId: string | null;
+  hideNavIcons?: boolean;
 }
 
-export function SpaceSidebar({ spaces, activeSpaceId }: Props) {
+export function SpaceSidebar({ spaces, activeSpaceId, hideNavIcons }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
   const toggleSpaceSidebar = useLayoutStore((s) => s.toggleSpaceSidebar);
   const dmUnreads = useDMStore((s) => s.dmUnreads);
   const totalDMUnreads = Object.values(dmUnreads).reduce((sum, n) => sum + n, 0);
+  const unreadCount = useNotificationsStore((s) => s.unreadCount);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSpaceMouseEnter = useCallback((spaceId: string) => {
@@ -37,42 +40,85 @@ export function SpaceSidebar({ spaces, activeSpaceId }: Props) {
     }
   }, []);
 
+  const isYouActive = location.pathname === '/you' || location.pathname.startsWith('/p/');
+  const isNotificationsActive = location.pathname === '/notifications';
+  const isFeedActive = location.pathname === '/feed';
+  const isDMActive = location.pathname.startsWith('/dm');
+
   return (
     <div style={styles.sidebar}>
-      {/* Home button */}
-      <button
-        onClick={() => navigate('/')}
-        style={{ ...styles.icon, background: activeSpaceId ? 'var(--bg-tertiary)' : 'var(--accent)' }}
-        title="Home"
-      >
-        <CrabIcon size={28} />
-      </button>
+      {!hideNavIcons && (
+        <>
+          {/* Home button */}
+          <button
+            onClick={() => navigate('/')}
+            style={{ ...styles.icon, background: activeSpaceId ? 'var(--bg-tertiary)' : 'var(--accent)' }}
+            title="Home"
+          >
+            <CrabIcon size={28} />
+          </button>
 
-      {/* DM button */}
-      <button
-        onClick={() => navigate('/dm')}
-        style={{ ...styles.icon, background: 'var(--bg-tertiary)', position: 'relative' }}
-        title="Direct Messages"
-      >
-        <Mail size={20} />
-        {totalDMUnreads > 0 && (
-          <span style={styles.badge}>
-            {totalDMUnreads > 99 ? '99+' : totalDMUnreads}
-          </span>
-        )}
-      </button>
+          {/* You button */}
+          <button
+            onClick={() => navigate('/you')}
+            style={{
+              ...styles.icon,
+              background: isYouActive ? 'var(--accent)' : 'var(--bg-tertiary)',
+            }}
+            title="You"
+          >
+            <User size={20} />
+          </button>
 
-      {/* You button */}
-      <button
-        onClick={() => navigate('/you')}
-        style={{
-          ...styles.icon,
-          background: location.pathname === '/you' ? 'var(--accent)' : 'var(--bg-tertiary)',
-        }}
-        title="You"
-      >
-        <User size={20} />
-      </button>
+          {/* Notifications button */}
+          <button
+            onClick={() => navigate('/notifications')}
+            style={{
+              ...styles.icon,
+              background: isNotificationsActive ? 'var(--accent)' : 'var(--bg-tertiary)',
+              position: 'relative',
+            }}
+            title="Notifications"
+          >
+            <Bell size={20} />
+            {unreadCount > 0 && (
+              <span style={styles.badge}>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {/* Feed button */}
+          <button
+            onClick={() => navigate('/feed')}
+            style={{
+              ...styles.icon,
+              background: isFeedActive ? 'var(--accent)' : 'var(--bg-tertiary)',
+            }}
+            title="Feed"
+          >
+            <Newspaper size={20} />
+          </button>
+
+          {/* DM button */}
+          <button
+            onClick={() => navigate('/dm')}
+            style={{
+              ...styles.icon,
+              background: isDMActive ? 'var(--accent)' : 'var(--bg-tertiary)',
+              position: 'relative',
+            }}
+            title="Direct Messages"
+          >
+            <Mail size={20} />
+            {totalDMUnreads > 0 && (
+              <span style={styles.badge}>
+                {totalDMUnreads > 99 ? '99+' : totalDMUnreads}
+              </span>
+            )}
+          </button>
+        </>
+      )}
 
       <div style={styles.divider} />
 

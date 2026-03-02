@@ -287,7 +287,7 @@ export function SpaceView() {
     return (
       <div style={mobileLayout}>
         <div style={{ width: 72, flexShrink: 0, height: '100%' }}>
-          <SpaceSidebar spaces={spaces} activeSpaceId={spaceId || null} />
+          <SpaceSidebar spaces={spaces} activeSpaceId={spaceId || null} hideNavIcons={isMobile} />
         </div>
         <ChannelSidebar
           space={displaySpace || null}
@@ -304,7 +304,7 @@ export function SpaceView() {
   return (
     <div style={styles.layout}>
       <div style={{ ...styles.sidebarWrap, width: spaceSidebarOpen ? 72 : 0 }}>
-        <SpaceSidebar spaces={spaces} activeSpaceId={spaceId || null} />
+        <SpaceSidebar spaces={spaces} activeSpaceId={spaceId || null} hideNavIcons={isMobile} />
       </div>
       <div style={{ ...styles.sidebarWrap, width: channelSidebarOpen ? 240 : 0 }}>
         <ChannelSidebar

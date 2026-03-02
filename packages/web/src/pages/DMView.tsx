@@ -141,7 +141,7 @@ export function DMView() {
     return (
       <div style={mobileLayout}>
         <div style={{ width: 72, flexShrink: 0, height: '100%' }}>
-          <SpaceSidebar spaces={spaces} activeSpaceId={null} />
+          <SpaceSidebar spaces={spaces} activeSpaceId={null} hideNavIcons={isMobile} />
         </div>
         <div style={{ flex: 1, height: '100%' }}>
           <DMSidebar
@@ -161,7 +161,7 @@ export function DMView() {
   return (
     <div style={styles.layout}>
       <div style={{ ...styles.sidebarWrap, width: spaceSidebarOpen ? 72 : 0 }}>
-        <SpaceSidebar spaces={spaces} activeSpaceId={null} />
+        <SpaceSidebar spaces={spaces} activeSpaceId={null} hideNavIcons={isMobile} />
       </div>
       <div style={{ ...styles.sidebarWrap, width: channelSidebarOpen ? 240 : 0 }}>
         <DMSidebar

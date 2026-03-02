@@ -1,27 +1,28 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Image, Map, CalendarDays, Upload, Plus, Trash2, Share2, Edit3, MapPinned, X, FileText, Users, ImagePlus, MapPin, Bell, User, CheckCheck, AtSign, Reply, Zap, Tag, SmilePlus, Newspaper } from 'lucide-react';
-import { CrabIcon } from '../components/icons/CrabIcon.js';
+import { Image, Map, CalendarDays, Upload, Plus, Trash2, Share2, Edit3, MapPinned, X, FileText, Users, ImagePlus, MapPin, SmilePlus, Newspaper } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
+import { useSpacesStore } from '../stores/spaces.js';
 import { usePersonalCollectionsStore } from '../stores/personalCollections.js';
 import { useNotificationsStore } from '../stores/notifications.js';
 import { useFriendsStore } from '../stores/friends.js';
+import { useLayoutStore } from '../stores/layout.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 import { Avatar } from '../components/common/Avatar.js';
+import { FollowListModal } from '../components/common/FollowListModal.js';
 import { UserSettingsModal } from '../components/settings/user/UserSettingsModal.js';
 import { ShareToSpacePicker } from '../components/common/ShareToSpacePicker.js';
 import { FriendTagPicker } from '../components/common/FriendTagPicker.js';
 import { FriendMentionAutocomplete } from '../components/common/FriendMentionAutocomplete.js';
-import { EmojiPicker } from '../components/messages/EmojiPicker.js';
 import { PostCard as SharedPostCard, VisibilityBadge } from '../components/posts/PostCard.js';
 import { useFollowsStore } from '../stores/follows.js';
-import { FeedView } from '../pages/FeedPage.js';
+import { SpaceSidebar } from '../components/layout/SpaceSidebar.js';
+import { ProfileSidebar } from '../components/layout/ProfileSidebar.js';
 import { PersonalNewsletterView } from '../components/newsletter/PersonalNewsletterView.js';
 import { api } from '../lib/api.js';
-import type { PersonalGalleryItem, PersonalRouteItem, PersonalEvent, PersonalEventCategory, PersonalVisibility, UserPost, UserPostComment, Notification, MentionNotificationData, ReplyNotificationData, FollowUser } from '@crabac/shared';
+import type { PersonalGalleryItem, PersonalRouteItem, PersonalEvent, PersonalEventCategory, PersonalVisibility, UserPost } from '@crabac/shared';
 
 type SubTab = 'feed' | 'photos' | 'routes' | 'events' | 'newsletter';
-type SidebarView = 'home' | 'notifications' | 'feed';
 
 const VISIBILITY_LABELS: Record<PersonalVisibility, string> = {
   public: 'Public',
@@ -42,7 +43,6 @@ export function YouPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState<SubTab>('feed');
-  const [sidebarView, setSidebarView] = useState<SidebarView>('home');
   const [showSettings, setShowSettings] = useState(false);
   const [shareItem, setShareItem] = useState<{ type: 'gallery' | 'route' | 'event' | 'post'; id: string } | null>(null);
   const [defaultVisibility, setDefaultVisibility] = useState<PersonalVisibility>('private');
@@ -58,13 +58,16 @@ export function YouPage() {
     createRepost,
   } = usePersonalCollectionsStore();
 
-  const { unreadCount, fetchUnreadCount } = useNotificationsStore();
+  const { fetchUnreadCount } = useNotificationsStore();
+  const { spaces, fetchSpaces } = useSpacesStore();
+  const { spaceSidebarOpen, channelSidebarOpen } = useLayoutStore();
   const { counts: followCounts, fetchCounts: fetchFollowCounts, followers, following, fetchFollowers, fetchFollowing } = useFollowsStore();
   const [followListMode, setFollowListMode] = useState<'followers' | 'following' | null>(null);
 
   useEffect(() => {
     fetchSummary();
     fetchUnreadCount();
+    fetchSpaces();
     if (user?.id) fetchFollowCounts(user.id);
     api('/users/preferences').then((prefs: any) => {
       if (prefs.defaultVisibility) setDefaultVisibility(prefs.defaultVisibility);
@@ -73,12 +76,11 @@ export function YouPage() {
   }, []);
 
   useEffect(() => {
-    if (sidebarView !== 'home') return;
     if (activeTab === 'feed') fetchPosts();
     if (activeTab === 'photos') fetchGallery();
     if (activeTab === 'routes') fetchRoutes();
     if (activeTab === 'events') { fetchEvents(); fetchEventCategories(); }
-  }, [activeTab, sidebarView]);
+  }, [activeTab]);
 
   const memberSince = user?.createdAt
     ? new Date(user.createdAt).toLocaleDateString([], { year: 'numeric', month: 'long' })
@@ -190,81 +192,24 @@ export function YouPage() {
     );
   }
 
-  // Desktop layout
+  // Desktop layout: Rail | ProfileSidebar | Main content
   return (
     <div style={styles.outerContainer}>
-      {/* Left Sidebar */}
-      <div style={styles.sidebar}>
-        {/* Profile Mini Card */}
-        <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-          <Avatar
-            src={user?.avatarUrl ?? null}
-            name={user?.displayName || '?'}
-            size={56}
-            baseColor={user?.baseColor ?? null}
-            accentColor={user?.accentColor ?? null}
-          />
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{user?.displayName}</div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>@{user?.username}</div>
-          </div>
-          <button onClick={() => setShowSettings(true)} style={{ ...styles.editBtn, fontSize: '0.72rem', padding: '0.3rem 0.6rem' }}>
-            <Edit3 size={12} /> Edit
-          </button>
-          {/* Follower/Following counts */}
-          <div style={{ display: 'flex', gap: 12, fontSize: '0.78rem', marginTop: 4 }}>
-            <span
-              style={{ cursor: 'pointer', color: 'var(--text-secondary)' }}
-              onClick={() => { if (user?.id) { fetchFollowing(user.id); setFollowListMode('following'); } }}
-            >
-              <strong>{followCounts.followingCount}</strong> following
-            </span>
-            <span
-              style={{ cursor: 'pointer', color: 'var(--text-secondary)' }}
-              onClick={() => { if (user?.id) { fetchFollowers(user.id); setFollowListMode('followers'); } }}
-            >
-              <strong>{followCounts.followerCount}</strong> followers
-            </span>
-          </div>
-        </div>
-
-        {/* Nav Links: You / Feed / Spaces / Notifications */}
-        <button
-          onClick={() => setSidebarView('home')}
-          style={{
-            ...styles.sidebarLink,
-            background: sidebarView === 'home' ? 'var(--bg-tertiary)' : 'transparent',
-          }}
-        >
-          <User size={16} /> You
-        </button>
-        <button
-          onClick={() => setSidebarView('feed')}
-          style={{
-            ...styles.sidebarLink,
-            background: sidebarView === 'feed' ? 'var(--bg-tertiary)' : 'transparent',
-          }}
-        >
-          <Newspaper size={16} /> Feed
-        </button>
-        <button
-          onClick={() => navigate('/')}
-          style={{ ...styles.sidebarLink, background: 'transparent' }}
-        >
-          <CrabIcon size={16} /> Spaces
-        </button>
-        <button
-          onClick={() => setSidebarView('notifications')}
-          style={{
-            ...styles.sidebarLink,
-            background: sidebarView === 'notifications' ? 'var(--bg-tertiary)' : 'transparent',
-          }}
-        >
-          <Bell size={16} /> Notifications
-          {unreadCount > 0 && (
-            <span style={styles.unreadBadge}>{unreadCount > 99 ? '99+' : unreadCount}</span>
-          )}
-        </button>
+      <div style={{ ...styles.sidebarWrap, width: spaceSidebarOpen ? 72 : 0 }}>
+        <SpaceSidebar spaces={spaces} activeSpaceId={null} />
+      </div>
+      <div style={{ ...styles.sidebarWrap, width: channelSidebarOpen ? 240 : 0 }}>
+        <ProfileSidebar
+          avatarUrl={user?.avatarUrl ?? null}
+          displayName={user?.displayName || '?'}
+          username={user?.username || ''}
+          baseColor={user?.baseColor}
+          accentColor={user?.accentColor}
+          followingCount={followCounts.followingCount}
+          followerCount={followCounts.followerCount}
+          onFollowingClick={() => { if (user?.id) { fetchFollowing(user.id); setFollowListMode('following'); } }}
+          onFollowersClick={() => { if (user?.id) { fetchFollowers(user.id); setFollowListMode('followers'); } }}
+        />
       </div>
 
       {/* Main Content */}
@@ -275,105 +220,95 @@ export function YouPage() {
         display: 'flex',
         justifyContent: 'center',
       }}>
-        {sidebarView === 'feed' ? (
-          <div style={{ width: '100%', maxWidth: 700 }}>
-            <FeedView />
+        <div style={{ ...styles.card, maxWidth: 700 }}>
+          {/* Profile Card */}
+          <div style={styles.profileSection}>
+            <Avatar
+              src={user?.avatarUrl ?? null}
+              name={user?.displayName || '?'}
+              size={80}
+              baseColor={user?.baseColor ?? null}
+              accentColor={user?.accentColor ?? null}
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h2 style={{ margin: 0, fontSize: '1.3rem' }}>{user?.displayName}</h2>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>@{user?.username}</div>
+              {memberSince && (
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
+                  Member since {memberSince}
+                </div>
+              )}
+            </div>
           </div>
-        ) : sidebarView === 'notifications' ? (
-          <div style={{ width: '100%', maxWidth: 700 }}>
-            <NotificationsPanel />
-          </div>
-        ) : (
-          <div style={{ ...styles.card, maxWidth: 700 }}>
-            {/* Profile Card */}
-            <div style={styles.profileSection}>
-              <Avatar
-                src={user?.avatarUrl ?? null}
-                name={user?.displayName || '?'}
-                size={80}
-                baseColor={user?.baseColor ?? null}
-                accentColor={user?.accentColor ?? null}
+
+          {/* Collection Counts */}
+          {summary && (
+            <div style={styles.summaryRow}>
+              <SummaryBadge icon={<FileText size={14} />} label="Feed" count={summary.postCount} active={activeTab === 'feed'} onClick={() => setActiveTab('feed')} />
+              <SummaryBadge icon={<Image size={14} />} label="Photos" count={summary.galleryCount} active={activeTab === 'photos'} onClick={() => setActiveTab('photos')} />
+              <SummaryBadge icon={<Map size={14} />} label="Routes" count={summary.routeCount} active={activeTab === 'routes'} onClick={() => setActiveTab('routes')} />
+              <SummaryBadge icon={<CalendarDays size={14} />} label="Events" count={summary.eventCount} active={activeTab === 'events'} onClick={() => setActiveTab('events')} />
+              {newsletterEnabled && <SummaryBadge icon={<Newspaper size={14} />} label="Newsletter" count={0} active={activeTab === 'newsletter'} onClick={() => setActiveTab('newsletter')} />}
+            </div>
+          )}
+
+          {/* Sub-tab Content */}
+          <div style={{ marginTop: '1rem' }}>
+            {activeTab === 'feed' && (
+              <FeedTab
+                posts={posts}
+                loading={postsLoading}
+                hasMore={postsHasMore}
+                defaultVisibility={defaultVisibility}
+                onCreatePost={createPost}
+                onDeletePost={deletePost}
+                onUpdatePost={updatePost}
+                onLoadMore={() => {
+                  if (posts.length > 0) fetchPosts({ before: posts[posts.length - 1].id });
+                }}
               />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <h2 style={{ margin: 0, fontSize: '1.3rem' }}>{user?.displayName}</h2>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>@{user?.username}</div>
-                {memberSince && (
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
-                    Member since {memberSince}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Collection Counts */}
-            {summary && (
-              <div style={styles.summaryRow}>
-                <SummaryBadge icon={<FileText size={14} />} label="Feed" count={summary.postCount} active={activeTab === 'feed'} onClick={() => setActiveTab('feed')} />
-                <SummaryBadge icon={<Image size={14} />} label="Photos" count={summary.galleryCount} active={activeTab === 'photos'} onClick={() => setActiveTab('photos')} />
-                <SummaryBadge icon={<Map size={14} />} label="Routes" count={summary.routeCount} active={activeTab === 'routes'} onClick={() => setActiveTab('routes')} />
-                <SummaryBadge icon={<CalendarDays size={14} />} label="Events" count={summary.eventCount} active={activeTab === 'events'} onClick={() => setActiveTab('events')} />
-                {newsletterEnabled && <SummaryBadge icon={<Newspaper size={14} />} label="Newsletter" count={0} active={activeTab === 'newsletter'} onClick={() => setActiveTab('newsletter')} />}
-              </div>
             )}
-
-            {/* Sub-tab Content */}
-            <div style={{ marginTop: '1rem' }}>
-              {activeTab === 'feed' && (
-                <FeedTab
-                  posts={posts}
-                  loading={postsLoading}
-                  hasMore={postsHasMore}
-                  defaultVisibility={defaultVisibility}
-                  onCreatePost={createPost}
-                  onDeletePost={deletePost}
-                  onUpdatePost={updatePost}
-                  onLoadMore={() => {
-                    if (posts.length > 0) fetchPosts({ before: posts[posts.length - 1].id });
-                  }}
-                />
-              )}
-              {activeTab === 'photos' && (
-                <PhotosTab
-                  items={galleryItems}
-                  loading={loading}
-                  defaultVisibility={defaultVisibility}
-                  onUpload={uploadGalleryItem}
-                  onDelete={deleteGalleryItem}
-                  onUpdate={updateGalleryItem}
-                  onShare={(id) => setShareItem({ type: 'gallery', id })}
-                />
-              )}
-              {activeTab === 'routes' && (
-                <RoutesTab
-                  items={routeItems}
-                  loading={loading}
-                  defaultVisibility={defaultVisibility}
-                  onUpload={uploadRoute}
-                  onDelete={deleteRoute}
-                  onUpdate={updateRoute}
-                  onShare={(id) => setShareItem({ type: 'route', id })}
-                />
-              )}
-              {activeTab === 'events' && (
-                <EventsTab
-                  items={events}
-                  loading={loading}
-                  categories={eventCategories}
-                  routes={routeItems}
-                  defaultVisibility={defaultVisibility}
-                  onCreate={createEvent}
-                  onDelete={deleteEvent}
-                  onUpdate={updateEvent}
-                  onShare={(id) => setShareItem({ type: 'event', id })}
-                  onCreateCategory={createEventCategory}
-                  onDeleteCategory={deleteEventCategory}
-                  onFetchRoutes={fetchRoutes}
-                />
-              )}
-              {activeTab === 'newsletter' && <PersonalNewsletterView />}
-            </div>
+            {activeTab === 'photos' && (
+              <PhotosTab
+                items={galleryItems}
+                loading={loading}
+                defaultVisibility={defaultVisibility}
+                onUpload={uploadGalleryItem}
+                onDelete={deleteGalleryItem}
+                onUpdate={updateGalleryItem}
+                onShare={(id) => setShareItem({ type: 'gallery', id })}
+              />
+            )}
+            {activeTab === 'routes' && (
+              <RoutesTab
+                items={routeItems}
+                loading={loading}
+                defaultVisibility={defaultVisibility}
+                onUpload={uploadRoute}
+                onDelete={deleteRoute}
+                onUpdate={updateRoute}
+                onShare={(id) => setShareItem({ type: 'route', id })}
+              />
+            )}
+            {activeTab === 'events' && (
+              <EventsTab
+                items={events}
+                loading={loading}
+                categories={eventCategories}
+                routes={routeItems}
+                defaultVisibility={defaultVisibility}
+                onCreate={createEvent}
+                onDelete={deleteEvent}
+                onUpdate={updateEvent}
+                onShare={(id) => setShareItem({ type: 'event', id })}
+                onCreateCategory={createEventCategory}
+                onDeleteCategory={deleteEventCategory}
+                onFetchRoutes={fetchRoutes}
+              />
+            )}
+            {activeTab === 'newsletter' && <PersonalNewsletterView />}
           </div>
-        )}
+        </div>
       </div>
 
       {showSettings && <UserSettingsModal onClose={() => setShowSettings(false)} />}
@@ -392,57 +327,6 @@ export function YouPage() {
           onClose={() => setFollowListMode(null)}
         />
       )}
-    </div>
-  );
-}
-
-function FollowListModal({ mode, users, onClose }: {
-  mode: 'followers' | 'following';
-  users: FollowUser[];
-  onClose: () => void;
-}) {
-  const navigate = useNavigate();
-
-  return (
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }} onClick={onClose}>
-      <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius)', padding: '1rem', maxWidth: 400, width: '100%', maxHeight: '70vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
-            {mode === 'followers' ? 'Followers' : 'Following'}
-          </h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, display: 'flex' }}>
-            <X size={18} />
-          </button>
-        </div>
-
-        {users.length === 0 && (
-          <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem', fontSize: '0.9rem' }}>
-            No {mode} yet
-          </div>
-        )}
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {users.map((u) => (
-            <button
-              key={u.id}
-              onClick={() => { onClose(); navigate(`/p/${u.username}`); }}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px', borderRadius: 'var(--radius)', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-primary)', width: '100%', textAlign: 'left' }}
-            >
-              <Avatar
-                src={u.avatarUrl}
-                name={u.displayName}
-                size={32}
-                baseColor={u.baseColor}
-                accentColor={u.accentColor}
-              />
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{u.displayName}</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>@{u.username}</div>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
@@ -982,135 +866,6 @@ function EventsTab({ items, loading, categories, routes, defaultVisibility = 'pr
   );
 }
 
-// ─── Notifications Panel ───
-
-function NotificationsPanel() {
-  const navigate = useNavigate();
-  const { notifications, loading, hasMore, fetchNotifications, markAsRead, markAllAsRead } = useNotificationsStore();
-
-  useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
-
-  const handleClick = (n: Notification) => {
-    if (!n.read) markAsRead(n.id);
-    const data = n.data as any;
-    if (n.type === 'post_tag' && data.postId) {
-      // Stay on YouPage, switch to feed
-      return;
-    }
-    if (data.conversationId) {
-      navigate(`/dm/${data.conversationId}`);
-    } else if (data.spaceId && data.channelId) {
-      navigate(`/space/${data.spaceId}/channel/${data.channelId}`);
-    }
-  };
-
-  const loadMore = () => {
-    if (notifications.length > 0) {
-      fetchNotifications(notifications[notifications.length - 1].id);
-    }
-  };
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Notifications</h3>
-        <button onClick={() => markAllAsRead()} style={styles.markAllBtn}>
-          <CheckCheck size={14} /> Mark all read
-        </button>
-      </div>
-
-      {notifications.length === 0 && !loading && (
-        <div style={styles.emptyState}>No notifications yet</div>
-      )}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {notifications.map((n) => (
-          <button
-            key={n.id}
-            style={{
-              ...styles.notifItem,
-              background: n.read ? 'transparent' : 'rgba(88, 101, 242, 0.08)',
-            }}
-            onClick={() => handleClick(n)}
-          >
-            <div style={{ flexShrink: 0, paddingTop: 2 }}>
-              {n.type === 'mention' && <AtSign size={16} style={{ color: 'var(--accent)' }} />}
-              {n.type === 'reply' && <Reply size={16} style={{ color: 'var(--accent)' }} />}
-              {n.type === 'portal_invite' && <Zap size={16} style={{ color: 'var(--accent)' }} />}
-              {n.type === 'friend_request' && <Users size={16} style={{ color: 'var(--accent)' }} />}
-              {n.type === 'dm_request' && <Users size={16} style={{ color: 'var(--accent)' }} />}
-              {n.type === 'event_cancelled' && <CalendarDays size={16} style={{ color: 'var(--danger, #ed4245)' }} />}
-              {n.type === 'post_tag' && <Tag size={16} style={{ color: 'var(--accent)' }} />}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '0.82rem', fontWeight: 600, marginBottom: 2 }}>
-                {formatNotifTitle(n)}
-              </div>
-              <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {(n.data as any).messagePreview || (n.data as any).postPreview || ''}
-              </div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                {formatNotifTime(n.createdAt)}
-              </div>
-            </div>
-            {!n.read && <div style={styles.unreadDot} />}
-          </button>
-        ))}
-      </div>
-
-      {hasMore && notifications.length > 0 && (
-        <button onClick={loadMore} disabled={loading} style={{ ...styles.cancelBtn, width: '100%', marginTop: 12, textAlign: 'center' }}>
-          {loading ? 'Loading...' : 'Load more'}
-        </button>
-      )}
-    </div>
-  );
-}
-
-function formatNotifTitle(n: Notification): string {
-  const data = n.data as any;
-  switch (n.type) {
-    case 'mention': {
-      const d = data as MentionNotificationData;
-      if (d.mentionType === 'everyone') return `@everyone in #${d.channelName}`;
-      if (d.mentionType === 'here') return `@here in #${d.channelName}`;
-      return `${d.authorUsername} mentioned you in #${d.channelName}`;
-    }
-    case 'reply': {
-      const d = data as ReplyNotificationData;
-      return `${d.repliedByUsername} replied in #${d.channelName}`;
-    }
-    case 'portal_invite':
-      return `Portal invite from ${data.sourceSpaceName}`;
-    case 'friend_request':
-      return `${data.fromDisplayName} sent you a friend request`;
-    case 'dm_request':
-      return `${data.fromDisplayName} sent you a message`;
-    case 'event_cancelled':
-      return `${data.eventName} was cancelled`;
-    case 'post_tag':
-      return `${data.taggedByDisplayName} tagged you in a post`;
-    default:
-      return 'Notification';
-  }
-}
-
-function formatNotifTime(createdAt: string): string {
-  const date = new Date(createdAt);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-}
-
 // ─── Feed Tab ───
 
 function FeedTab({ posts, loading, hasMore, defaultVisibility = 'private', onCreatePost, onDeletePost, onUpdatePost, onLoadMore }: {
@@ -1386,76 +1141,11 @@ const styles: Record<string, React.CSSProperties> = {
     height: '100vh',
     overflow: 'hidden',
   },
-  sidebar: {
-    width: 200,
+  sidebarWrap: {
+    overflow: 'hidden',
     flexShrink: 0,
-    display: 'flex',
-    flexDirection: 'column',
-    borderRight: '1px solid var(--border)',
-    background: 'var(--bg-secondary)',
-    overflowY: 'auto',
-  },
-  sidebarLink: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    padding: '10px 16px',
-    border: 'none',
-    cursor: 'pointer',
-    color: 'var(--text-primary)',
-    fontSize: '0.85rem',
-    fontWeight: 600,
-    borderRadius: 0,
-    textAlign: 'left',
-    width: '100%',
-    position: 'relative' as const,
-  },
-  unreadBadge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 18,
-    height: 18,
-    padding: '0 5px',
-    borderRadius: 9,
-    background: 'var(--danger, #ed4245)',
-    color: '#fff',
-    fontSize: '0.65rem',
-    fontWeight: 700,
-    marginLeft: 'auto',
-  },
-  markAllBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-    background: 'none',
-    border: 'none',
-    color: 'var(--accent)',
-    fontSize: '0.78rem',
-    cursor: 'pointer',
-    fontWeight: 600,
-  },
-  notifItem: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: 10,
-    width: '100%',
-    textAlign: 'left',
-    padding: '10px 14px',
-    border: 'none',
-    borderBottom: '1px solid var(--border)',
-    borderRadius: 'var(--radius)',
-    cursor: 'pointer',
-    color: 'var(--text-primary)',
-    marginBottom: 2,
-  },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: '50%',
-    background: 'var(--accent)',
-    flexShrink: 0,
-    marginTop: 6,
+    transition: 'width 0.2s ease',
+    height: '100%',
   },
   card: {
     width: '100%',

@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Image, Map, CalendarDays, FileText, UserPlus, UserMinus, Check, Clock, MessageSquare, Lock, ArrowLeft, UserCheck, Edit3, User, Bell, Newspaper } from 'lucide-react';
-import { CrabIcon } from '../components/icons/CrabIcon.js';
+import { Image, Map, CalendarDays, FileText, UserPlus, UserMinus, Check, Clock, MessageSquare, Lock, ArrowLeft, UserCheck, Newspaper } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
+import { useSpacesStore } from '../stores/spaces.js';
 import { useFriendsStore } from '../stores/friends.js';
 import { useDMStore } from '../stores/dm.js';
 import { usePersonalCollectionsStore } from '../stores/personalCollections.js';
 import { useNotificationsStore } from '../stores/notifications.js';
+import { useLayoutStore } from '../stores/layout.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 import { Avatar } from '../components/common/Avatar.js';
 import { PostCard as SharedPostCard } from '../components/posts/PostCard.js';
-import { UserSettingsModal } from '../components/settings/user/UserSettingsModal.js';
+import { SpaceSidebar } from '../components/layout/SpaceSidebar.js';
+import { ProfileSidebar } from '../components/layout/ProfileSidebar.js';
 import { useFollowsStore } from '../stores/follows.js';
 import { api } from '../lib/api.js';
 import type { PersonalGalleryItem, PersonalRouteItem, PersonalEvent, UserPost, UserPostComment, UserCollectionsSummary, FriendshipStatus, PersonalVisibility, FollowCounts } from '@crabac/shared';
@@ -49,8 +51,9 @@ export function PublicProfilePage() {
   const navigate = useNavigate();
   const currentUser = useAuthStore((s) => s.user);
   const isMobile = useIsMobile();
-  const [showSettings, setShowSettings] = useState(false);
-  const { unreadCount, fetchUnreadCount } = useNotificationsStore();
+  const { spaces, fetchSpaces } = useSpacesStore();
+  const { spaceSidebarOpen, channelSidebarOpen } = useLayoutStore();
+  const { fetchUnreadCount } = useNotificationsStore();
 
   const [profile, setProfile] = useState<ProfileUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,11 +87,11 @@ export function PublicProfilePage() {
     }
   }, [currentUser, username, navigate]);
 
-  // Fetch sidebar data (current user's follow counts + unread notifications)
+  // Fetch sidebar data (spaces, unread notifications)
   useEffect(() => {
     fetchUnreadCount();
-    if (currentUser?.id) fetchCounts(currentUser.id);
-  }, [currentUser]);
+    fetchSpaces();
+  }, []);
 
   // Fetch profile
   useEffect(() => {
@@ -411,67 +414,22 @@ export function PublicProfilePage() {
     );
   }
 
+  // Desktop: Rail | ProfileSidebar (viewed user) | Main content
   return (
     <div style={styles.outerContainer}>
-      {/* Left Sidebar */}
-      <div style={styles.sidebar}>
-        {/* Current User Mini Card */}
-        <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-          <Avatar
-            src={currentUser?.avatarUrl ?? null}
-            name={currentUser?.displayName || '?'}
-            size={56}
-            baseColor={currentUser?.baseColor ?? null}
-            accentColor={currentUser?.accentColor ?? null}
-          />
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{currentUser?.displayName}</div>
-            <div
-              style={{ fontSize: '0.75rem', color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }}
-              onClick={() => currentUser?.username && navigate(`/p/${currentUser.username}`)}
-            >@{currentUser?.username}</div>
-          </div>
-          <button onClick={() => setShowSettings(true)} style={styles.editBtn}>
-            <Edit3 size={12} /> Edit
-          </button>
-          <div style={{ display: 'flex', gap: 12, fontSize: '0.78rem', marginTop: 4 }}>
-            <span style={{ color: 'var(--text-secondary)' }}>
-              <strong>{currentUserFollowCounts.followingCount}</strong> following
-            </span>
-            <span style={{ color: 'var(--text-secondary)' }}>
-              <strong>{currentUserFollowCounts.followerCount}</strong> followers
-            </span>
-          </div>
-        </div>
-
-        {/* Nav Links */}
-        <button
-          onClick={() => navigate('/you')}
-          style={{ ...styles.sidebarLink, background: 'transparent' }}
-        >
-          <User size={16} /> You
-        </button>
-        <button
-          onClick={() => navigate('/you')}
-          style={{ ...styles.sidebarLink, background: 'transparent' }}
-        >
-          <Newspaper size={16} /> Feed
-        </button>
-        <button
-          onClick={() => navigate('/')}
-          style={{ ...styles.sidebarLink, background: 'transparent' }}
-        >
-          <CrabIcon size={16} /> Spaces
-        </button>
-        <button
-          onClick={() => navigate('/you')}
-          style={{ ...styles.sidebarLink, background: 'transparent' }}
-        >
-          <Bell size={16} /> Notifications
-          {unreadCount > 0 && (
-            <span style={styles.unreadBadge}>{unreadCount > 99 ? '99+' : unreadCount}</span>
-          )}
-        </button>
+      <div style={{ ...styles.sidebarWrap, width: spaceSidebarOpen ? 72 : 0 }}>
+        <SpaceSidebar spaces={spaces} activeSpaceId={null} />
+      </div>
+      <div style={{ ...styles.sidebarWrap, width: channelSidebarOpen ? 240 : 0 }}>
+        <ProfileSidebar
+          avatarUrl={profile.avatarUrl}
+          displayName={profile.displayName}
+          username={profile.username}
+          baseColor={profile.baseColor}
+          accentColor={profile.accentColor}
+          followingCount={followCounts.followingCount}
+          followerCount={followCounts.followerCount}
+        />
       </div>
 
       {/* Main Content */}
@@ -484,8 +442,6 @@ export function PublicProfilePage() {
       }}>
         {content}
       </div>
-
-      {showSettings && <UserSettingsModal onClose={() => setShowSettings(false)} />}
     </div>
   );
 }
@@ -755,57 +711,11 @@ const styles: Record<string, React.CSSProperties> = {
     height: '100vh',
     overflow: 'hidden',
   },
-  sidebar: {
-    width: 200,
+  sidebarWrap: {
+    overflow: 'hidden',
     flexShrink: 0,
-    display: 'flex',
-    flexDirection: 'column',
-    borderRight: '1px solid var(--border)',
-    background: 'var(--bg-secondary)',
-    overflowY: 'auto',
-  },
-  sidebarLink: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    padding: '10px 16px',
-    border: 'none',
-    cursor: 'pointer',
-    color: 'var(--text-primary)',
-    fontSize: '0.85rem',
-    fontWeight: 600,
-    borderRadius: 0,
-    textAlign: 'left',
-    width: '100%',
-    position: 'relative' as const,
-  },
-  unreadBadge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 18,
-    height: 18,
-    padding: '0 5px',
-    borderRadius: 9,
-    background: 'var(--danger, #ed4245)',
-    color: '#fff',
-    fontSize: '0.65rem',
-    fontWeight: 700,
-    marginLeft: 'auto',
-  },
-  editBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '0.3rem 0.6rem',
-    borderRadius: 'var(--radius)',
-    border: '1px solid var(--border)',
-    background: 'transparent',
-    color: 'var(--text-secondary)',
-    fontSize: '0.72rem',
-    fontWeight: 600,
-    cursor: 'pointer',
-    flexShrink: 0,
+    transition: 'width 0.2s ease',
+    height: '100%',
   },
   profileSection: {
     display: 'flex',

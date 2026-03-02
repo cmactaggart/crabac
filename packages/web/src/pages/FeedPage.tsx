@@ -1,15 +1,20 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useAuthStore } from '../stores/auth.js';
+import { useSpacesStore } from '../stores/spaces.js';
 import { useFeedStore } from '../stores/feed.js';
 import { usePersonalCollectionsStore } from '../stores/personalCollections.js';
+import { useNotificationsStore } from '../stores/notifications.js';
+import { useFollowsStore } from '../stores/follows.js';
+import { useLayoutStore } from '../stores/layout.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
+import { SpaceSidebar } from '../components/layout/SpaceSidebar.js';
+import { ProfileSidebar } from '../components/layout/ProfileSidebar.js';
 import { PostCard } from '../components/posts/PostCard.js';
 import { api } from '../lib/api.js';
 import type { UserPost } from '@crabac/shared';
 
 /**
- * FeedView — shared feed rendering component used by both FeedPage (mobile)
- * and YouPage (desktop sidebar).
+ * FeedView — shared feed rendering component.
  */
 export function FeedView() {
   const currentUser = useAuthStore((s) => s.user);
@@ -103,10 +108,21 @@ export function FeedView() {
 }
 
 /**
- * FeedPage — full-page wrapper for mobile, with fixed positioning.
+ * FeedPage — full-page wrapper with rail + profile sidebar on desktop.
  */
 export function FeedPage() {
   const isMobile = useIsMobile();
+  const user = useAuthStore((s) => s.user);
+  const { spaces, fetchSpaces } = useSpacesStore();
+  const { spaceSidebarOpen, channelSidebarOpen } = useLayoutStore();
+  const { fetchUnreadCount } = useNotificationsStore();
+  const { counts: followCounts, fetchCounts: fetchFollowCounts } = useFollowsStore();
+
+  useEffect(() => {
+    fetchSpaces();
+    fetchUnreadCount();
+    if (user?.id) fetchFollowCounts(user.id);
+  }, []);
 
   if (isMobile) {
     return (
@@ -116,12 +132,49 @@ export function FeedPage() {
     );
   }
 
-  // Desktop: centered layout
+  // Desktop: Rail | ProfileSidebar | FeedView
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem', height: '100vh', overflowY: 'auto' }}>
-      <div style={{ width: '100%', maxWidth: 700 }}>
-        <FeedView />
+    <div style={styles.layout}>
+      <div style={{ ...styles.sidebarWrap, width: spaceSidebarOpen ? 72 : 0 }}>
+        <SpaceSidebar spaces={spaces} activeSpaceId={null} />
+      </div>
+      <div style={{ ...styles.sidebarWrap, width: channelSidebarOpen ? 240 : 0 }}>
+        <ProfileSidebar
+          avatarUrl={user?.avatarUrl ?? null}
+          displayName={user?.displayName || '?'}
+          username={user?.username || ''}
+          baseColor={user?.baseColor}
+          accentColor={user?.accentColor}
+          followingCount={followCounts.followingCount}
+          followerCount={followCounts.followerCount}
+        />
+      </div>
+      <div style={styles.main}>
+        <div style={{ width: '100%', maxWidth: 700 }}>
+          <FeedView />
+        </div>
       </div>
     </div>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  layout: {
+    display: 'flex',
+    height: '100vh',
+    overflow: 'hidden',
+  },
+  sidebarWrap: {
+    overflow: 'hidden',
+    flexShrink: 0,
+    transition: 'width 0.2s ease',
+    height: '100%',
+  },
+  main: {
+    flex: 1,
+    overflowY: 'auto',
+    padding: '2rem',
+    display: 'flex',
+    justifyContent: 'center',
+  },
+};
