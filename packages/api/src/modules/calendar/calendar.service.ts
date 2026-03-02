@@ -120,6 +120,7 @@ export async function createEvent(
     location?: string | null;
     activityType?: string | null;
     routeId?: string | null;
+    imageUrl?: string | null;
   },
 ) {
   const id = snowflake.generate();
@@ -136,6 +137,7 @@ export async function createEvent(
     location: data.location || null,
     activity_type: data.activityType || null,
     route_id: data.routeId || null,
+    image_url: data.imageUrl || null,
   });
   return getEvent(id);
 }
@@ -152,6 +154,7 @@ export async function updateEvent(
     location?: string | null;
     activityType?: string | null;
     routeId?: string | null;
+    imageUrl?: string | null;
   },
 ) {
   const updates: Record<string, any> = {};
@@ -164,6 +167,7 @@ export async function updateEvent(
   if (data.location !== undefined) updates.location = data.location;
   if (data.activityType !== undefined) updates.activity_type = data.activityType;
   if (data.routeId !== undefined) updates.route_id = data.routeId;
+  if (data.imageUrl !== undefined) updates.image_url = data.imageUrl;
 
   if (Object.keys(updates).length > 0) {
     updates.updated_at = db.fn.now(3);
@@ -186,6 +190,23 @@ export async function listPublicEvents(spaceId: string, from: string, to: string
   const rsvpCountsMap = eventIds.length > 0 ? await getRsvpCountsBatch(eventIds) : new Map();
 
   return rows.map((row: any) => formatEvent(row, rsvpCountsMap.get(String(row.id))));
+}
+
+export async function listUpcomingEvents(spaceId: string, limit: number, userId?: string) {
+  const today = formatDateStr(new Date());
+  const rows = await eventBaseQuery()
+    .where('calendar_events.space_id', spaceId)
+    .where('calendar_events.is_cancelled', false)
+    .where('calendar_events.event_date', '>=', today)
+    .orderBy('calendar_events.event_date', 'asc')
+    .orderBy('calendar_events.event_time', 'asc')
+    .limit(limit);
+
+  const eventIds = rows.map((r: any) => r.id);
+  const rsvpCountsMap = eventIds.length > 0 ? await getRsvpCountsBatch(eventIds) : new Map();
+  const myRsvpMap = eventIds.length > 0 && userId ? await getMyRsvpsBatch(eventIds, userId) : new Map();
+
+  return rows.map((row: any) => formatEvent(row, rsvpCountsMap.get(String(row.id)), myRsvpMap.get(String(row.id))));
 }
 
 export async function deleteEvent(id: string) {
@@ -325,6 +346,7 @@ function formatEvent(
     location: row.location || null,
     activityType: row.activity_type || null,
     routeId: row.route_id ? String(row.route_id) : null,
+    imageUrl: row.image_url || null,
     isPublic: !!row.is_public,
     seriesId: row.series_id ? String(row.series_id) : null,
     isOverride: !!row.is_override,
@@ -456,6 +478,7 @@ export async function createSeries(
     location?: string | null;
     activityType?: string | null;
     routeId?: string | null;
+    imageUrl?: string | null;
     recurrenceRule: RecurrenceRule;
   },
 ) {
@@ -470,6 +493,7 @@ export async function createSeries(
     location: data.location || null,
     activity_type: data.activityType || null,
     route_id: data.routeId || null,
+    image_url: data.imageUrl || null,
     is_public: data.isPublic ?? false,
     recurrence_rule: JSON.stringify(data.recurrenceRule),
     event_time: data.eventTime || null,
@@ -492,6 +516,7 @@ export async function createSeries(
       location: data.location || null,
       activity_type: data.activityType || null,
       route_id: data.routeId || null,
+      image_url: data.imageUrl || null,
       series_id: seriesId,
     });
   }
@@ -523,6 +548,7 @@ export async function updateSeries(
     location?: string | null;
     activityType?: string | null;
     routeId?: string | null;
+    imageUrl?: string | null;
     recurrenceRule?: RecurrenceRule;
     updateMode?: 'all' | 'future';
   },
@@ -540,6 +566,7 @@ export async function updateSeries(
   if (data.location !== undefined) updates.location = data.location;
   if (data.activityType !== undefined) updates.activity_type = data.activityType;
   if (data.routeId !== undefined) updates.route_id = data.routeId;
+  if (data.imageUrl !== undefined) updates.image_url = data.imageUrl;
   if (data.recurrenceRule !== undefined) updates.recurrence_rule = JSON.stringify(data.recurrenceRule);
   updates.updated_at = db.fn.now(3);
 
@@ -582,6 +609,7 @@ export async function updateSeries(
       location: updatedSeries.location,
       activity_type: updatedSeries.activity_type,
       route_id: updatedSeries.route_id,
+      image_url: updatedSeries.image_url,
       series_id: seriesId,
     });
   }
@@ -618,6 +646,7 @@ export async function overrideOccurrence(
     location?: string | null;
     activityType?: string | null;
     routeId?: string | null;
+    imageUrl?: string | null;
   },
 ) {
   const updates: Record<string, any> = { is_override: true };
@@ -628,6 +657,7 @@ export async function overrideOccurrence(
   if (data.location !== undefined) updates.location = data.location;
   if (data.activityType !== undefined) updates.activity_type = data.activityType;
   if (data.routeId !== undefined) updates.route_id = data.routeId;
+  if (data.imageUrl !== undefined) updates.image_url = data.imageUrl;
   updates.updated_at = db.fn.now(3);
 
   const affected = await db('calendar_events').where('id', eventId).update(updates);
@@ -704,6 +734,7 @@ function formatSeries(row: any) {
     location: row.location,
     activityType: row.activity_type || null,
     routeId: row.route_id ? String(row.route_id) : null,
+    imageUrl: row.image_url || null,
     isPublic: !!row.is_public,
     recurrenceRule: rule,
     eventTime: row.event_time || null,

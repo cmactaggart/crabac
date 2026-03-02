@@ -18,6 +18,7 @@ export interface CalendarEvent {
   location: string | null;
   activityType: 'ride' | 'run' | 'walk' | null;
   routeId: string | null;
+  imageUrl?: string | null;
   route?: CalendarEventRoute | null;
   isPublic?: boolean;
   seriesId?: string | null;
@@ -55,6 +56,7 @@ export interface EventSeries {
   location: string | null;
   activityType: 'ride' | 'run' | 'walk' | null;
   routeId: string | null;
+  imageUrl?: string | null;
   isPublic: boolean;
   recurrenceRule: RecurrenceRule;
   eventTime: string | null;

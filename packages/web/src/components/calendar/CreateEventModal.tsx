@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { X, MapPinned } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, MapPinned, ImagePlus, Trash2 } from 'lucide-react';
 import { useCalendarStore } from '../../stores/calendar.js';
 import { useChannelsStore } from '../../stores/channels.js';
 import { api } from '../../lib/api.js';
@@ -35,6 +35,10 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
   const [showRouteSelect, setShowRouteSelect] = useState(!!(editEvent?.routeId || prefillRouteId));
   const [routeChannelId, setRouteChannelId] = useState('');
   const [routeOptions, setRouteOptions] = useState<RouteItem[]>([]);
+  const [imageUrl, setImageUrl] = useState(editEvent?.imageUrl || '');
+  const [imageUploading, setImageUploading] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const uploadEventImage = useCalendarStore((s) => s.uploadEventImage);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -77,6 +81,18 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
 
   const routeLinked = showRouteSelect && !!routeId;
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageUploading(true);
+    try {
+      const url = await uploadEventImage(spaceId, file);
+      setImageUrl(url);
+    } catch { setError('Image upload failed'); }
+    setImageUploading(false);
+    if (imageInputRef.current) imageInputRef.current.value = '';
+  };
+
   const handleSubmit = async () => {
     if (!name.trim() || !eventDate) return;
     if (routeLinked && (!location.trim() || !eventTime)) return;
@@ -95,6 +111,7 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
           location: location.trim() || null,
           activityType: activityType || null,
           routeId: (showRouteSelect && routeId) ? routeId : null,
+          imageUrl: imageUrl || null,
           recurrenceRule: {
             freq: recurrenceFreq,
             interval: recurrenceInterval,
@@ -115,6 +132,7 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
           location: location.trim() || null,
           activityType: activityType || null,
           routeId: (showRouteSelect && routeId) ? routeId : null,
+          imageUrl: imageUrl || null,
         };
 
         if (editEvent) {
@@ -143,6 +161,30 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
         </div>
         <div style={styles.body}>
           {error && <div style={styles.error}>{error}</div>}
+
+          {/* Event Image Upload */}
+          <input type="file" ref={imageInputRef} accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
+          {imageUrl ? (
+            <div style={{ position: 'relative', aspectRatio: '16/9', borderRadius: 'var(--radius)', overflow: 'hidden', marginBottom: 4 }}>
+              <img src={imageUrl} alt="Event" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <button
+                onClick={() => setImageUrl('')}
+                style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff' }}
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => imageInputRef.current?.click()}
+              disabled={imageUploading}
+              style={{ aspectRatio: '16/9', border: '2px dashed var(--border)', borderRadius: 'var(--radius)', background: 'var(--bg-secondary)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: '0.8rem', marginBottom: 4 }}
+            >
+              <ImagePlus size={24} />
+              {imageUploading ? 'Uploading...' : 'Add Cover Image'}
+            </button>
+          )}
 
           <label style={styles.label}>Name</label>
           <input

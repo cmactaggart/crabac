@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@crabac/shared": "workspace:*",
+    "@parse/node-apn": "^7.1.0",
     "@socket.io/redis-adapter": "^8.3.0",
     "@we-gold/gpxjs": "^1.1.0",
     "bcrypt": "^5.1.1",
@@ -32,6 +33,7 @@
     "otpauth": "^9.5.0",
     "qrcode": "^1.5.4",
     "semver": "^7.7.4",
+    "sharp": "^0.34.5",
     "socket.io": "^4.8.0",
     "xmldom-qsa": "^1.1.3",
     "zod": "^3.24.0"
@@ -46,6 +48,7 @@
     "@types/nodemailer": "^7.0.9",
     "@types/qrcode": "^1.5.6",
     "@types/semver": "^7.7.1",
+    "@types/sharp": "^0.32.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }

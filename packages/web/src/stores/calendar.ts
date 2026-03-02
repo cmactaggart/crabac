@@ -5,6 +5,8 @@ import type { CalendarCategory, CalendarEvent, EventRsvp, EventSeries } from '@c
 interface CalendarState {
   categories: CalendarCategory[];
   events: CalendarEvent[];
+  upcomingEvents: CalendarEvent[];
+  upcomingLoading: boolean;
   selectedDate: string | null; // YYYY-MM-DD
   selectedEvent: CalendarEvent | null;
   currentMonth: number; // 0-11
@@ -17,15 +19,19 @@ interface CalendarState {
   deleteCategory: (spaceId: string, id: string) => Promise<void>;
 
   fetchEvents: (spaceId: string) => Promise<void>;
+  fetchUpcomingEvents: (spaceId: string) => Promise<void>;
+  uploadEventImage: (spaceId: string, file: File) => Promise<string>;
   createEvent: (spaceId: string, data: {
     name: string; description?: string | null; eventDate: string; eventTime?: string | null;
     categoryId?: string | null; isPublic?: boolean;
     location?: string | null; activityType?: string | null; routeId?: string | null;
+    imageUrl?: string | null;
   }) => Promise<CalendarEvent>;
   updateEvent: (spaceId: string, id: string, data: {
     name?: string; description?: string | null; eventDate?: string; eventTime?: string | null;
     categoryId?: string | null; isPublic?: boolean;
     location?: string | null; activityType?: string | null; routeId?: string | null;
+    imageUrl?: string | null;
   }) => Promise<CalendarEvent>;
   deleteEvent: (spaceId: string, id: string) => Promise<void>;
 
@@ -51,6 +57,8 @@ const now = new Date();
 export const useCalendarStore = create<CalendarState>((set, get) => ({
   categories: [],
   events: [],
+  upcomingEvents: [],
+  upcomingLoading: false,
   selectedDate: null,
   selectedEvent: null,
   currentMonth: now.getMonth(),
@@ -113,6 +121,29 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     } catch {
       set({ loading: false });
     }
+  },
+
+  fetchUpcomingEvents: async (spaceId) => {
+    set({ upcomingLoading: true });
+    try {
+      const upcomingEvents = await api<CalendarEvent[]>(`/spaces/${spaceId}/calendar/upcoming?limit=20`);
+      set({ upcomingEvents, upcomingLoading: false });
+    } catch {
+      set({ upcomingLoading: false });
+    }
+  },
+
+  uploadEventImage: async (spaceId, file) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const res = await fetch(`/api/spaces/${spaceId}/calendar/events/upload-image`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
+      body: formData,
+    });
+    if (!res.ok) throw new Error('Upload failed');
+    const data = await res.json();
+    return data.url as string;
   },
 
   createEvent: async (spaceId, data) => {
@@ -237,6 +268,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
   clear: () => set({
     categories: [],
     events: [],
+    upcomingEvents: [],
     selectedDate: null,
     selectedEvent: null,
   }),

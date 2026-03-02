@@ -24,21 +24,21 @@ export function NewsletterView({ spaceId, showBackButton, onBack }: Props) {
   const [editingNewsletter, setEditingNewsletter] = useState<Newsletter | null>(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [subscribed, setSubscribed] = useState<boolean | null>(null);
-  const [subscriberCount, setSubscriberCount] = useState<number | null>(null);
+  const [stats, setStats] = useState<{ drafts: number; published: number; subscribers: number } | null>(null);
 
   useEffect(() => {
     fetchNewsletters(spaceId);
     return () => useNewsletterStore.getState().clear();
   }, [spaceId, fetchNewsletters]);
 
-  // Check subscription status
+  // Check subscription status + fetch stats
   useEffect(() => {
     api(`/newsletter-subscriptions/check?sourceType=space&sourceId=${spaceId}`)
       .then((sub: any) => setSubscribed(sub ? sub.isActive : false))
       .catch(() => {});
     if (canManage) {
-      api(`/spaces/${spaceId}/newsletter-subscribers/count`)
-        .then((data: any) => setSubscriberCount(data.total))
+      api(`/spaces/${spaceId}/newsletter-stats`)
+        .then((data: any) => setStats(data))
         .catch(() => {});
     }
   }, [spaceId, canManage]);
@@ -86,9 +86,6 @@ export function NewsletterView({ spaceId, showBackButton, onBack }: Props) {
         )}
         <h2 style={{ margin: 0, fontSize: '1.1rem' }}>Newsletter</h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {subscriberCount !== null && canManage && (
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{subscriberCount} subscriber{subscriberCount !== 1 ? 's' : ''}</span>
-          )}
           {subscribed !== null && (
             <button onClick={toggleSubscription} style={{ ...styles.subBtn, background: subscribed ? 'var(--bg-secondary)' : 'var(--accent)', color: subscribed ? 'var(--text-secondary)' : '#fff' }}>
               <Mail size={14} /> {subscribed ? 'Subscribed' : 'Subscribe'}
@@ -106,6 +103,23 @@ export function NewsletterView({ spaceId, showBackButton, onBack }: Props) {
           )}
         </div>
       </div>
+
+      {canManage && stats && (
+        <div style={styles.statsBar}>
+          <div style={styles.statItem}>
+            <span style={styles.statValue}>{stats.drafts}</span>
+            <span style={styles.statLabel}>Drafts</span>
+          </div>
+          <div style={styles.statItem}>
+            <span style={styles.statValue}>{stats.published}</span>
+            <span style={styles.statLabel}>Published</span>
+          </div>
+          <div style={styles.statItem}>
+            <span style={styles.statValue}>{stats.subscribers}</span>
+            <span style={styles.statLabel}>Subscribers</span>
+          </div>
+        </div>
+      )}
 
       <div style={styles.list}>
         {loading && newsletters.length === 0 ? (
@@ -156,6 +170,10 @@ export function NewsletterView({ spaceId, showBackButton, onBack }: Props) {
 const styles: Record<string, React.CSSProperties> = {
   container: { display: 'flex', flexDirection: 'column', height: '100%' },
   header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border)' },
+  statsBar: { display: 'flex', borderBottom: '1px solid var(--border)', padding: '10px 16px', gap: 0 },
+  statItem: { flex: 1, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: 2 },
+  statValue: { fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' },
+  statLabel: { fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase' as const, color: 'var(--text-muted)', letterSpacing: '0.05em' },
   list: { flex: 1, overflow: 'auto', padding: '8px 0' },
   empty: { textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: '0.9rem' },
   item: { display: 'flex', gap: 12, padding: '12px 16px', background: 'none', border: 'none', borderBottom: '1px solid var(--border)', cursor: 'pointer', textAlign: 'left', width: '100%', alignItems: 'center', color: 'inherit' },

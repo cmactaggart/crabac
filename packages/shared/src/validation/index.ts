@@ -303,6 +303,7 @@ export const createCalendarEventSchema = z.object({
   location: z.string().max(500).nullable().optional(),
   activityType: z.enum(['ride', 'run', 'walk']).nullable().optional(),
   routeId: z.string().nullable().optional(),
+  imageUrl: z.string().max(512).nullable().optional(),
 });
 
 export const updateCalendarEventSchema = z.object({
@@ -315,6 +316,7 @@ export const updateCalendarEventSchema = z.object({
   location: z.string().max(500).nullable().optional(),
   activityType: z.enum(['ride', 'run', 'walk']).nullable().optional(),
   routeId: z.string().nullable().optional(),
+  imageUrl: z.string().max(512).nullable().optional(),
 });
 
 export const calendarEventsQuerySchema = z.object({
@@ -341,6 +343,7 @@ export const createEventSeriesSchema = z.object({
   location: z.string().max(500).nullable().optional(),
   activityType: z.enum(['ride', 'run', 'walk']).nullable().optional(),
   routeId: z.string().nullable().optional(),
+  imageUrl: z.string().max(512).nullable().optional(),
   recurrenceRule: recurrenceRuleSchema,
 });
 
@@ -353,6 +356,7 @@ export const updateEventSeriesSchema = z.object({
   location: z.string().max(500).nullable().optional(),
   activityType: z.enum(['ride', 'run', 'walk']).nullable().optional(),
   routeId: z.string().nullable().optional(),
+  imageUrl: z.string().max(512).nullable().optional(),
   recurrenceRule: recurrenceRuleSchema.optional(),
   updateMode: z.enum(['all', 'future']).default('all'),
 });

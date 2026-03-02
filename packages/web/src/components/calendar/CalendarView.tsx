@@ -9,6 +9,7 @@ import { DayEventsPanel } from './DayEventsPanel.js';
 import { EventDetailModal } from './EventDetailModal.js';
 import { CreateEventModal } from './CreateEventModal.js';
 import { CreateCategoryModal } from './CreateCategoryModal.js';
+import { UpcomingEventsList } from './UpcomingEventsList.js';
 import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu.js';
 import { PersonalCollectionPicker } from '../common/PersonalCollectionPicker.js';
 import { api } from '../../lib/api.js';
@@ -47,11 +48,14 @@ function formatDateKey(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+const MOBILE_BREAKPOINT = 768;
+
 export function CalendarView({ spaceId, showBackButton, onBack }: Props) {
   const {
     categories, events, selectedDate, selectedEvent,
+    upcomingEvents, upcomingLoading,
     currentMonth, currentYear, loading,
-    fetchCategories, fetchEvents,
+    fetchCategories, fetchEvents, fetchUpcomingEvents,
     setSelectedDate, setSelectedEvent, navigateMonth, goToToday, clear,
   } = useCalendarStore();
 
@@ -63,11 +67,19 @@ export function CalendarView({ spaceId, showBackButton, onBack }: Props) {
   const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
   const [prefillDate, setPrefillDate] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < MOBILE_BREAKPOINT);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Fetch data on mount and when month changes
   useEffect(() => {
     fetchCategories(spaceId);
-  }, [spaceId, fetchCategories]);
+    fetchUpcomingEvents(spaceId);
+  }, [spaceId, fetchCategories, fetchUpcomingEvents]);
 
   useEffect(() => {
     fetchEvents(spaceId);
@@ -126,8 +138,28 @@ export function CalendarView({ spaceId, showBackButton, onBack }: Props) {
 
   const dayEvents = selectedDate ? (eventsByDate.get(selectedDate) || []) : [];
 
-  return (
-    <div style={styles.container}>
+  const handleEventClick = (ev: CalendarEvent) => {
+    setSelectedEvent(ev);
+  };
+
+  const handleCloseCreateEvent = () => {
+    setShowCreateEvent(false);
+    setEditEvent(null);
+    // Refetch upcoming events after create/edit
+    fetchUpcomingEvents(spaceId);
+  };
+
+  const upcomingPanel = (
+    <UpcomingEventsList
+      spaceId={spaceId}
+      events={upcomingEvents}
+      loading={upcomingLoading}
+      onEventClick={handleEventClick}
+    />
+  );
+
+  const calendarGrid = (
+    <>
       {/* Header */}
       <div style={styles.header}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -183,6 +215,24 @@ export function CalendarView({ spaceId, showBackButton, onBack }: Props) {
           );
         })}
       </div>
+    </>
+  );
+
+  return (
+    <div style={styles.outerContainer}>
+      {isMobile ? (
+        /* Mobile: calendar on top, upcoming events below */
+        <div style={styles.mobileLayout}>
+          <div style={styles.mobileCalendar}>{calendarGrid}</div>
+          <div style={styles.mobileUpcoming}>{upcomingPanel}</div>
+        </div>
+      ) : (
+        /* Desktop: upcoming on left, calendar on right */
+        <div style={styles.desktopLayout}>
+          <div style={styles.desktopSidebar}>{upcomingPanel}</div>
+          <div style={styles.desktopCalendar}>{calendarGrid}</div>
+        </div>
+      )}
 
       {/* Context menu */}
       {contextMenu && (
@@ -235,10 +285,7 @@ export function CalendarView({ spaceId, showBackButton, onBack }: Props) {
           spaceId={spaceId}
           prefillDate={prefillDate}
           editEvent={editEvent}
-          onClose={() => {
-            setShowCreateEvent(false);
-            setEditEvent(null);
-          }}
+          onClose={handleCloseCreateEvent}
         />
       )}
 
@@ -264,8 +311,9 @@ export function CalendarView({ spaceId, showBackButton, onBack }: Props) {
                 });
               } catch {}
             }
-            // Refresh calendar
+            // Refresh calendar + upcoming
             fetchEvents(spaceId);
+            fetchUpcomingEvents(spaceId);
           }}
         />
       )}
@@ -274,7 +322,7 @@ export function CalendarView({ spaceId, showBackButton, onBack }: Props) {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: {
+  outerContainer: {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
@@ -282,6 +330,51 @@ const styles: Record<string, React.CSSProperties> = {
     height: '100%',
     overflow: 'hidden',
   },
+  // Desktop two-column layout
+  desktopLayout: {
+    display: 'flex',
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+  },
+  desktopSidebar: {
+    width: 320,
+    flexShrink: 0,
+    borderRight: '1px solid var(--border)',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  desktopCalendar: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: 0,
+    overflow: 'hidden',
+  },
+  // Mobile stacked layout
+  mobileLayout: {
+    display: 'flex',
+    flexDirection: 'column',
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+  },
+  mobileCalendar: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: 0,
+    overflow: 'hidden',
+  },
+  mobileUpcoming: {
+    maxHeight: '40%',
+    borderTop: '1px solid var(--border)',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  // Calendar internals
   header: {
     display: 'flex',
     justifyContent: 'space-between',

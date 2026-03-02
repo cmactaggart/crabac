@@ -149,6 +149,21 @@ newsletterRoutes.get(
   },
 );
 
+// Newsletter stats (drafts + published + subscribers combined)
+newsletterRoutes.get(
+  '/:spaceId/newsletter-stats',
+  requirePermission(Permissions.MANAGE_NEWSLETTER),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const [stats, subscriberCounts] = await Promise.all([
+        newsletterService.getNewsletterStats(req.params.spaceId),
+        subscriptionService.getSubscriberCounts('space', req.params.spaceId),
+      ]);
+      res.json({ ...stats, subscribers: subscriberCounts.total });
+    } catch (err) { next(err); }
+  },
+);
+
 // Subscriber counts
 newsletterRoutes.get(
   '/:spaceId/newsletter-subscribers/count',

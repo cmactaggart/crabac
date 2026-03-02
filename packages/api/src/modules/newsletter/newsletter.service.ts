@@ -207,6 +207,17 @@ export async function getPublicPersonalNewsletter(newsletterId: string) {
   return formatNewsletter(row);
 }
 
+export async function getNewsletterStats(spaceId: string) {
+  const [drafts, published] = await Promise.all([
+    db('newsletters').where({ space_id: spaceId, status: 'draft' }).count('* as count').first(),
+    db('newsletters').where({ space_id: spaceId, status: 'published' }).count('* as count').first(),
+  ]);
+  return {
+    drafts: Number(drafts?.count || 0),
+    published: Number(published?.count || 0),
+  };
+}
+
 function formatNewsletter(row: any) {
   let blocks: any[] = [];
   try {
