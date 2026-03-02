@@ -25,6 +25,8 @@ export interface DirectMessage {
   authorId: string;
   content: string;
   editedAt: string | null;
+  reactions: import('./message.js').Reaction[];
+  attachments?: import('./message.js').Attachment[];
   author: {
     id: string;
     username: string;

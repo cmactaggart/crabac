@@ -268,10 +268,20 @@ export async function listMessages(conversationId: string, options: { before?: s
   }
 
   const rows = await query;
-  return rows.map((r: any) => formatDM(r)).reverse();
+  const messageIds = rows.map((r: any) => String(r.id));
+  const [reactionsMap, attachmentsMap] = await Promise.all([
+    getDMReactionsForMessages(messageIds),
+    getDMAttachmentsForMessages(messageIds),
+  ]);
+
+  return rows.map((r: any) => formatDM(
+    r,
+    reactionsMap.get(String(r.id)) || [],
+    attachmentsMap.get(String(r.id)) || [],
+  )).reverse();
 }
 
-export async function sendMessage(conversationId: string, authorId: string, content: string) {
+export async function sendMessage(conversationId: string, authorId: string, content: string, opts?: { skipEvent?: boolean }) {
   const id = snowflake.generate();
 
   await db('direct_messages').insert({
@@ -287,7 +297,9 @@ export async function sendMessage(conversationId: string, authorId: string, cont
     .update({ updated_at: db.fn.now(3) });
 
   const message = await getDM(id);
-  eventBus.emit('dm.created', { message, conversationId });
+  if (!opts?.skipEvent) {
+    eventBus.emit('dm.created', { message, conversationId });
+  }
   return message;
 }
 
@@ -318,6 +330,61 @@ export async function deleteMessage(conversationId: string, messageId: string, u
 
 export async function getMessageById(messageId: string) {
   return getDM(messageId);
+}
+
+// ─── Reactions ───
+
+export async function addDMReaction(conversationId: string, messageId: string, userId: string, emoji: string) {
+  const msg = await db('direct_messages').where({ id: messageId, conversation_id: conversationId }).first();
+  if (!msg) throw new NotFoundError('Message');
+
+  await db('dm_message_reactions')
+    .insert({ dm_message_id: messageId, user_id: userId, emoji })
+    .onConflict(['dm_message_id', 'user_id', 'emoji'])
+    .ignore();
+
+  const reactions = await getDMReactionsForMessage(messageId);
+  eventBus.emit('dm.reactions_updated', { conversationId, messageId, reactions });
+  return reactions;
+}
+
+export async function removeDMReaction(conversationId: string, messageId: string, userId: string, emoji: string) {
+  const msg = await db('direct_messages').where({ id: messageId, conversation_id: conversationId }).first();
+  if (!msg) throw new NotFoundError('Message');
+
+  await db('dm_message_reactions')
+    .where({ dm_message_id: messageId, user_id: userId, emoji })
+    .delete();
+
+  const reactions = await getDMReactionsForMessage(messageId);
+  eventBus.emit('dm.reactions_updated', { conversationId, messageId, reactions });
+  return reactions;
+}
+
+// ─── DM Attachments ───
+
+export async function createDMAttachment(
+  messageId: string,
+  file: { filename: string; originalName: string; mimeType: string; size: number; url: string },
+  metadata?: Record<string, any> | null,
+) {
+  const id = snowflake.generate();
+  await db('dm_attachments').insert({
+    id,
+    dm_message_id: messageId,
+    filename: file.filename,
+    original_name: file.originalName,
+    mime_type: file.mimeType,
+    size: file.size,
+    url: file.url,
+    metadata: metadata ? JSON.stringify(metadata) : null,
+  });
+  return { id, messageId, filename: file.filename, originalName: file.originalName, mimeType: file.mimeType, size: file.size, url: file.url, metadata: metadata ?? null };
+}
+
+export async function emitDMCreated(conversationId: string, messageId: string) {
+  const message = await getDM(messageId);
+  eventBus.emit('dm.created', { message, conversationId });
 }
 
 // ─── Read Tracking ───
@@ -437,16 +504,22 @@ async function getDM(messageId: string) {
     .first();
 
   if (!row) throw new NotFoundError('Message');
-  return formatDM(row);
+  const [reactions, attachments] = await Promise.all([
+    getDMReactionsForMessage(messageId),
+    getDMAttachmentsForMessages([messageId]),
+  ]);
+  return formatDM(row, reactions, attachments.get(messageId) || []);
 }
 
-function formatDM(row: any) {
+function formatDM(row: any, reactions: any[] = [], attachments: any[] = []) {
   return {
     id: row.id.toString(),
     conversationId: row.conversation_id.toString(),
     authorId: row.author_id.toString(),
     content: row.content,
     editedAt: row.edited_at,
+    reactions,
+    attachments,
     author: {
       id: row.author_id.toString(),
       username: row.author_username,
@@ -456,4 +529,86 @@ function formatDM(row: any) {
       accentColor: row.author_accent_color || null,
     },
   };
+}
+
+// ─── Reaction Helpers ───
+
+async function getDMReactionsForMessage(messageId: string) {
+  const rows = await db('dm_message_reactions')
+    .where('dm_message_id', messageId)
+    .join('users', 'dm_message_reactions.user_id', 'users.id')
+    .select('dm_message_reactions.emoji', 'dm_message_reactions.user_id', 'users.username');
+
+  return aggregateReactions(rows);
+}
+
+async function getDMReactionsForMessages(messageIds: string[]): Promise<Map<string, any[]>> {
+  if (messageIds.length === 0) return new Map();
+
+  const rows = await db('dm_message_reactions')
+    .whereIn('dm_message_id', messageIds)
+    .join('users', 'dm_message_reactions.user_id', 'users.id')
+    .select('dm_message_reactions.dm_message_id', 'dm_message_reactions.emoji', 'dm_message_reactions.user_id', 'users.username');
+
+  const byMessage = new Map<string, any[]>();
+  for (const row of rows) {
+    const key = String(row.dm_message_id);
+    const list = byMessage.get(key) || [];
+    list.push(row);
+    byMessage.set(key, list);
+  }
+
+  const result = new Map<string, any[]>();
+  for (const [msgId, rawRows] of byMessage) {
+    result.set(msgId, aggregateReactions(rawRows));
+  }
+  return result;
+}
+
+function aggregateReactions(rows: any[]) {
+  const byEmoji = new Map<string, { emoji: string; count: number; users: { id: string; username: string }[] }>();
+  for (const row of rows) {
+    const existing = byEmoji.get(row.emoji);
+    if (existing) {
+      existing.count++;
+      existing.users.push({ id: String(row.user_id), username: row.username });
+    } else {
+      byEmoji.set(row.emoji, {
+        emoji: row.emoji,
+        count: 1,
+        users: [{ id: String(row.user_id), username: row.username }],
+      });
+    }
+  }
+  return Array.from(byEmoji.values());
+}
+
+// ─── Attachment Helpers ───
+
+async function getDMAttachmentsForMessages(messageIds: string[]): Promise<Map<string, any[]>> {
+  if (messageIds.length === 0) return new Map();
+
+  const rows = await db('dm_attachments').whereIn('dm_message_id', messageIds).select('*');
+
+  const result = new Map<string, any[]>();
+  for (const row of rows) {
+    const key = String(row.dm_message_id);
+    const list = result.get(key) || [];
+    let meta = row.metadata;
+    if (typeof meta === 'string') {
+      try { meta = JSON.parse(meta); } catch { meta = null; }
+    }
+    list.push({
+      id: String(row.id),
+      messageId: key,
+      filename: row.filename,
+      originalName: row.original_name,
+      mimeType: row.mime_type,
+      size: row.size,
+      url: row.url,
+      metadata: meta ?? null,
+    });
+    result.set(key, list);
+  }
+  return result;
 }

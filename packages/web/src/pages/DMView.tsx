@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LogOut, Copy, Link2, Pencil, Trash2, PanelLeftClose, ChevronsRight, PanelLeft, UserPlus, Users, LogOut as LeaveIcon, Check, X, Clock, UserMinus, ArrowLeft, Flag, Ban } from 'lucide-react';
+import { LogOut, Copy, Link2, Pencil, Trash2, PanelLeftClose, ChevronsRight, PanelLeft, UserPlus, Users, LogOut as LeaveIcon, Check, X, Clock, UserMinus, ArrowLeft, Flag, Ban, SmilePlus, Paperclip } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { useDMStore } from '../stores/dm.js';
@@ -13,9 +13,11 @@ import { useDMSocket, useDMTypingEmit } from '../hooks/useDMSocket.js';
 import { useFriendsSocket } from '../hooks/useFriendsSocket.js';
 import { SpaceSidebar } from '../components/layout/SpaceSidebar.js';
 import { Avatar } from '../components/common/Avatar.js';
-import { Markdown } from '../components/common/Markdown.js';
-import { MessageLinkEmbed, extractMessageLinks } from '../components/messages/MessageLinkEmbed.js';
 import { ContextMenu, useLongPress, type ContextMenuItem } from '../components/common/ContextMenu.js';
+import { EmojiPicker } from '../components/messages/EmojiPicker.js';
+import { MessageEmbeds } from '../components/messages/MessageEmbeds.js';
+import { MessageAttachments } from '../components/messages/MessageAttachments.js';
+import { ReactionBar } from '../components/messages/ReactionBar.js';
 import { api } from '../lib/api.js';
 import type { DirectMessage, Conversation, FriendshipStatus } from '@crabac/shared';
 
@@ -40,6 +42,7 @@ export function DMView() {
     openConversation,
     fetchMessages,
     sendMessage,
+    sendMessageWithFiles,
     clearMessages,
   } = useDMStore();
 
@@ -119,7 +122,7 @@ export function DMView() {
       </div>
 
       {/* Input */}
-      <DMInput conversationId={conversationId} onSend={sendMessage} />
+      <DMInput conversationId={conversationId} onSend={sendMessage} onSendWithFiles={sendMessageWithFiles} />
     </div>
   ) : null;
 
@@ -809,6 +812,7 @@ function DMMessageList({
             compact={compact}
             spacedSameAuthor={spacedSameAuthor}
             isOwn={msg.authorId === currentUserId}
+            currentUserId={currentUserId}
             conversationId={conversationId}
             onReport={(m) => setReportTarget({ message: m })}
           />
@@ -838,6 +842,7 @@ function DMMessageItem({
   compact,
   spacedSameAuthor,
   isOwn,
+  currentUserId,
   conversationId,
   onReport,
 }: {
@@ -845,19 +850,30 @@ function DMMessageItem({
   compact: boolean;
   spacedSameAuthor?: boolean;
   isOwn: boolean;
+  currentUserId: string;
   conversationId: string;
   onReport: (msg: DirectMessage) => void;
 }) {
   const [showActions, setShowActions] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
   const editMessage = useDMStore((s) => s.editMessage);
   const deleteMessage = useDMStore((s) => s.deleteMessage);
+  const toggleReaction = useDMStore((s) => s.toggleReaction);
   const blockUser = useBlocksStore((s) => s.blockUser);
   const isBlockedByMe = useBlocksStore((s) => s.isBlockedByMe);
   const unblockUser = useBlocksStore((s) => s.unblockUser);
   const ts = formatTimestamp(message.id);
+
+  const handleReaction = (emoji: string) => {
+    const hasReacted = message.reactions?.some(
+      (r) => r.emoji === emoji && r.users.some((u) => u.id === currentUserId),
+    ) || false;
+    toggleReaction(conversationId, message.id, emoji, hasReacted);
+    setShowEmojiPicker(false);
+  };
 
   const handleEdit = () => {
     setEditContent(message.content);
@@ -893,7 +909,6 @@ function DMMessageItem({
   const longPressHandlers = useLongPress(handleLongPressCallback);
 
   const navigate = useNavigate();
-  const linkedMessageIds = extractMessageLinks(message.content);
 
   const handleContentClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
@@ -924,6 +939,7 @@ function DMMessageItem({
   };
 
   const contextMenuItems: ContextMenuItem[] = [
+    { label: 'Add Reaction', icon: <SmilePlus size={16} />, onClick: () => setShowEmojiPicker(true) },
     { label: 'Copy Text', icon: <Copy size={16} />, onClick: () => navigator.clipboard.writeText(message.content) },
     { label: 'Copy Link', icon: <Link2 size={16} />, onClick: () => navigator.clipboard.writeText(`${window.location.origin}/dm/${conversationId}/message/${message.id}`) },
     ...(isOwn ? [{ label: 'Edit', icon: <Pencil size={16} />, onClick: handleEdit }] : []),
@@ -940,11 +956,22 @@ function DMMessageItem({
       onContextMenu={handleContextMenu}
       {...longPressHandlers}
     >
-      {showActions && !editing && isOwn && (
+      {showActions && !editing && (
         <div style={styles.actionBar}>
-          <button style={styles.actionBtn} title="Edit" onClick={handleEdit}><Pencil size={16} /></button>
-          <button style={styles.actionBtn} title="Delete" onClick={handleDelete}><Trash2 size={16} /></button>
+          <button style={styles.actionBtn} title="Add reaction" onClick={() => setShowEmojiPicker(!showEmojiPicker)}><SmilePlus size={16} /></button>
+          {isOwn && <button style={styles.actionBtn} title="Edit" onClick={handleEdit}><Pencil size={16} /></button>}
+          {isOwn && <button style={styles.actionBtn} title="Delete" onClick={handleDelete}><Trash2 size={16} /></button>}
         </div>
+      )}
+
+      {showEmojiPicker && (
+        <EmojiPicker
+          onSelect={(emoji) => {
+            handleReaction(emoji);
+            setShowEmojiPicker(false);
+          }}
+          onClose={() => setShowEmojiPicker(false)}
+        />
       )}
 
       {contextMenu && (
@@ -983,46 +1010,96 @@ function DMMessageItem({
             </div>
           </div>
         ) : (
-          <>
-            <Markdown content={message.content} />
-            {linkedMessageIds.map((mid) => (
-              <MessageLinkEmbed key={mid} messageId={mid} />
-            ))}
-          </>
+          <MessageEmbeds content={message.content} />
         )}
       </div>
+
+      {/* Attachments */}
+      {message.attachments && message.attachments.length > 0 && (
+        <MessageAttachments attachments={message.attachments} />
+      )}
+
+      {/* Reactions */}
+      <ReactionBar
+        reactions={message.reactions}
+        currentUserId={currentUserId}
+        onToggleReaction={handleReaction}
+      />
     </div>
   );
 }
 
 // ─── DM Input ───
 
-function DMInput({ conversationId, onSend }: { conversationId: string; onSend: (convId: string, content: string) => Promise<void> }) {
+function DMInput({ conversationId, onSend, onSendWithFiles }: {
+  conversationId: string;
+  onSend: (convId: string, content: string) => Promise<void>;
+  onSendWithFiles: (convId: string, content: string, files: File[]) => Promise<void>;
+}) {
   const [content, setContent] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const emitTyping = useDMTypingEmit(conversationId);
 
   const handleSubmit = async () => {
     const trimmed = content.trim();
-    if (!trimmed) return;
+    if (!trimmed && files.length === 0) return;
+    const currentFiles = [...files];
     setContent('');
-    await onSend(conversationId, trimmed);
+    setFiles([]);
+    if (currentFiles.length > 0) {
+      await onSendWithFiles(conversationId, trimmed, currentFiles);
+    } else {
+      await onSend(conversationId, trimmed);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+    }
+    e.target.value = '';
+  };
+
+  const removeFile = (index: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   return (
     <div style={styles.inputContainer}>
-      <textarea
-        value={content}
-        onChange={(e) => { setContent(e.target.value); emitTyping(); }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSubmit();
-          }
-        }}
-        placeholder="Type a message..."
-        style={styles.textarea}
-        rows={1}
-      />
+      {files.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+          {files.map((file, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '2px 8px', fontSize: '0.8rem' }}>
+              <span style={{ color: 'var(--text-secondary)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
+              <button onClick={() => removeFile(i)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, lineHeight: 1 }}><X size={12} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '8px 0', lineHeight: 1, flexShrink: 0 }}
+          title="Attach files"
+        >
+          <Paperclip size={20} />
+        </button>
+        <input ref={fileInputRef} type="file" multiple hidden onChange={handleFileSelect} />
+        <textarea
+          value={content}
+          onChange={(e) => { setContent(e.target.value); emitTyping(); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSubmit();
+            }
+          }}
+          placeholder="Type a message..."
+          style={{ ...styles.textarea, flex: 1 }}
+          rows={1}
+        />
+      </div>
     </div>
   );
 }

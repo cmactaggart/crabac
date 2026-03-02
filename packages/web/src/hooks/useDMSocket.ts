@@ -1,12 +1,13 @@
 import { useEffect } from 'react';
 import { getSocket } from '../lib/socket.js';
 import { useDMStore } from '../stores/dm.js';
-import type { DirectMessage } from '@crabac/shared';
+import type { DirectMessage, Reaction } from '@crabac/shared';
 
 export function useDMSocket(conversationId: string | null) {
   const addMessage = useDMStore((s) => s.addMessage);
   const updateMessage = useDMStore((s) => s.updateMessage);
   const removeMessage = useDMStore((s) => s.removeMessage);
+  const updateReactions = useDMStore((s) => s.updateReactions);
   const setTyping = useDMStore((s) => s.setTyping);
 
   useEffect(() => {
@@ -31,6 +32,10 @@ export function useDMSocket(conversationId: string | null) {
       removeMessage(payload.messageId);
     };
 
+    const onReactionsUpdated = (payload: { conversationId: string; messageId: string; reactions: Reaction[] }) => {
+      updateReactions(payload.messageId, payload.reactions);
+    };
+
     const onTyping = (payload: { conversationId: string; userId: string; username: string }) => {
       if (payload.conversationId === conversationId) {
         setTyping(payload.userId, payload.username);
@@ -40,15 +45,17 @@ export function useDMSocket(conversationId: string | null) {
     socket.on('dm:new', onNew);
     socket.on('dm:updated', onUpdated);
     socket.on('dm:deleted', onDeleted);
+    socket.on('dm:reactions_updated', onReactionsUpdated);
     socket.on('dm:typing', onTyping);
 
     return () => {
       socket.off('dm:new', onNew);
       socket.off('dm:updated', onUpdated);
       socket.off('dm:deleted', onDeleted);
+      socket.off('dm:reactions_updated', onReactionsUpdated);
       socket.off('dm:typing', onTyping);
     };
-  }, [conversationId, addMessage, updateMessage, removeMessage, setTyping]);
+  }, [conversationId, addMessage, updateMessage, removeMessage, updateReactions, setTyping]);
 }
 
 export function useDMTypingEmit(conversationId: string | null) {

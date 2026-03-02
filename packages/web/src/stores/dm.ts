@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../lib/api.js';
-import type { Conversation, DirectMessage } from '@crabac/shared';
+import type { Conversation, DirectMessage, Reaction } from '@crabac/shared';
 
 interface DMState {
   conversations: Conversation[];
@@ -26,8 +26,11 @@ interface DMState {
   renameGroup: (conversationId: string, name: string) => Promise<void>;
   fetchMessages: (conversationId: string, before?: string) => Promise<void>;
   sendMessage: (conversationId: string, content: string) => Promise<void>;
+  sendMessageWithFiles: (conversationId: string, content: string, files: File[]) => Promise<void>;
   editMessage: (conversationId: string, messageId: string, content: string) => Promise<void>;
   deleteMessage: (conversationId: string, messageId: string) => Promise<void>;
+  toggleReaction: (conversationId: string, messageId: string, emoji: string, hasReacted: boolean) => void;
+  updateReactions: (messageId: string, reactions: Reaction[]) => void;
   addMessage: (message: DirectMessage) => void;
   updateMessage: (message: DirectMessage) => void;
   removeMessage: (messageId: string) => void;
@@ -195,6 +198,17 @@ export const useDMStore = create<DMState>((set, get) => ({
     get().addMessage(message);
   },
 
+  sendMessageWithFiles: async (conversationId, content, files) => {
+    const formData = new FormData();
+    formData.append('content', content);
+    files.forEach((file) => formData.append('files', file));
+    const message = await api<DirectMessage>(`/conversations/${conversationId}/messages/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+    get().addMessage(message);
+  },
+
   editMessage: async (conversationId, messageId, content) => {
     await api(`/conversations/${conversationId}/messages/${messageId}`, {
       method: 'PATCH',
@@ -206,6 +220,23 @@ export const useDMStore = create<DMState>((set, get) => ({
     await api(`/conversations/${conversationId}/messages/${messageId}`, {
       method: 'DELETE',
     });
+  },
+
+  toggleReaction: async (conversationId, messageId, emoji, hasReacted) => {
+    const method = hasReacted ? 'DELETE' : 'PUT';
+    try {
+      await api(`/conversations/${conversationId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, { method });
+    } catch {
+      // ignore
+    }
+  },
+
+  updateReactions: (messageId, reactions) => {
+    set((s) => ({
+      messages: s.messages.map((m) =>
+        m.id === messageId ? { ...m, reactions } : m,
+      ),
+    }));
   },
 
   addMessage: (message) => {

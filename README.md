@@ -17,11 +17,9 @@ The platform is especially well-suited for outdoor activity communities (cycling
 
 ---
 
-## What's New in 0.6.0
+## What's New in 0.7.0
 
 - **Newsletter system** — space and personal newsletters with a block editor (text, images, galleries, quotes, embeds, dividers), email delivery via SES, open/click tracking, anonymous + authenticated subscriptions, and daily/weekly digest scheduling
-- **Public page navigation bar** — cross-page navbar across all public features (boards, gallery, routes, calendar, blog, newsletter) with configurable feature visibility and custom external links
-- **Single-item auto-redirect** — public board and gallery listing pages auto-redirect to the content when only one channel exists, eliminating useless intermediate pages
 - **Workflow engine** — trigger-condition-action automations: welcome flows, auto-imports, slash commands, interactive cards, incoming/outgoing webhooks
 - **Social profiles** — personal galleries, route collections, event calendars, and a post feed on every user profile with visibility controls (public/friends/private)
 - **User posts** — text posts with photo/route attachments, friend tagging, reactions, comments, and reposts

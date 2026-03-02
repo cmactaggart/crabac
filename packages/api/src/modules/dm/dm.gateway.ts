@@ -45,6 +45,11 @@ export function registerDMGateway() {
     io.to(`dm:${conversationId}`).emit('dm:deleted', { conversationId, messageId });
   });
 
+  eventBus.on('dm.reactions_updated', ({ conversationId, messageId, reactions }) => {
+    if (!io) return;
+    io.to(`dm:${conversationId}`).emit('dm:reactions_updated', { conversationId, messageId, reactions });
+  });
+
   // Message request created (DM to non-friend)
   eventBus.on('dm.request_created', async ({ conversation, senderId, recipientId, senderUsername, senderDisplayName }) => {
     if (!io) return;

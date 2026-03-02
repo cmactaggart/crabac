@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Reply, SmilePlus, MessageSquare, Pin, Copy, Link2, Pencil, Trash2, FileText, Zap, Check, X, Flag } from 'lucide-react';
+import { Reply, SmilePlus, MessageSquare, Pin, Copy, Link2, Pencil, Trash2, Zap, Check, X, Flag } from 'lucide-react';
 import { useMessagesStore } from '../../stores/messages.js';
 import { usePortalsStore } from '../../stores/portals.js';
 import { useMutesStore } from '../../stores/mutes.js';
@@ -9,16 +9,13 @@ import { Permissions } from '@crabac/shared';
 import { ReportModal } from '../moderation/ReportModal.js';
 import { Avatar } from '../common/Avatar.js';
 import { Markdown } from '../common/Markdown.js';
-import { MessageLinkEmbed, extractMessageLinks } from './MessageLinkEmbed.js';
-import { SpaceLinkEmbed, extractSpaceLinks } from '../spaces/SpaceLinkEmbed.js';
 import { EmojiPicker } from './EmojiPicker.js';
 import { ContextMenu, useLongPress, type ContextMenuItem } from '../common/ContextMenu.js';
-import type { Message, Attachment, GpxTrackMetadata } from '@crabac/shared';
-import { GpxPreviewCard } from './GpxPreviewCard.js';
-import { MediaGrid } from './MediaGrid.js';
-import { MediaCarousel } from './MediaCarousel.js';
-import { CalendarEventCard, extractCalendarEvent } from '../calendar/CalendarEventCard.js';
+import type { Message } from '@crabac/shared';
 import { InteractiveCard } from './InteractiveCard.js';
+import { MessageEmbeds } from './MessageEmbeds.js';
+import { MessageAttachments } from './MessageAttachments.js';
+import { ReactionBar } from './ReactionBar.js';
 
 interface Props {
   messages: Message[];
@@ -208,7 +205,6 @@ function MessageItem({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
-  const [carouselData, setCarouselData] = useState<{ attachments: Attachment[]; startIndex: number } | null>(null);
   const isMuted = useMutesStore((s) => s.isMuted(message.authorId));
   const toggleReaction = useMessagesStore((s) => s.toggleReaction);
   const openThread = useMessagesStore((s) => s.openThread);
@@ -277,8 +273,6 @@ function MessageItem({
   ];
 
   const navigate = useNavigate();
-  const linkedMessageIds = extractMessageLinks(message.content);
-  const linkedSpaceRefs = extractSpaceLinks(message.content);
 
   const handleContentClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
@@ -434,28 +428,9 @@ function MessageItem({
                     <div style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.85rem' }}>
                       <Markdown content={message.content} />
                     </div>
-                  ) : (() => {
-                    const calEvent = extractCalendarEvent(message.content);
-                    if (calEvent) {
-                      return (
-                        <>
-                          {calEvent.remainingContent && <Markdown content={calEvent.remainingContent} />}
-                          <CalendarEventCard embed={calEvent.embed} spaceId={spaceId} />
-                        </>
-                      );
-                    }
-                    return (
-                      <>
-                        <Markdown content={message.content} />
-                        {linkedMessageIds.map((mid) => (
-                          <MessageLinkEmbed key={mid} messageId={mid} />
-                        ))}
-                        {linkedSpaceRefs.map((ref) => (
-                          <SpaceLinkEmbed key={ref.key} spaceId={ref.type === 'id' ? ref.value : undefined} spaceSlug={ref.type === 'slug' ? ref.value : undefined} />
-                        ))}
-                      </>
-                    );
-                  })()}
+                  ) : (
+                    <MessageEmbeds content={message.content} spaceId={spaceId} />
+                  )}
                 </>
               )}
             </div>
@@ -469,71 +444,16 @@ function MessageItem({
           )}
 
           {/* Attachments */}
-          {message.attachments && message.attachments.length > 0 && (() => {
-            const gpxAtts = message.attachments.filter((att) => (att as any).metadata?.gpx);
-            const mediaAtts = message.attachments.filter((att) =>
-              !(att as any).metadata?.gpx && (att.mimeType.startsWith('image/') || att.mimeType.startsWith('video/'))
-            );
-            const fileAtts = message.attachments.filter((att) =>
-              !(att as any).metadata?.gpx && !att.mimeType.startsWith('image/') && !att.mimeType.startsWith('video/')
-            );
-            return (
-              <div style={styles.attachments}>
-                {gpxAtts.map((att) => (
-                  <GpxPreviewCard key={att.id} attachment={att} gpx={(att as any).metadata!.gpx as GpxTrackMetadata} />
-                ))}
-                {mediaAtts.length > 0 && (
-                  <MediaGrid
-                    mediaAttachments={mediaAtts}
-                    onMediaClick={(index) => setCarouselData({ attachments: mediaAtts, startIndex: index })}
-                  />
-                )}
-                {fileAtts.map((att) => (
-                  <a key={att.id} href={att.url} download={att.originalName} style={styles.attachmentFile}>
-                    <FileText size={16} /> {att.originalName}
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                      ({(att.size / 1024).toFixed(1)} KB)
-                    </span>
-                  </a>
-                ))}
-              </div>
-            );
-          })()}
-
-          {/* Media carousel */}
-          {carouselData && (
-            <MediaCarousel
-              attachments={carouselData.attachments}
-              startIndex={carouselData.startIndex}
-              onClose={() => setCarouselData(null)}
-            />
+          {message.attachments && message.attachments.length > 0 && (
+            <MessageAttachments attachments={message.attachments} />
           )}
 
           {/* Reactions */}
-          {message.reactions && message.reactions.length > 0 && (
-            <div style={styles.reactions}>
-              {message.reactions.map((reaction) => {
-                const hasReacted = reaction.users.some((u) => u.id === currentUserId);
-                return (
-                  <button
-                    key={reaction.emoji}
-                    style={{
-                      ...styles.reactionChip,
-                      borderColor: hasReacted ? 'var(--accent)' : 'var(--border)',
-                      background: hasReacted ? 'rgba(88, 101, 242, 0.15)' : 'var(--bg-secondary)',
-                    }}
-                    onClick={() => handleReaction(reaction.emoji)}
-                    title={reaction.users.map((u) => u.username).join(', ')}
-                  >
-                    <span>{reaction.emoji}</span>
-                    <span style={{ fontSize: '0.75rem', color: hasReacted ? 'var(--accent)' : 'var(--text-secondary)' }}>
-                      {reaction.count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <ReactionBar
+            reactions={message.reactions}
+            currentUserId={currentUserId}
+            onToggleReaction={handleReaction}
+          />
 
           {/* Thread preview */}
           {message.replyCount > 0 && (
@@ -856,23 +776,6 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 4,
     fontWeight: 600,
   },
-  reactions: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: 4,
-    paddingLeft: 48,
-    marginTop: 4,
-  },
-  reactionChip: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-    padding: '2px 8px',
-    borderRadius: 12,
-    border: '1px solid var(--border)',
-    cursor: 'pointer',
-    fontSize: '0.9rem',
-  },
   threadBtn: {
     background: 'none',
     border: 'none',
@@ -882,33 +785,6 @@ const styles: Record<string, React.CSSProperties> = {
     paddingLeft: 48,
     marginTop: 4,
     fontWeight: 500,
-  },
-  attachments: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingLeft: 48,
-    marginTop: 6,
-    maxWidth: '100%',
-    overflow: 'hidden',
-  },
-  attachmentImage: {
-    maxWidth: '100%',
-    maxHeight: 200,
-    borderRadius: 'var(--radius)',
-    cursor: 'pointer',
-  },
-  attachmentFile: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '6px 12px',
-    background: 'var(--bg-secondary)',
-    border: '1px solid var(--border)',
-    borderRadius: 'var(--radius)',
-    color: 'var(--accent)',
-    fontSize: '0.85rem',
-    textDecoration: 'none',
   },
   portalCard: {
     background: 'var(--bg-secondary)',
