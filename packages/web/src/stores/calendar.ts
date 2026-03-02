@@ -136,14 +136,11 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
   uploadEventImage: async (spaceId, file) => {
     const formData = new FormData();
     formData.append('image', file);
-    const res = await fetch(`/api/spaces/${spaceId}/calendar/events/upload-image`, {
+    const data = await api<{ url: string }>(`/spaces/${spaceId}/calendar/events/upload-image`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
       body: formData,
     });
-    if (!res.ok) throw new Error('Upload failed');
-    const data = await res.json();
-    return data.url as string;
+    return data.url;
   },
 
   createEvent: async (spaceId, data) => {
