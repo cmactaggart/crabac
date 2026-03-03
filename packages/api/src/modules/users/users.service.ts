@@ -87,6 +87,23 @@ export async function deleteAccount(userId: string, password: string) {
   await db('users').where('id', userId).del();
 }
 
+export async function searchUsers(query: string, currentUserId: string) {
+  const rows = await db('users')
+    .where(function () {
+      this.where('username', 'like', `%${query}%`)
+        .orWhere('display_name', 'like', `%${query}%`);
+    })
+    .whereNot('id', currentUserId)
+    .limit(20)
+    .select('id', 'username', 'display_name', 'avatar_url');
+  return rows.map((r: any) => ({
+    id: r.id,
+    username: r.username,
+    displayName: r.display_name,
+    avatarUrl: r.avatar_url,
+  }));
+}
+
 function formatPublicUser(row: any) {
   return {
     id: row.id,

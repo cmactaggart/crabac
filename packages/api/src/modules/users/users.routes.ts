@@ -173,6 +173,22 @@ usersRoutes.delete('/blocks/:userId', async (req: Request, res: Response, next: 
   }
 });
 
+// ─── Search ───
+
+usersRoutes.get('/search', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const q = (req.query.q as string || '').trim();
+    if (q.length < 2) {
+      res.json([]);
+      return;
+    }
+    const results = await usersService.searchUsers(q, req.user!.userId);
+    res.json(results);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── Username Lookup ───
 
 usersRoutes.get('/by-username/:username', async (req: Request, res: Response, next: NextFunction) => {
