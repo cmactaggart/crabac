@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trash2, Edit3, Eye, MapPin, SmilePlus, MessageCircle, Repeat2, Forward, X } from 'lucide-react';
 import { Avatar } from '../common/Avatar.js';
@@ -113,7 +113,7 @@ function renderTextWithMentions(text: string, navigate: (path: string) => void):
   return result;
 }
 
-export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, editVisibility, onEditBodyChange, onEditVisibilityChange, onStartEdit, onSaveEdit, onCancelEdit, onDelete, onReaction, onFetchComments, onAddComment, onDeleteComment, onCommentReaction, onRepost, onShare, showAuthorLink }: {
+export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, editVisibility, onEditBodyChange, onEditVisibilityChange, onStartEdit, onSaveEdit, onCancelEdit, onDelete, onReaction, onFetchComments, onAddComment, onDeleteComment, onCommentReaction, onRepost, onShare, showAuthorLink, initialShowComments }: {
   post: UserPost;
   currentUserId: string;
   isOwn: boolean;
@@ -134,12 +134,21 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
   onRepost?: ((post: UserPost) => void) | undefined;
   onShare: () => void;
   showAuthorLink?: boolean;
+  initialShowComments?: boolean;
 }) {
   const navigate = useNavigate();
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [showComments, setShowComments] = useState(false);
+  const [showComments, setShowComments] = useState(!!initialShowComments);
   const [comments, setComments] = useState<UserPostComment[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
+
+  // Auto-load comments when initialShowComments is set
+  useEffect(() => {
+    if (initialShowComments) {
+      setCommentsLoading(true);
+      onFetchComments().then((result) => setComments(result)).catch(() => {}).finally(() => setCommentsLoading(false));
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [commentText, setCommentText] = useState('');
   const [repostForm, setRepostForm] = useState(false);
   const [repostBody, setRepostBody] = useState('');
@@ -208,7 +217,7 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
     : undefined;
 
   return (
-    <div style={styles.postCard}>
+    <div data-post-id={post.id} style={styles.postCard}>
       {/* Repost header */}
       {post.repostOfId && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: '0.78rem', color: 'var(--text-muted)' }}>

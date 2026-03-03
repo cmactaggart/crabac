@@ -76,6 +76,17 @@ export function registerDMGateway() {
     }
   });
 
+  // Members added to group DM
+  eventBus.on('conversation.members_added', ({ conversation, addedMemberIds, existingMemberIds }) => {
+    if (!io) return;
+    // Notify new members (they need to know about the conversation)
+    for (const pid of addedMemberIds) {
+      io.to(`user:${pid}`).emit('conversation:created', conversation);
+    }
+    // Notify existing members (updated participant list)
+    io.to(`dm:${conversation.id}`).emit('conversation:updated', conversation);
+  });
+
   // Conversation updated (renamed)
   eventBus.on('conversation.updated', ({ conversation }) => {
     if (!io) return;

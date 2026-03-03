@@ -10,6 +10,8 @@ import type {
   ReplyNotificationData,
   DMRequestNotificationData,
   FriendRequestNotificationData,
+  PostCommentNotificationData,
+  PostTagNotificationData,
 } from '@crabac/shared';
 
 export function NotificationBell() {
@@ -49,6 +51,16 @@ export function NotificationBell() {
         case 'friend_request': {
           const d = notification.data as FriendRequestNotificationData;
           fireNotification('Friend Request', `${d.fromDisplayName} wants to be friends`);
+          break;
+        }
+        case 'post_comment': {
+          const d = notification.data as PostCommentNotificationData;
+          fireNotification(`${d.commenterDisplayName} commented on your post`, d.commentPreview);
+          break;
+        }
+        case 'post_tag': {
+          const d = notification.data as PostTagNotificationData;
+          fireNotification(`${d.taggedByDisplayName} tagged you in a post`, d.postPreview || '');
           break;
         }
       }

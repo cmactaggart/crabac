@@ -164,6 +164,10 @@ export const updateConversationSchema = z.object({
   name: z.string().min(1).max(100),
 });
 
+export const addGroupDMMembersSchema = z.object({
+  userIds: z.array(z.string().min(1)).min(1).max(9),
+});
+
 // Direct Messages
 export const createDMSchema = z.object({
   content: z.string().min(1).max(4000),

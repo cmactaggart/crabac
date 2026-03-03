@@ -161,6 +161,24 @@ dmRoutes.post(
   },
 );
 
+// Add members to group DM
+dmRoutes.post(
+  '/:conversationId/members',
+  validate(validation.addGroupDMMembersSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const conversation = await dmService.addGroupDMMembers(
+        req.params.conversationId,
+        req.user!.userId,
+        req.body.userIds,
+      );
+      res.json(conversation);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // Leave group DM
 dmRoutes.delete(
   '/:conversationId/members/me',

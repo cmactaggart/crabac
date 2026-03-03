@@ -278,6 +278,7 @@ function GroupDMHeaderContent({ conversation, currentUserId }: { conversation: C
   const renameGroup = useDMStore((s) => s.renameGroup);
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState('');
+  const [showAddMembers, setShowAddMembers] = useState(false);
 
   const handleLeave = async () => {
     if (confirm('Leave this group?')) {
@@ -322,9 +323,23 @@ function GroupDMHeaderContent({ conversation, currentUserId }: { conversation: C
         {conversation.participants.length} members
       </span>
       <div style={{ flex: 1 }} />
-      <button onClick={handleLeave} style={styles.headerFriendBtn} title="Leave group">
+      <button onClick={() => { setNewName(conversation.name || ''); setRenaming(true); }} style={styles.headerFriendBtn} title="Rename group">
+        <Pencil size={15} />
+      </button>
+      {conversation.participants.length < 10 && (
+        <button onClick={() => setShowAddMembers(true)} style={styles.headerFriendBtn} title="Add members">
+          <UserPlus size={16} />
+        </button>
+      )}
+      <button onClick={handleLeave} style={{ ...styles.headerFriendBtn, color: 'var(--danger, #ed4245)' }} title="Leave group">
         <LeaveIcon size={16} />
       </button>
+      {showAddMembers && (
+        <AddMembersModal
+          conversation={conversation}
+          onClose={() => setShowAddMembers(false)}
+        />
+      )}
     </>
   );
 }
@@ -743,6 +758,125 @@ function CreateGroupDMModal({ onClose }: { onClose: () => void }) {
           <button onClick={onClose} style={styles.modalCancelBtn}>Cancel</button>
           <button onClick={handleCreate} disabled={creating || selected.size === 0} style={styles.modalCreateBtn}>
             {creating ? 'Creating...' : 'Create'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Add Members Modal ───
+
+function AddMembersModal({ conversation, onClose }: { conversation: Conversation; onClose: () => void }) {
+  const addMembers = useDMStore((s) => s.addMembers);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<{ id: string; username: string; displayName: string; avatarUrl: string | null }[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState('');
+  const searchTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const existingIds = new Set(conversation.participants.map((p) => p.id));
+  const maxNew = 10 - conversation.participants.length;
+
+  const doSearch = useCallback(async (q: string) => {
+    if (q.length < 2) { setResults([]); return; }
+    try {
+      const data = await api<{ id: string; username: string; displayName: string; avatarUrl: string | null }[]>(`/users/search?q=${encodeURIComponent(q)}`);
+      setResults(data.filter((u) => !existingIds.has(String(u.id))));
+    } catch { setResults([]); }
+  }, [existingIds]);
+
+  const handleQueryChange = (val: string) => {
+    setQuery(val);
+    setError('');
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(() => doSearch(val), 300);
+  };
+
+  const toggleUser = (userId: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else if (next.size < maxNew) next.add(userId);
+      return next;
+    });
+  };
+
+  const handleAdd = async () => {
+    if (selected.size === 0) return;
+    setAdding(true);
+    setError('');
+    try {
+      await addMembers(conversation.id, Array.from(selected));
+      onClose();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to add members');
+    }
+    setAdding(false);
+  };
+
+  return (
+    <div style={styles.modalOverlay} onClick={onClose}>
+      <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ margin: '0 0 12px', fontSize: '1rem' }}>Add Members</h3>
+
+        <input
+          value={query}
+          onChange={(e) => handleQueryChange(e.target.value)}
+          placeholder="Search users..."
+          autoFocus
+          style={styles.modalInput}
+        />
+
+        {selected.size > 0 && (
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '8px 0 4px' }}>
+            {selected.size} selected (max {maxNew} new)
+          </div>
+        )}
+
+        <div style={styles.friendPickerList}>
+          {query.length >= 2 && results.length === 0 && (
+            <div style={{ padding: '1rem', color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center' }}>
+              No users found
+            </div>
+          )}
+          {results.map((u) => {
+            const isSelected = selected.has(String(u.id));
+            return (
+              <button
+                key={u.id}
+                onClick={() => toggleUser(String(u.id))}
+                style={{
+                  ...styles.friendPickerItem,
+                  background: isSelected ? 'var(--hover)' : 'transparent',
+                }}
+              >
+                <Avatar src={u.avatarUrl} name={u.displayName} size={28} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: '0.9rem', color: 'var(--text-primary)' }}>{u.displayName}</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: 6 }}>@{u.username}</span>
+                </div>
+                <div style={{
+                  width: 18, height: 18, borderRadius: 4,
+                  border: isSelected ? 'none' : '2px solid var(--text-muted)',
+                  background: isSelected ? 'var(--accent)' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {isSelected && <Check size={12} style={{ color: 'white' }} />}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {error && (
+          <div style={{ color: 'var(--danger, #ed4245)', fontSize: '0.82rem', marginTop: 8 }}>{error}</div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={styles.modalCancelBtn}>Cancel</button>
+          <button onClick={handleAdd} disabled={adding || selected.size === 0} style={styles.modalCreateBtn}>
+            {adding ? 'Adding...' : `Add ${selected.size > 0 ? `(${selected.size})` : ''}`}
           </button>
         </div>
       </div>

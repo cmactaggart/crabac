@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useState, useCallback } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Image, Map, CalendarDays, FileText, UserPlus, UserMinus, Check, Clock, MessageSquare, Lock, ArrowLeft, UserCheck, Newspaper } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
@@ -49,6 +49,7 @@ const VISIBILITY_COLORS: Record<PersonalVisibility, string> = {
 export function PublicProfilePage() {
   const { username } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const currentUser = useAuthStore((s) => s.user);
   const isMobile = useIsMobile();
   const { spaces, fetchSpaces } = useSpacesStore();
@@ -58,6 +59,8 @@ export function PublicProfilePage() {
   const [profile, setProfile] = useState<ProfileUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const highlightPostId = searchParams.get('post');
+  const highlightCommentId = searchParams.get('comment');
   const [activeTab, setActiveTab] = useState<SubTab>('feed');
   const [summary, setSummary] = useState<UserCollectionsSummary | null>(null);
   const [posts, setPosts] = useState<UserPost[]>([]);
@@ -80,10 +83,11 @@ export function PublicProfilePage() {
   const removeFriend = useFriendsStore((s) => s.removeFriend);
   const createConversation = useDMStore((s) => s.createConversation);
 
-  // Redirect to /you if viewing own profile
+  // Redirect to /you if viewing own profile (preserve query params)
   useEffect(() => {
     if (currentUser && username === currentUser.username) {
-      navigate('/you', { replace: true });
+      const qs = searchParams.toString();
+      navigate(`/you${qs ? `?${qs}` : ''}`, { replace: true });
     }
   }, [currentUser, username, navigate]);
 
@@ -388,6 +392,8 @@ export function PublicProfilePage() {
             handleFriendAction={handleFriendAction}
             friendLoading={friendLoading}
             displayName={profile.displayName}
+            highlightPostId={highlightPostId}
+            highlightCommentId={highlightCommentId}
           />
         )}
         {!tabLoading && activeTab === 'photos' && (
@@ -473,7 +479,7 @@ function SummaryBadge({ icon, label, count, active, onClick }: {
 
 // ─── Read-Only Feed Tab ───
 
-function ReadOnlyFeedTab({ posts, setPosts, profileUserId, friendStatus, handleFriendAction, friendLoading, displayName }: {
+function ReadOnlyFeedTab({ posts, setPosts, profileUserId, friendStatus, handleFriendAction, friendLoading, displayName, highlightPostId, highlightCommentId }: {
   posts: UserPost[];
   setPosts: (posts: UserPost[]) => void;
   profileUserId: string;
@@ -481,11 +487,25 @@ function ReadOnlyFeedTab({ posts, setPosts, profileUserId, friendStatus, handleF
   handleFriendAction: () => void;
   friendLoading: boolean;
   displayName: string;
+  highlightPostId?: string | null;
+  highlightCommentId?: string | null;
 }) {
   const navigate = useNavigate();
   const currentUser = useAuthStore((s) => s.user);
   const { togglePostReaction, fetchComments, addComment, deleteComment, toggleCommentReaction, createRepost } = usePersonalCollectionsStore();
   const currentUserId = currentUser?.id || '';
+
+  // Scroll to highlighted post after posts load
+  useEffect(() => {
+    if (!highlightPostId || posts.length === 0) return;
+    const el = document.querySelector(`[data-post-id="${highlightPostId}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      (el as HTMLElement).style.boxShadow = '0 0 0 2px var(--accent)';
+      const timer = setTimeout(() => { (el as HTMLElement).style.boxShadow = ''; }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [highlightPostId, posts]);
 
   const handleReaction = async (postId: string, emoji: string, hasReacted: boolean) => {
     try {
@@ -558,6 +578,7 @@ function ReadOnlyFeedTab({ posts, setPosts, profileUserId, friendStatus, handleF
             onRepost={post.userId !== currentUserId && !post.repostOfId ? () => {} : undefined}
             onShare={() => {}}
             showAuthorLink={true}
+            initialShowComments={highlightPostId === post.id && !!highlightCommentId}
           />
         ))}
       </div>

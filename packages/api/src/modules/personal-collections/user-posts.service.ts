@@ -148,7 +148,7 @@ export async function createPost(
 
   // Process friend tags
   if (data.taggedUserIds?.length) {
-    const author = await db('users').where('id', userId).select('username', 'display_name').first();
+    const author = await db('users').where('id', userId).select('username', 'display_name', 'avatar_url').first();
     for (const taggedId of data.taggedUserIds) {
       if (taggedId === userId) continue;
       const isFriend = await areFriends(userId, taggedId);
@@ -164,6 +164,7 @@ export async function createPost(
         taggedByUsername: author?.username || '',
         taggedByDisplayName: author?.display_name || '',
         taggedByUserId: userId,
+        taggedByAvatarUrl: author?.avatar_url || null,
         postPreview: data.body ? data.body.substring(0, 100) : null,
       });
     }
@@ -400,13 +401,18 @@ export async function createComment(postId: string, userId: string, body: string
 
   // Notify post owner if commenter is someone else
   if (String(post.user_id) !== userId) {
-    const commenter = await db('users').where('id', userId).select('username', 'display_name').first();
+    const [commenter, postOwner] = await Promise.all([
+      db('users').where('id', userId).select('username', 'display_name', 'avatar_url').first(),
+      db('users').where('id', post.user_id).select('username').first(),
+    ]);
     createNotification(String(post.user_id), 'post_comment', {
       postId: String(postId),
       commentId: String(commentId),
       commenterUsername: commenter?.username || '',
       commenterDisplayName: commenter?.display_name || '',
       commenterUserId: userId,
+      commenterAvatarUrl: commenter?.avatar_url || null,
+      postOwnerUsername: postOwner?.username || '',
       commentPreview: body.substring(0, 100),
     }).catch(() => {});
   }

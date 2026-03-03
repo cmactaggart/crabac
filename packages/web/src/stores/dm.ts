@@ -22,6 +22,7 @@ interface DMState {
   openConversation: (conversationId: string) => Promise<void>;
   createConversation: (userId: string) => Promise<Conversation>;
   createGroupDM: (participantIds: string[], name?: string) => Promise<Conversation>;
+  addMembers: (conversationId: string, userIds: string[]) => Promise<Conversation>;
   leaveGroup: (conversationId: string) => Promise<void>;
   renameGroup: (conversationId: string, name: string) => Promise<void>;
   fetchMessages: (conversationId: string, before?: string) => Promise<void>;
@@ -153,6 +154,17 @@ export const useDMStore = create<DMState>((set, get) => ({
       if (s.conversations.some((c) => c.id === conversation.id)) return s;
       return { conversations: [conversation, ...s.conversations] };
     });
+    return conversation;
+  },
+
+  addMembers: async (conversationId, userIds) => {
+    const conversation = await api<Conversation>(`/conversations/${conversationId}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ userIds }),
+    });
+    set((s) => ({
+      conversations: s.conversations.map((c) => (c.id === conversationId ? conversation : c)),
+    }));
     return conversation;
   },
 

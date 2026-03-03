@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { CheckCheck, AtSign, Reply, Zap, Tag, Users, Mail, CalendarX } from 'lucide-react';
 import { useNotificationsStore } from '../../stores/notifications.js';
 import { Avatar } from '../common/Avatar.js';
-import type { Notification, MentionNotificationData, ReplyNotificationData } from '@crabac/shared';
+import type { Notification, MentionNotificationData, ReplyNotificationData, PostCommentNotificationData, PostTagNotificationData } from '@crabac/shared';
 
 interface Props {
   onClose: () => void;
@@ -39,6 +39,14 @@ export function NotificationDropdown({ onClose }: Props) {
     const data = notification.data as any;
     if (data.conversationId) {
       navigate(`/dm/${data.conversationId}`);
+      onClose();
+    } else if (notification.type === 'post_comment') {
+      const d = data as PostCommentNotificationData;
+      navigate(`/p/${d.postOwnerUsername}?post=${d.postId}&comment=${d.commentId}`);
+      onClose();
+    } else if (notification.type === 'post_tag') {
+      const d = data as PostTagNotificationData;
+      navigate(`/p/${d.taggedByUsername}?post=${d.postId}`);
       onClose();
     } else if (data.spaceId && data.channelId) {
       navigate(`/space/${data.spaceId}/channel/${data.channelId}`);
@@ -158,10 +166,14 @@ function getNotificationAvatar(n: Notification): { src: string | null; name: str
     case 'friend_request':
     case 'dm_request':
       return { src: null, name: data.fromDisplayName || data.fromUsername || '?' };
-    case 'post_tag':
-      return { src: null, name: data.taggedByDisplayName || '?' };
-    case 'post_comment':
-      return { src: null, name: data.commenterDisplayName || '?' };
+    case 'post_tag': {
+      const d = data as PostTagNotificationData;
+      return { src: d.taggedByAvatarUrl || null, name: d.taggedByDisplayName || '?' };
+    }
+    case 'post_comment': {
+      const d = data as PostCommentNotificationData;
+      return { src: d.commenterAvatarUrl || null, name: d.commenterDisplayName || '?' };
+    }
     default:
       return { src: null, name: '' };
   }

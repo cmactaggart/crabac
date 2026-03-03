@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Image, Map, CalendarDays, Upload, Plus, Trash2, Share2, Edit3, MapPinned, X, FileText, Users, ImagePlus, MapPin, SmilePlus, Newspaper } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
@@ -41,6 +41,9 @@ const VISIBILITY_COLORS: Record<PersonalVisibility, string> = {
 export function YouPage() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const highlightPostId = searchParams.get('post');
+  const highlightCommentId = searchParams.get('comment');
   const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState<SubTab>('feed');
   const [showSettings, setShowSettings] = useState(false);
@@ -138,6 +141,8 @@ export function YouPage() {
                 onLoadMore={() => {
                   if (posts.length > 0) fetchPosts({ before: posts[posts.length - 1].id });
                 }}
+                highlightPostId={highlightPostId}
+                highlightCommentId={highlightCommentId}
               />
             )}
             {activeTab === 'photos' && (
@@ -266,6 +271,8 @@ export function YouPage() {
                 onLoadMore={() => {
                   if (posts.length > 0) fetchPosts({ before: posts[posts.length - 1].id });
                 }}
+                highlightPostId={highlightPostId}
+                highlightCommentId={highlightCommentId}
               />
             )}
             {activeTab === 'photos' && (
@@ -868,13 +875,15 @@ function EventsTab({ items, loading, categories, routes, defaultVisibility = 'pr
 
 // ─── Feed Tab ───
 
-function FeedTab({ posts, loading, hasMore, defaultVisibility = 'private', onCreatePost, onDeletePost, onUpdatePost, onLoadMore }: {
+function FeedTab({ posts, loading, hasMore, defaultVisibility = 'private', onCreatePost, onDeletePost, onUpdatePost, onLoadMore, highlightPostId, highlightCommentId }: {
   posts: UserPost[]; loading: boolean; hasMore: boolean;
   defaultVisibility?: PersonalVisibility;
   onCreatePost: (formData: FormData) => Promise<void>;
   onDeletePost: (id: string) => Promise<void>;
   onUpdatePost: (id: string, data: Record<string, any>) => Promise<void>;
   onLoadMore: () => void;
+  highlightPostId?: string | null;
+  highlightCommentId?: string | null;
 }) {
   const navigate = useNavigate();
   const currentUser = useAuthStore((s) => s.user);
@@ -888,6 +897,18 @@ function FeedTab({ posts, loading, hasMore, defaultVisibility = 'private', onCre
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState('');
   const [editVisibility, setEditVisibility] = useState<PersonalVisibility>('private');
+
+  // Scroll to highlighted post after posts load
+  useEffect(() => {
+    if (!highlightPostId || posts.length === 0) return;
+    const el = document.querySelector(`[data-post-id="${highlightPostId}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      (el as HTMLElement).style.boxShadow = '0 0 0 2px var(--accent)';
+      const timer = setTimeout(() => { (el as HTMLElement).style.boxShadow = ''; }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [highlightPostId, posts]);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const gpxRef = useRef<HTMLInputElement>(null);
@@ -1121,6 +1142,7 @@ function FeedTab({ posts, loading, hasMore, defaultVisibility = 'private', onCre
             onCommentReaction={(commentId, emoji, hasReacted) => toggleCommentReaction(commentId, emoji, hasReacted)}
             onRepost={undefined}
             onShare={() => {}}
+            initialShowComments={highlightPostId === post.id && !!highlightCommentId}
           />
         ))}
       </div>

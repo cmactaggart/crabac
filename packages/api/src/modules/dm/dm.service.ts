@@ -166,6 +166,58 @@ export async function createGroupDM(creatorId: string, participantIds: string[],
   return conversation;
 }
 
+export async function addGroupDMMembers(conversationId: string, userId: string, newMemberIds: string[]) {
+  const conv = await db('conversations').where('id', conversationId).first();
+  if (!conv) throw new NotFoundError('Conversation');
+  if (conv.type !== 'group') throw new BadRequestError('Can only add members to group conversations');
+
+  const membership = await db('conversation_members')
+    .where({ conversation_id: conversationId, user_id: userId })
+    .first();
+  if (!membership) throw new ForbiddenError('Not a member of this conversation');
+
+  // Check current member count
+  const currentMembers = await db('conversation_members')
+    .where('conversation_id', conversationId)
+    .select('user_id');
+  const currentMemberIds = new Set(currentMembers.map((m: any) => String(m.user_id)));
+
+  // Filter out users already in the group
+  const toAdd = newMemberIds.filter((id) => !currentMemberIds.has(id));
+  if (toAdd.length === 0) throw new BadRequestError('All selected users are already members');
+
+  if (currentMemberIds.size + toAdd.length > 10) {
+    throw new BadRequestError('Group DMs can have at most 10 members');
+  }
+
+  // Verify all new members are friends with the person adding them
+  for (const mid of toAdd) {
+    const friends = await areFriends(userId, mid);
+    if (!friends) {
+      const user = await db('users').where('id', mid).select('username').first();
+      throw new BadRequestError(`You must be friends with ${user?.username || 'this user'} to add them`);
+    }
+  }
+
+  await db('conversation_members').insert(
+    toAdd.map((uid) => ({
+      conversation_id: conversationId,
+      user_id: uid,
+      status: 'accepted',
+    })),
+  );
+
+  const conversation = await getConversation(conversationId, userId);
+
+  eventBus.emit('conversation.members_added', {
+    conversation,
+    addedMemberIds: toAdd,
+    existingMemberIds: Array.from(currentMemberIds),
+  });
+
+  return conversation;
+}
+
 export async function leaveGroupDM(conversationId: string, userId: string) {
   const conv = await db('conversations').where('id', conversationId).first();
   if (!conv) throw new NotFoundError('Conversation');

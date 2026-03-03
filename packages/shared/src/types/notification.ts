@@ -71,6 +71,7 @@ export interface PostTagNotificationData {
   taggedByUsername: string;
   taggedByDisplayName: string;
   taggedByUserId: string;
+  taggedByAvatarUrl?: string | null;
   postPreview: string | null;
 }
 
@@ -80,6 +81,8 @@ export interface PostCommentNotificationData {
   commenterUsername: string;
   commenterDisplayName: string;
   commenterUserId: string;
+  commenterAvatarUrl?: string | null;
+  postOwnerUsername: string;
   commentPreview: string;
 }
 
