@@ -53,7 +53,7 @@ export function PublicProfilePage() {
   const currentUser = useAuthStore((s) => s.user);
   const isMobile = useIsMobile();
   const { spaces, fetchSpaces } = useSpacesStore();
-  const { spaceSidebarOpen, channelSidebarOpen } = useLayoutStore();
+  const { channelSidebarOpen } = useLayoutStore();
   const { fetchUnreadCount } = useNotificationsStore();
 
   const [profile, setProfile] = useState<ProfileUser | null>(null);
@@ -423,7 +423,7 @@ export function PublicProfilePage() {
   // Desktop: Rail | ProfileSidebar (viewed user) | Main content
   return (
     <div style={styles.outerContainer}>
-      <div style={{ ...styles.sidebarWrap, width: spaceSidebarOpen ? 72 : 0 }}>
+      <div style={styles.sidebarWrap}>
         <SpaceSidebar spaces={spaces} activeSpaceId={null} />
       </div>
       <div style={{ ...styles.sidebarWrap, width: channelSidebarOpen ? 240 : 0 }}>

@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LogOut, Copy, Link2, Pencil, Trash2, PanelLeftClose, ChevronsRight, PanelLeft, UserPlus, Users, LogOut as LeaveIcon, Check, X, Clock, UserMinus, ArrowLeft, Flag, Ban, SmilePlus, Paperclip } from 'lucide-react';
+import { LogOut, Copy, Link2, Pencil, Trash2, PanelLeftClose, PanelLeft, UserPlus, Users, LogOut as LeaveIcon, Check, X, Clock, UserMinus, ArrowLeft, Flag, Ban, SmilePlus, Paperclip } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { useDMStore } from '../stores/dm.js';
@@ -26,7 +26,7 @@ export function DMView() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const isMobile = useIsMobile();
-  const { spaceSidebarOpen, channelSidebarOpen, mobileView, setMobileView, toggleSpaceSidebar, toggleChannelSidebar } = useLayoutStore();
+  const { channelSidebarOpen, mobileView, setMobileView, toggleChannelSidebar } = useLayoutStore();
   const { spaces, fetchSpaces } = useSpacesStore();
   const {
     conversations,
@@ -160,7 +160,7 @@ export function DMView() {
   // ─── Desktop Layout ───
   return (
     <div style={styles.layout}>
-      <div style={{ ...styles.sidebarWrap, width: spaceSidebarOpen ? 72 : 0 }}>
+      <div style={styles.sidebarWrap}>
         <SpaceSidebar spaces={spaces} activeSpaceId={null} hideNavIcons={isMobile} />
       </div>
       <div style={{ ...styles.sidebarWrap, width: channelSidebarOpen ? 240 : 0 }}>
@@ -174,18 +174,11 @@ export function DMView() {
         />
       </div>
       <div style={styles.main}>
-        {(!spaceSidebarOpen || !channelSidebarOpen) && (
+        {!channelSidebarOpen && (
           <div style={styles.expandBar}>
-            {!spaceSidebarOpen && (
-              <button onClick={toggleSpaceSidebar} style={styles.expandBtn} title="Show spaces">
-                <ChevronsRight size={18} />
-              </button>
-            )}
-            {!channelSidebarOpen && (
-              <button onClick={toggleChannelSidebar} style={styles.expandBtn} title="Show conversations">
-                <PanelLeft size={18} />
-              </button>
-            )}
+            <button onClick={toggleChannelSidebar} style={styles.expandBtn} title="Show conversations">
+              <PanelLeft size={18} />
+            </button>
           </div>
         )}
         {chatContent || (

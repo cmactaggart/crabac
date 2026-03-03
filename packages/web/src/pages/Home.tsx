@@ -10,6 +10,7 @@ import { SpaceBrandedCard } from '../components/spaces/SpaceBrandedCard.js';
 import { Avatar } from '../components/common/Avatar.js';
 import { CrabIcon } from '../components/icons/CrabIcon.js';
 import { NewSpaceOnboardingModal } from '../components/common/NewSpaceOnboardingModal.js';
+import { SpaceSidebar } from '../components/layout/SpaceSidebar.js';
 import { api } from '../lib/api.js';
 import type { UserCollectionsSummary } from '@crabac/shared';
 
@@ -52,7 +53,7 @@ export function Home() {
     }).catch(() => {});
   }, []);
 
-  return (
+  const homeContent = (
     <div style={{
       ...styles.container,
       ...(isMobile ? {
@@ -66,7 +67,10 @@ export function Home() {
         padding: '1rem',
         flexDirection: 'column',
         justifyContent: 'flex-start',
-      } : {}),
+      } : {
+        minHeight: 'unset',
+        padding: '2rem',
+      }),
     }}>
       {/* Left Card — Your Spaces */}
       <div style={{
@@ -219,6 +223,22 @@ export function Home() {
           }}
         />
       )}
+    </div>
+  );
+
+  if (isMobile) {
+    return homeContent;
+  }
+
+  // Desktop: Rail | Home content
+  return (
+    <div style={styles.layout}>
+      <div style={styles.sidebarWrap}>
+        <SpaceSidebar spaces={spaces} activeSpaceId={null} />
+      </div>
+      <div style={styles.main}>
+        {homeContent}
+      </div>
     </div>
   );
 }
@@ -399,6 +419,23 @@ function JoinSpaceModal({ onClose }: { onClose: () => void }) {
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  layout: {
+    display: 'flex',
+    height: '100vh',
+    overflow: 'hidden',
+  },
+  sidebarWrap: {
+    overflow: 'hidden',
+    flexShrink: 0,
+    transition: 'width 0.2s ease',
+    height: '100%',
+  },
+  main: {
+    flex: 1,
+    overflowY: 'auto',
+    display: 'flex',
+    justifyContent: 'center',
+  },
   container: {
     display: 'flex',
     alignItems: 'flex-start',

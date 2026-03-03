@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.7.0
+## API Version 0.8.0
 
 Base URL: `https://app.crab.ac/api`
 
@@ -184,6 +184,17 @@ Get current user profile. Requires auth.
 
 **Response:** User object with `id`, `email`, `username`, `displayName`, `avatarUrl`, `isAdmin`, `emailVerified`, `totpEnabled`, `baseColor`, `accentColor`, `status`, `createdAt`.
 
+### DELETE /users/me
+
+Delete own account. Requires auth.
+
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `password` | string | yes | Account password for confirmation |
+
+**Response:** `{ success: true }`
+
 ### PATCH /users/me
 
 Update current user profile. Requires auth.
@@ -235,6 +246,17 @@ Mute a user. Requires auth.
 
 Unmute a user. Requires auth.
 
+### GET /users/search
+
+Search users by username or display name. Requires auth.
+
+**Query:**
+| Param | Type | Description |
+|-------|------|-------------|
+| `q` | string | Search query (min 2 chars) |
+
+**Response:** Array of `{ id, username, displayName, avatarUrl }` (max 20 results). Excludes the current user.
+
 ### GET /users/by-username/:username
 
 Look up a user by username. Requires auth. Returns the user object with an additional `canViewProfile` boolean indicating whether the requesting user can see this profile's content (based on visibility settings and friendship status).
@@ -285,6 +307,12 @@ List the current user's spaces. Requires auth.
 ### GET /spaces/:spaceId
 
 Get space details. Requires membership or public access.
+
+### GET /spaces/:spaceId/embed
+
+Get space embed metadata (for link previews). Requires membership or public access.
+
+**Response:** `{ id, name, slug, description, iconUrl, memberCount, channelCount, baseColor, accentColor, textColor, isPublic }`
 
 ### PATCH /spaces/:spaceId
 
@@ -508,6 +536,12 @@ Search messages in a space. Requires auth.
 ### GET /spaces/by-slug/:slug
 
 Get space info by slug. No auth required.
+
+### GET /spaces/by-slug/:slug/embed
+
+Get space embed metadata by slug (for link previews). No auth required.
+
+**Response:** `{ id, name, slug, description, iconUrl, memberCount, channelCount, baseColor, accentColor, textColor, isPublic }`
 
 ### GET /spaces/directory
 
@@ -899,6 +933,23 @@ List events by date range. Requires membership.
 
 **Query:** `from=YYYY-MM-DD&to=YYYY-MM-DD`
 
+#### GET /spaces/:spaceId/calendar/upcoming
+
+List upcoming events starting from today. Requires membership.
+
+**Query:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `limit` | number | 20 | Max 50 |
+
+**Response:** Array of CalendarEvent objects ordered by date.
+
+#### POST /spaces/:spaceId/calendar/events/upload-image
+
+Upload a calendar event image. Requires `MANAGE_CALENDAR`. Multipart form data with `image` field (max 10MB, images only). Processed to 16:9 crop, max 1280x720 JPEG.
+
+**Response:** `{ url: string }`
+
 #### GET /spaces/:spaceId/calendar/events/:id
 
 Get a single event. Requires membership.
@@ -1225,6 +1276,12 @@ Reject a portal invite.
 
 Remove a portal.
 
+### GET /portals/eligible-spaces/:channelId
+
+List spaces eligible for portaling a channel (all spaces the user belongs to except the source space). Requires auth.
+
+**Response:** Array of Space objects.
+
 ---
 
 ## Direct Messages
@@ -1259,6 +1316,14 @@ Accept a message request.
 
 Decline a message request.
 
+### POST /conversations/:conversationId/members
+
+Add members to a group DM. Requires auth.
+
+**Body:** `{ userIds: string[] }`
+
+**Response:** Updated conversation object.
+
 ### DELETE /conversations/:conversationId/members/me
 
 Leave a group DM.
@@ -1285,6 +1350,19 @@ Send a DM. Returns `403` if the other participant has blocked you or vice versa.
 
 **Body:** `{ content: string }`
 
+### POST /conversations/:conversationId/messages/upload
+
+Send a DM with file attachments. Multipart form data with `files` field (max 20 files, max 100MB each; non-video max 10MB).
+
+**Form fields:**
+| Field | Type | Required |
+|-------|------|----------|
+| `content` | string | no |
+
+### POST /conversations/:conversationId/messages/:messageId/attachments
+
+Add attachments to an existing DM. Multipart form data with `files` field.
+
 ### PATCH /conversations/:conversationId/messages/:messageId
 
 Edit a DM.
@@ -1292,6 +1370,14 @@ Edit a DM.
 ### DELETE /conversations/:conversationId/messages/:messageId
 
 Delete a DM. Author can delete own; global admins can delete any DM.
+
+### PUT /conversations/:conversationId/messages/:messageId/reactions/:emoji
+
+Add a reaction to a DM message. Requires auth.
+
+### DELETE /conversations/:conversationId/messages/:messageId/reactions/:emoji
+
+Remove your reaction from a DM message. Requires auth.
 
 ---
 
@@ -1948,6 +2034,12 @@ Get analytics for a specific newsletter. Requires `MANAGE_NEWSLETTER`.
 
 Get analytics summary for all space newsletters. Requires `MANAGE_NEWSLETTER`.
 
+#### GET /spaces/:spaceId/newsletter-stats
+
+Get aggregated newsletter statistics. Requires `MANAGE_NEWSLETTER`.
+
+**Response:** `{ drafts, published, subscribers }`
+
 #### GET /spaces/:spaceId/newsletter-subscribers/count
 
 Get subscriber counts for space newsletters. Requires `MANAGE_NEWSLETTER`.
@@ -2410,41 +2502,94 @@ List loaded plugins.
 
 ## WebSocket Events
 
-The API uses Socket.io for real-time communication at `/socket.io/`. Clients authenticate by passing the access token.
+The API uses Socket.io for real-time communication at `/socket.io/`. Clients authenticate by passing the access token. On connect, the server auto-joins the user to their personal room (`user:<userId>`), all space rooms, and all DM conversation rooms.
 
 ### Client Events (emit)
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `join_space` | `{ spaceId }` | Join a space room |
-| `leave_space` | `{ spaceId }` | Leave a space room |
 | `channel:join` | `{ channelId }` | Join a channel room |
 | `channel:leave` | `{ channelId }` | Leave a channel room |
 | `thread:join` | `{ threadId }` | Join a forum thread room |
 | `thread:leave` | `{ threadId }` | Leave a forum thread room |
-| `typing_start` | `{ channelId }` | Begin typing indicator |
-| `typing_stop` | `{ channelId }` | Stop typing indicator |
+| `message:send` | `{ channelId, content, replyToId? }` | Send a channel message via socket |
+| `message:typing` | `{ channelId }` | Channel typing indicator |
+| `dm:join` | `{ conversationId }` | Join a DM room (for conversations created after connect) |
+| `dm:send` | `{ conversationId, content }` | Send a DM via socket |
+| `dm:typing` | `{ conversationId }` | DM typing indicator |
+| `space:visit` | `{ spaceId }` | Visit a public space as guest |
+| `space:leave_visit` | `{ spaceId }` | Leave a public space guest visit |
+| `space:kick_guest` | `{ spaceId, targetUserId }` | Kick a guest (requires `MANAGE_MEMBERS`) |
+| `presence:heartbeat` | _(none)_ | Refresh presence TTL |
+| `presence:status` | `{ status }` | Set status: `online`, `idle`, `dnd`, `offline` |
 
 ### Server Events (listen)
 
+#### Channel Messages
+
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `message:create` | Message object | New message in a channel |
-| `message:update` | Message object | Message edited |
-| `message:delete` | `{ id, channelId }` | Message deleted |
-| `typing:start` | `{ channelId, userId, username }` | User started typing |
-| `typing:stop` | `{ channelId, userId }` | User stopped typing |
-| `presence:update` | `{ userId, status }` | User online/offline |
-| `channel:create` | Channel object | New channel created |
-| `channel:update` | Channel object | Channel updated |
-| `channel:delete` | `{ id }` | Channel deleted |
-| `member:join` | Member object | New member joined |
-| `member:leave` | `{ userId, spaceId }` | Member left/kicked/banned |
-| `dm:message` | Message object | New DM received |
-| `notification` | Notification object | New notification |
-| `space:guests_cleared` | `{ spaceId }` | Guest sessions cleared |
-| `route:create` | RouteItem object | New route added to library |
-| `route:delete` | `{ id, channelId }` | Route deleted from library |
+| `message:new` | Message object | New message in a channel |
+| `message:updated` | Message object | Message edited |
+| `message:deleted` | `{ channelId, messageId }` | Message deleted |
+| `message:reactions_updated` | `{ channelId, messageId, reactions }` | Reactions changed on a message |
+| `channel:activity` | `{ channelId, authorId, messageId, spaceId }` | New activity in channel (for unread tracking) |
+
+#### Direct Messages
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `dm:new` | Message object | New DM received |
+| `dm:updated` | Message object | DM edited |
+| `dm:deleted` | `{ conversationId, messageId }` | DM deleted |
+| `dm:reactions_updated` | `{ conversationId, messageId, reactions }` | DM reactions changed |
+| `dm:typing` | `{ conversationId, userId, username }` | User typing in DM |
+| `conversation:created` | Conversation object | New conversation or DM request received |
+| `conversation:updated` | Conversation object | Conversation renamed or members changed |
+| `conversation:member_left` | `{ conversationId, userId }` | Member left group DM |
+
+#### Space & Members
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `member:typing` | `{ channelId, userId, username }` | User typing in channel |
+| `member:presence` | `{ userId, status }` | User presence change (online/idle/dnd/offline) |
+| `space:member_joined` | `{ spaceId, userId }` | New member joined space |
+| `space:member_left` | `{ spaceId, userId }` | Member left/kicked/banned from space |
+| `space:guest_joined` | `{ spaceId, user }` | Guest visited public space |
+| `space:guest_left` | `{ spaceId, userId }` | Guest left public space |
+| `space:guest_kicked` | `{ spaceId }` | You were kicked from a public space (sent to kicked user) |
+
+#### Forums
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `forum:thread_created` | Thread object | New thread in forum channel |
+| `forum:post_created` | Post object | New post in forum thread |
+| `forum:thread_updated` | Thread object | Thread pinned/locked/updated |
+
+#### Gallery & Routes
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `gallery:item_created` | GalleryItem object | New gallery item uploaded |
+| `gallery:item_deleted` | `{ itemId, channelId }` | Gallery item deleted |
+| `route:item_created` | RouteItem object | New route added to library |
+| `route:item_deleted` | `{ itemId, channelId }` | Route deleted from library |
+
+#### Friends
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `friend:request_received` | `{ friendshipId, user }` | Friend request received |
+| `friend:accepted` | `{ friendshipId, user }` | Friend request accepted |
+| `friend:removed` | `{ userId }` | Friend removed |
+
+#### Notifications & Workflows
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `notification:new` | Notification object | New notification |
 | `workflow:card_created` | CardInstance object | New card instance created by workflow |
 | `workflow:card_updated` | CardInstance object | Card instance state updated |
 | `workflow:card_dismissed` | CardInstance object | Card instance dismissed |

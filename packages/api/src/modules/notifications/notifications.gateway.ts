@@ -6,7 +6,7 @@ import { config } from '../../config.js';
 
 function getActorName(notification: any): string {
   const d = notification.data || {};
-  return d.fromDisplayName || d.authorDisplayName || d.authorUsername || d.repliedByUsername || d.repliedByDisplayName || d.reactedByUsername || 'Someone';
+  return d.fromDisplayName || d.authorDisplayName || d.commenterDisplayName || d.taggedByDisplayName || d.authorUsername || d.repliedByUsername || d.repliedByDisplayName || d.reactedByUsername || 'Someone';
 }
 
 function formatNotificationForPush(notification: any): { title: string; body: string } {

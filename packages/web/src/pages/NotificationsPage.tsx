@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCheck, AtSign, Reply, Zap, CalendarX, Users, Mail, Tag } from 'lucide-react';
+import { CheckCheck, AtSign, Reply, Zap, CalendarX, Users, Mail, Tag, MessageCircle } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { useNotificationsStore } from '../stores/notifications.js';
@@ -10,15 +10,16 @@ import { useIsMobile } from '../hooks/useIsMobile.js';
 import { SpaceSidebar } from '../components/layout/SpaceSidebar.js';
 import { ProfileSidebar } from '../components/layout/ProfileSidebar.js';
 import { Avatar } from '../components/common/Avatar.js';
-import type { Notification, MentionNotificationData, ReplyNotificationData, EventCancelledNotificationData } from '@crabac/shared';
+import type { Notification, MentionNotificationData, ReplyNotificationData, EventCancelledNotificationData, PostCommentNotificationData, PostTagNotificationData } from '@crabac/shared';
 
 export function NotificationsPage() {
   const { notifications, loading, hasMore, fetchNotifications, fetchUnreadCount, markAsRead, markAllAsRead } = useNotificationsStore();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const { spaces, fetchSpaces } = useSpacesStore();
-  const { spaceSidebarOpen, channelSidebarOpen } = useLayoutStore();
+  const { channelSidebarOpen } = useLayoutStore();
   const { counts: followCounts, fetchCounts: fetchFollowCounts } = useFollowsStore();
 
   useEffect(() => {
@@ -35,6 +36,12 @@ export function NotificationsPage() {
     const data = notification.data as any;
     if (data.conversationId) {
       navigate(`/dm/${data.conversationId}`);
+    } else if (notification.type === 'post_comment') {
+      const d = data as PostCommentNotificationData;
+      navigate(`/p/${d.postOwnerUsername}?post=${d.postId}&comment=${d.commentId}`);
+    } else if (notification.type === 'post_tag') {
+      const d = data as PostTagNotificationData;
+      navigate(`/p/${d.taggedByUsername}?post=${d.postId}`);
     } else if (data.spaceId && data.channelId) {
       navigate(`/space/${data.spaceId}/channel/${data.channelId}`);
     }
@@ -116,7 +123,7 @@ export function NotificationsPage() {
   // Desktop: Rail | ProfileSidebar | Notification list
   return (
     <div style={styles.layout}>
-      <div style={{ ...styles.sidebarWrap, width: spaceSidebarOpen ? 72 : 0 }}>
+      <div style={styles.sidebarWrap}>
         <SpaceSidebar spaces={spaces} activeSpaceId={null} />
       </div>
       <div style={{ ...styles.sidebarWrap, width: channelSidebarOpen ? 240 : 0 }}>
@@ -128,6 +135,7 @@ export function NotificationsPage() {
           accentColor={user?.accentColor}
           followingCount={followCounts.followingCount}
           followerCount={followCounts.followerCount}
+          onLogout={logout}
         />
       </div>
       <div style={styles.main}>
@@ -186,10 +194,14 @@ function getNotificationAvatar(n: Notification): { src: string | null; name: str
     case 'friend_request':
     case 'dm_request':
       return { src: null, name: data.fromDisplayName || data.fromUsername || '?' };
-    case 'post_tag':
-      return { src: null, name: data.taggedByDisplayName || '?' };
-    case 'post_comment':
-      return { src: null, name: data.commenterDisplayName || '?' };
+    case 'post_tag': {
+      const d = data as PostTagNotificationData;
+      return { src: d.taggedByAvatarUrl || null, name: d.taggedByDisplayName || '?' };
+    }
+    case 'post_comment': {
+      const d = data as PostCommentNotificationData;
+      return { src: d.commenterAvatarUrl || null, name: d.commenterDisplayName || '?' };
+    }
     default:
       return { src: null, name: '' };
   }
@@ -203,6 +215,7 @@ function getNotificationIcon(type: string) {
     case 'post_tag': return <Tag size={18} style={{ color: 'var(--accent)' }} />;
     case 'friend_request': return <Users size={18} style={{ color: 'var(--accent)' }} />;
     case 'dm_request': return <Mail size={18} style={{ color: 'var(--accent)' }} />;
+    case 'post_comment': return <MessageCircle size={18} style={{ color: 'var(--accent)' }} />;
     case 'event_cancelled': return <CalendarX size={18} style={{ color: 'var(--danger)' }} />;
     default: return null;
   }

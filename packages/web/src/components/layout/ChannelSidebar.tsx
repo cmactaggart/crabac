@@ -634,9 +634,10 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
             }}
             style={{
               ...sidebarStyles.channelItem,
-              background: calendarOpen ? 'var(--hover)' : 'transparent',
+              background: calendarOpen ? 'rgba(88, 101, 242, 0.18)' : 'rgba(88, 101, 242, 0.08)',
               color: calendarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
               marginBottom: 4,
+              borderRadius: 'var(--radius)',
             }}
           >
             <Calendar size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} />
@@ -652,9 +653,10 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
             }}
             style={{
               ...sidebarStyles.channelItem,
-              background: blogOpen ? 'var(--hover)' : 'transparent',
+              background: blogOpen ? 'rgba(88, 101, 242, 0.18)' : 'rgba(88, 101, 242, 0.08)',
               color: blogOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
               marginBottom: 4,
+              borderRadius: 'var(--radius)',
             }}
           >
             <BookOpen size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} />
@@ -670,9 +672,10 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
             }}
             style={{
               ...sidebarStyles.channelItem,
-              background: newsletterOpen ? 'var(--hover)' : 'transparent',
+              background: newsletterOpen ? 'rgba(88, 101, 242, 0.18)' : 'rgba(88, 101, 242, 0.08)',
               color: newsletterOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
               marginBottom: 4,
+              borderRadius: 'var(--radius)',
             }}
           >
             <Mail size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} />
@@ -893,7 +896,7 @@ const sidebarStyles: Record<string, React.CSSProperties> = {
   sidebar: {
     width: 240,
     height: '100%',
-    background: 'var(--bg-secondary)',
+    background: 'linear-gradient(to bottom, var(--bg-secondary), color-mix(in srgb, var(--bg-secondary), black 18%))',
     display: 'flex',
     flexDirection: 'column',
     flexShrink: 0,

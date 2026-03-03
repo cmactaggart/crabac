@@ -1,7 +1,6 @@
 import { useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Mail, ChevronsLeft, User, Bell, Newspaper } from 'lucide-react';
-import { useLayoutStore } from '../../stores/layout.js';
+import { Mail, User, Bell, Newspaper } from 'lucide-react';
 import { useDMStore } from '../../stores/dm.js';
 import { useNotificationsStore } from '../../stores/notifications.js';
 import { useChannelsStore } from '../../stores/channels.js';
@@ -19,7 +18,6 @@ interface Props {
 export function SpaceSidebar({ spaces, activeSpaceId, hideNavIcons }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
-  const toggleSpaceSidebar = useLayoutStore((s) => s.toggleSpaceSidebar);
   const dmUnreads = useDMStore((s) => s.dmUnreads);
   const totalDMUnreads = Object.values(dmUnreads).reduce((sum, n) => sum + n, 0);
   const unreadCount = useNotificationsStore((s) => s.unreadCount);
@@ -169,11 +167,6 @@ export function SpaceSidebar({ spaces, activeSpaceId, hideNavIcons }: Props) {
         );
       })}
 
-      <div style={{ marginTop: 'auto', paddingTop: 8 }}>
-        <button onClick={toggleSpaceSidebar} style={styles.collapseBtn} title="Collapse sidebar">
-          <ChevronsLeft size={18} />
-        </button>
-      </div>
     </div>
   );
 }
@@ -182,7 +175,7 @@ const styles: Record<string, React.CSSProperties> = {
   sidebar: {
     width: 72,
     height: '100%',
-    background: 'var(--bg-primary)',
+    background: 'linear-gradient(to bottom, var(--bg-primary), color-mix(in srgb, var(--bg-primary), black 18%))',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -210,18 +203,6 @@ const styles: Record<string, React.CSSProperties> = {
     height: 2,
     background: 'var(--border)',
     borderRadius: 1,
-  },
-  collapseBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: '50%',
-    border: 'none',
-    background: 'none',
-    color: 'var(--text-muted)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
   },
   badge: {
     position: 'absolute',

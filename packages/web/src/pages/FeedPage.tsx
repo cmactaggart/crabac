@@ -113,8 +113,9 @@ export function FeedView() {
 export function FeedPage() {
   const isMobile = useIsMobile();
   const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const { spaces, fetchSpaces } = useSpacesStore();
-  const { spaceSidebarOpen, channelSidebarOpen } = useLayoutStore();
+  const { channelSidebarOpen } = useLayoutStore();
   const { fetchUnreadCount } = useNotificationsStore();
   const { counts: followCounts, fetchCounts: fetchFollowCounts } = useFollowsStore();
 
@@ -135,7 +136,7 @@ export function FeedPage() {
   // Desktop: Rail | ProfileSidebar | FeedView
   return (
     <div style={styles.layout}>
-      <div style={{ ...styles.sidebarWrap, width: spaceSidebarOpen ? 72 : 0 }}>
+      <div style={styles.sidebarWrap}>
         <SpaceSidebar spaces={spaces} activeSpaceId={null} />
       </div>
       <div style={{ ...styles.sidebarWrap, width: channelSidebarOpen ? 240 : 0 }}>
@@ -147,6 +148,7 @@ export function FeedPage() {
           accentColor={user?.accentColor}
           followingCount={followCounts.followingCount}
           followerCount={followCounts.followerCount}
+          onLogout={logout}
         />
       </div>
       <div style={styles.main}>

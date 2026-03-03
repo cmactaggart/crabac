@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Image, Map, CalendarDays, Upload, Plus, Trash2, Share2, Edit3, MapPinned, X, FileText, Users, ImagePlus, MapPin, SmilePlus, Newspaper } from 'lucide-react';
+import { Image, Map, CalendarDays, Upload, Plus, Trash2, Share2, Edit3, MapPinned, X, FileText, Users, ImagePlus, MapPin, SmilePlus, Newspaper, LogOut } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { usePersonalCollectionsStore } from '../stores/personalCollections.js';
@@ -40,6 +40,7 @@ const VISIBILITY_COLORS: Record<PersonalVisibility, string> = {
 
 export function YouPage() {
   const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const highlightPostId = searchParams.get('post');
@@ -63,7 +64,7 @@ export function YouPage() {
 
   const { fetchUnreadCount } = useNotificationsStore();
   const { spaces, fetchSpaces } = useSpacesStore();
-  const { spaceSidebarOpen, channelSidebarOpen } = useLayoutStore();
+  const { channelSidebarOpen } = useLayoutStore();
   const { counts: followCounts, fetchCounts: fetchFollowCounts, followers, following, fetchFollowers, fetchFollowing } = useFollowsStore();
   const [followListMode, setFollowListMode] = useState<'followers' | 'following' | null>(null);
 
@@ -113,6 +114,9 @@ export function YouPage() {
           </div>
           <button onClick={() => setShowSettings(true)} style={{ ...styles.editBtn, fontSize: '0.72rem', padding: '0.3rem 0.6rem' }}>
             <Edit3 size={12} /> Edit
+          </button>
+          <button onClick={logout} style={{ ...styles.editBtn, fontSize: '0.72rem', padding: '0.3rem 0.6rem', color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
+            <LogOut size={12} />
           </button>
         </div>
 
@@ -200,7 +204,7 @@ export function YouPage() {
   // Desktop layout: Rail | ProfileSidebar | Main content
   return (
     <div style={styles.outerContainer}>
-      <div style={{ ...styles.sidebarWrap, width: spaceSidebarOpen ? 72 : 0 }}>
+      <div style={styles.sidebarWrap}>
         <SpaceSidebar spaces={spaces} activeSpaceId={null} />
       </div>
       <div style={{ ...styles.sidebarWrap, width: channelSidebarOpen ? 240 : 0 }}>
@@ -214,6 +218,7 @@ export function YouPage() {
           followerCount={followCounts.followerCount}
           onFollowingClick={() => { if (user?.id) { fetchFollowing(user.id); setFollowListMode('following'); } }}
           onFollowersClick={() => { if (user?.id) { fetchFollowers(user.id); setFollowListMode('followers'); } }}
+          onLogout={logout}
         />
       </div>
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCheck, AtSign, Reply, Zap, Tag, Users, Mail, CalendarX } from 'lucide-react';
+import { CheckCheck, AtSign, Reply, Zap, Tag, Users, Mail, CalendarX, MessageCircle } from 'lucide-react';
 import { useNotificationsStore } from '../../stores/notifications.js';
 import { Avatar } from '../common/Avatar.js';
 import type { Notification, MentionNotificationData, ReplyNotificationData, PostCommentNotificationData, PostTagNotificationData } from '@crabac/shared';
@@ -187,6 +187,7 @@ function getNotificationIcon(type: string) {
     case 'post_tag': return <Tag size={16} style={{ color: 'var(--accent)' }} />;
     case 'friend_request': return <Users size={16} style={{ color: 'var(--accent)' }} />;
     case 'dm_request': return <Mail size={16} style={{ color: 'var(--accent)' }} />;
+    case 'post_comment': return <MessageCircle size={16} style={{ color: 'var(--accent)' }} />;
     case 'event_cancelled': return <CalendarX size={16} style={{ color: 'var(--danger)' }} />;
     default: return null;
   }

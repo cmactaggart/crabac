@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronsRight, PanelLeft } from 'lucide-react';
+import { PanelLeft } from 'lucide-react';
 import { useSpacesStore } from '../stores/spaces.js';
 import { useChannelsStore } from '../stores/channels.js';
 import { useMessagesStore } from '../stores/messages.js';
@@ -23,7 +23,7 @@ export function SpaceView() {
   const { spaceId, channelId } = useParams();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { spaceSidebarOpen, channelSidebarOpen, membersSidebarOpen, calendarOpen, blogOpen, newsletterOpen, mobileView, setMobileView, setCalendarOpen, setBlogOpen, setNewsletterOpen, toggleSpaceSidebar, toggleChannelSidebar } = useLayoutStore();
+  const { channelSidebarOpen, membersSidebarOpen, calendarOpen, blogOpen, newsletterOpen, mobileView, setMobileView, setCalendarOpen, setBlogOpen, setNewsletterOpen, toggleChannelSidebar } = useLayoutStore();
   const { spaces, fetchSpaces, setActiveSpace, members, fetchMembers, updateMemberStatus } = useSpacesStore();
   const { channels, categories, enterSpace, fetchMuted, setActiveChannel } = useChannelsStore();
 
@@ -303,7 +303,7 @@ export function SpaceView() {
   // ─── Desktop Layout ───
   return (
     <div style={styles.layout}>
-      <div style={{ ...styles.sidebarWrap, width: spaceSidebarOpen ? 72 : 0 }}>
+      <div style={styles.sidebarWrap}>
         <SpaceSidebar spaces={spaces} activeSpaceId={spaceId || null} hideNavIcons={isMobile} />
       </div>
       <div style={{ ...styles.sidebarWrap, width: channelSidebarOpen ? 240 : 0 }}>
@@ -315,18 +315,11 @@ export function SpaceView() {
         />
       </div>
       <div style={styles.main}>
-        {(!spaceSidebarOpen || !channelSidebarOpen) && (
+        {!channelSidebarOpen && (
           <div style={styles.expandBar}>
-            {!spaceSidebarOpen && (
-              <button onClick={toggleSpaceSidebar} style={styles.expandBtn} title="Show spaces">
-                <ChevronsRight size={18} />
-              </button>
-            )}
-            {!channelSidebarOpen && (
-              <button onClick={toggleChannelSidebar} style={styles.expandBtn} title="Show channels">
-                <PanelLeft size={18} />
-              </button>
-            )}
+            <button onClick={toggleChannelSidebar} style={styles.expandBtn} title="Show channels">
+              <PanelLeft size={18} />
+            </button>
           </div>
         )}
         {calendarOpen && spaceId ? (

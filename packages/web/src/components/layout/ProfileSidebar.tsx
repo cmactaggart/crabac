@@ -1,3 +1,4 @@
+import { LogOut } from 'lucide-react';
 import { Avatar } from '../common/Avatar.js';
 
 interface Props {
@@ -10,6 +11,7 @@ interface Props {
   followerCount: number;
   onFollowingClick?: () => void;
   onFollowersClick?: () => void;
+  onLogout?: () => void;
 }
 
 export function ProfileSidebar({
@@ -22,6 +24,7 @@ export function ProfileSidebar({
   followerCount,
   onFollowingClick,
   onFollowersClick,
+  onLogout,
 }: Props) {
   return (
     <div style={styles.sidebar}>
@@ -52,6 +55,14 @@ export function ProfileSidebar({
           </span>
         </div>
       </div>
+      {onLogout && (
+        <div style={styles.footer}>
+          <button onClick={onLogout} style={styles.logoutBtn}>
+            <LogOut size={14} />
+            Log Out
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -64,7 +75,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     borderRight: '1px solid var(--border)',
-    background: 'var(--bg-secondary)',
+    background: 'linear-gradient(to bottom, var(--bg-secondary), color-mix(in srgb, var(--bg-secondary), black 18%))',
     overflowY: 'auto',
   },
   content: {
@@ -97,5 +108,25 @@ const styles: Record<string, React.CSSProperties> = {
   },
   followStatic: {
     color: 'var(--text-secondary)',
+  },
+  footer: {
+    marginTop: 'auto',
+    padding: '0.75rem 1rem',
+    borderTop: '1px solid var(--border)',
+    display: 'flex',
+    justifyContent: 'center',
+  },
+  logoutBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '0.5rem 0.75rem',
+    borderRadius: 'var(--radius)',
+    border: 'none',
+    background: 'none',
+    color: 'var(--text-muted)',
+    fontSize: '0.78rem',
+    fontWeight: 500,
+    cursor: 'pointer',
   },
 };

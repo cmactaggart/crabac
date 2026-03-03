@@ -222,7 +222,10 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
       {post.repostOfId && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
           <Repeat2 size={14} />
-          <span>Reposted by <strong style={{ color: 'var(--text-primary)' }}>{post.author?.displayName}</strong></span>
+          <span>Reposted by <strong
+            style={{ color: 'var(--text-primary)', cursor: 'pointer' }}
+            onClick={() => post.author?.username && navigate(`/p/${post.author.username}`)}
+          >{post.author?.displayName}</strong></span>
         </div>
       )}
 
