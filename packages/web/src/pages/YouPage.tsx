@@ -106,6 +106,11 @@ export function YouPage() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{user?.displayName}</div>
             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>@{user?.username}</div>
+            {user?.bio && (
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.3 }}>
+                {user.bio}
+              </div>
+            )}
             {memberSince && (
               <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 2 }}>
                 Member since {memberSince}
@@ -212,6 +217,7 @@ export function YouPage() {
           avatarUrl={user?.avatarUrl ?? null}
           displayName={user?.displayName || '?'}
           username={user?.username || ''}
+          bio={user?.bio}
           baseColor={user?.baseColor}
           accentColor={user?.accentColor}
           followingCount={followCounts.followingCount}
@@ -892,7 +898,7 @@ function FeedTab({ posts, loading, hasMore, defaultVisibility = 'private', onCre
 }) {
   const navigate = useNavigate();
   const currentUser = useAuthStore((s) => s.user);
-  const { togglePostReaction, fetchComments, addComment, deleteComment, toggleCommentReaction, createRepost } = usePersonalCollectionsStore();
+  const { togglePostReaction, fetchComments, addComment, deleteComment, toggleCommentReaction, createRepost, pinPost, unpinPost } = usePersonalCollectionsStore();
   const [body, setBody] = useState('');
   const [visibility, setVisibility] = useState<PersonalVisibility>(defaultVisibility);
   const [files, setFiles] = useState<File[]>([]);
@@ -1147,6 +1153,8 @@ function FeedTab({ posts, loading, hasMore, defaultVisibility = 'private', onCre
             onCommentReaction={(commentId, emoji, hasReacted) => toggleCommentReaction(commentId, emoji, hasReacted)}
             onRepost={undefined}
             onShare={() => {}}
+            onPin={() => pinPost(post.id)}
+            onUnpin={() => unpinPost(post.id)}
             initialShowComments={highlightPostId === post.id && !!highlightCommentId}
           />
         ))}

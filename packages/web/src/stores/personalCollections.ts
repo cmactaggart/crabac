@@ -65,6 +65,10 @@ interface PersonalCollectionsState {
 
   // Share to channel
   sharePostToChannel: (postId: string, channelId: string, content?: string) => Promise<any>;
+
+  // Pin/Unpin
+  pinPost: (postId: string) => Promise<void>;
+  unpinPost: (postId: string) => Promise<void>;
 }
 
 export const usePersonalCollectionsStore = create<PersonalCollectionsState>((set, get) => ({
@@ -381,5 +385,20 @@ export const usePersonalCollectionsStore = create<PersonalCollectionsState>((set
       method: 'POST',
       body: JSON.stringify({ channelId, content }),
     });
+  },
+
+  // Pin/Unpin
+  pinPost: async (postId) => {
+    const post = await api<UserPost>(`/users/me/posts/${postId}/pin`, { method: 'PUT' });
+    set((s) => ({
+      posts: s.posts.map((p) => (p.id === postId ? post : p)),
+    }));
+  },
+
+  unpinPost: async (postId) => {
+    const post = await api<UserPost>(`/users/me/posts/${postId}/pin`, { method: 'DELETE' });
+    set((s) => ({
+      posts: s.posts.map((p) => (p.id === postId ? post : p)),
+    }));
   },
 }));

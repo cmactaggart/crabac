@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trash2, Edit3, Eye, MapPin, SmilePlus, MessageCircle, Repeat2, Forward, X } from 'lucide-react';
+import { Trash2, Edit3, Eye, MapPin, SmilePlus, MessageCircle, Repeat2, Forward, X, Flag, Pin } from 'lucide-react';
 import { Avatar } from '../common/Avatar.js';
 import { EmojiPicker } from '../messages/EmojiPicker.js';
 import { ShareToSpacePicker } from '../common/ShareToSpacePicker.js';
@@ -113,7 +113,7 @@ function renderTextWithMentions(text: string, navigate: (path: string) => void):
   return result;
 }
 
-export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, editVisibility, onEditBodyChange, onEditVisibilityChange, onStartEdit, onSaveEdit, onCancelEdit, onDelete, onReaction, onFetchComments, onAddComment, onDeleteComment, onCommentReaction, onRepost, onShare, showAuthorLink, initialShowComments }: {
+export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, editVisibility, onEditBodyChange, onEditVisibilityChange, onStartEdit, onSaveEdit, onCancelEdit, onDelete, onReaction, onFetchComments, onAddComment, onDeleteComment, onCommentReaction, onRepost, onShare, onReport, onPin, onUnpin, showAuthorLink, initialShowComments }: {
   post: UserPost;
   currentUserId: string;
   isOwn: boolean;
@@ -133,6 +133,9 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
   onCommentReaction: (commentId: string, emoji: string, hasReacted: boolean) => Promise<any>;
   onRepost?: ((post: UserPost) => void) | undefined;
   onShare: () => void;
+  onReport?: () => void;
+  onPin?: () => void;
+  onUnpin?: () => void;
   showAuthorLink?: boolean;
   initialShowComments?: boolean;
 }) {
@@ -294,6 +297,11 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
               {dateStr} at {timeStr}
             </div>
           </div>
+          {post.isPinned && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 10, fontSize: '0.65rem', fontWeight: 600, background: 'rgba(250, 166, 26, 0.15)', color: '#faa61a' }}>
+              <Pin size={10} /> Pinned
+            </span>
+          )}
           <VisibilityBadge visibility={post.visibility} />
         </div>
       )}
@@ -422,7 +430,26 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
             <Forward size={13} />
           </button>
 
+          {/* Report (non-own posts) */}
+          {onReport && !isOwn && (
+            <button onClick={onReport} style={{ ...styles.iconBtn, background: 'var(--bg-tertiary)' }} title="Report">
+              <Flag size={13} />
+            </button>
+          )}
+
           <div style={{ flex: 1 }} />
+
+          {/* Pin/Unpin (own posts only) */}
+          {isOwn && onPin && !post.isPinned && (
+            <button onClick={onPin} style={{ ...styles.iconBtn, background: 'var(--bg-tertiary)' }} title="Pin post">
+              <Pin size={13} />
+            </button>
+          )}
+          {isOwn && onUnpin && post.isPinned && (
+            <button onClick={onUnpin} style={{ ...styles.iconBtn, background: 'var(--bg-tertiary)', color: '#faa61a' }} title="Unpin post">
+              <Pin size={13} />
+            </button>
+          )}
 
           {/* Edit/Delete (own posts only) */}
           {isOwn && onStartEdit && (

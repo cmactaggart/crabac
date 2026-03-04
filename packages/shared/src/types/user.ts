@@ -6,6 +6,7 @@ export interface User {
   username: string;
   displayName: string;
   avatarUrl: string | null;
+  bio?: string | null;
   status: UserStatus;
   emailVerified: boolean;
   totpEnabled: boolean;
@@ -31,8 +32,18 @@ export interface CreateUserRequest {
 export interface UpdateUserRequest {
   displayName?: string;
   avatarUrl?: string | null;
+  bio?: string | null;
   baseColor?: string | null;
   accentColor?: string | null;
+}
+
+export interface UserProfileLink {
+  id: string;
+  userId: string;
+  label: string;
+  url: string;
+  position: number;
+  createdAt: string;
 }
 
 export interface LoginRequest {

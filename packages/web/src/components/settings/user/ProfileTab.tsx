@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Camera } from 'lucide-react';
+import { Camera, Plus, X, GripVertical } from 'lucide-react';
 import { useAuthStore } from '../../../stores/auth.js';
 import { Avatar } from '../../common/Avatar.js';
 import { api } from '../../../lib/api.js';
+import type { UserProfileLink } from '@crabac/shared';
 
 export function ProfileTab() {
   const user = useAuthStore((s) => s.user);
@@ -10,6 +11,7 @@ export function ProfileTab() {
   const uploadAvatar = useAuthStore((s) => s.uploadAvatar);
 
   const [displayName, setDisplayName] = useState(user?.displayName || '');
+  const [bio, setBio] = useState(user?.bio || '');
   const [baseColor, setBaseColor] = useState(user?.baseColor || '');
   const [accentColor, setAccentColor] = useState(user?.accentColor || '');
   const [newsletterEnabled, setNewsletterEnabled] = useState(false);
@@ -18,13 +20,21 @@ export function ProfileTab() {
   const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Profile links
+  const [profileLinks, setProfileLinks] = useState<UserProfileLink[]>([]);
+  const [newLinkLabel, setNewLinkLabel] = useState('');
+  const [newLinkUrl, setNewLinkUrl] = useState('');
+  const [addingLink, setAddingLink] = useState(false);
+
   useEffect(() => {
     api('/users/preferences').then((prefs: any) => {
       setNewsletterEnabled(!!prefs.newsletterEnabled);
     }).catch(() => {});
+    api<UserProfileLink[]>('/users/me/profile-links').then(setProfileLinks).catch(() => {});
   }, []);
 
   const hasNameChange = displayName !== (user?.displayName || '');
+  const hasBioChange = bio !== (user?.bio || '');
   const hasColorChange =
     baseColor !== (user?.baseColor || '') ||
     accentColor !== (user?.accentColor || '');
@@ -51,6 +61,7 @@ export function ProfileTab() {
     try {
       await updateProfile({
         displayName: displayName.trim(),
+        bio: bio.trim() || null,
         baseColor: baseColor || null,
         accentColor: accentColor || null,
       });
@@ -93,6 +104,84 @@ export function ProfileTab() {
           style={styles.input}
           maxLength={100}
         />
+      </div>
+
+      {/* Bio */}
+      <div>
+        <label style={styles.label}>Bio</label>
+        <textarea
+          value={bio}
+          onChange={(e) => setBio(e.target.value)}
+          placeholder="Tell people about yourself..."
+          style={{ ...styles.input, minHeight: 60, resize: 'vertical', fontFamily: 'inherit' }}
+          maxLength={255}
+        />
+        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'right', marginTop: 2 }}>{bio.length}/255</div>
+      </div>
+
+      {/* Profile Links */}
+      <div>
+        <label style={styles.label}>Profile Links</label>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '4px 0 8px' }}>
+          Add links to your website, social media, or other profiles (max 10).
+        </p>
+        {profileLinks.map((link) => (
+          <div key={link.id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+            <span style={{ fontSize: '0.85rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <strong>{link.label}</strong> — <span style={{ color: 'var(--text-muted)' }}>{link.url}</span>
+            </span>
+            <button
+              onClick={async () => {
+                try {
+                  await api(`/users/me/profile-links/${link.id}`, { method: 'DELETE' });
+                  setProfileLinks((prev) => prev.filter((l) => l.id !== link.id));
+                } catch {}
+              }}
+              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, display: 'flex' }}
+              title="Remove link"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        ))}
+        {profileLinks.length < 10 && (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <input
+              value={newLinkLabel}
+              onChange={(e) => setNewLinkLabel(e.target.value)}
+              placeholder="Label"
+              style={{ ...styles.input, width: 120, marginTop: 0 }}
+              maxLength={100}
+            />
+            <input
+              value={newLinkUrl}
+              onChange={(e) => setNewLinkUrl(e.target.value)}
+              placeholder="https://..."
+              style={{ ...styles.input, flex: 1, minWidth: 140, marginTop: 0 }}
+              maxLength={512}
+            />
+            <button
+              onClick={async () => {
+                if (!newLinkLabel.trim() || !newLinkUrl.trim()) return;
+                setAddingLink(true);
+                try {
+                  const link = await api<UserProfileLink>('/users/me/profile-links', {
+                    method: 'POST',
+                    body: JSON.stringify({ label: newLinkLabel.trim(), url: newLinkUrl.trim() }),
+                  });
+                  setProfileLinks((prev) => [...prev, link]);
+                  setNewLinkLabel('');
+                  setNewLinkUrl('');
+                } catch {}
+                setAddingLink(false);
+              }}
+              disabled={addingLink || !newLinkLabel.trim() || !newLinkUrl.trim()}
+              style={{ ...styles.smallBtn, display: 'flex', alignItems: 'center', gap: 4 }}
+            >
+              <Plus size={14} /> Add
+            </button>
+          </div>
+        )}
       </div>
 
       {/* User Colors */}
@@ -172,7 +261,7 @@ export function ProfileTab() {
       </div>
 
       {/* Save */}
-      {(hasNameChange || hasColorChange) && (
+      {(hasNameChange || hasBioChange || hasColorChange) && (
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <button onClick={handleSave} disabled={saving || !displayName.trim()} style={styles.saveBtn}>
             {saving ? 'Saving...' : 'Save Changes'}

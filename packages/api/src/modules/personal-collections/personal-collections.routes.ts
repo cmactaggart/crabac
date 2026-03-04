@@ -444,6 +444,28 @@ personalCollectionsRoutes.post(
   },
 );
 
+// ─── Pin/Unpin Posts ───
+
+personalCollectionsRoutes.put(
+  '/me/posts/:postId/pin',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const post = await postsService.pinPost(req.params.postId, req.user!.userId);
+      res.json(post);
+    } catch (err) { next(err); }
+  },
+);
+
+personalCollectionsRoutes.delete(
+  '/me/posts/:postId/pin',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const post = await postsService.unpinPost(req.params.postId, req.user!.userId);
+      res.json(post);
+    } catch (err) { next(err); }
+  },
+);
+
 // ─── Repost (must be before :postId routes) ───
 
 personalCollectionsRoutes.post(

@@ -173,6 +173,26 @@ export async function createPost(
   return getPost(String(postId));
 }
 
+// ─── Pin/Unpin Posts ───
+
+export async function pinPost(postId: string, userId: string) {
+  const post = await db('user_posts').where('id', postId).first();
+  if (!post) throw new NotFoundError('Post');
+  if (String(post.user_id) !== userId) throw new ForbiddenError('You can only pin your own posts');
+
+  await db('user_posts').where('id', postId).update({ is_pinned: true });
+  return getPost(postId);
+}
+
+export async function unpinPost(postId: string, userId: string) {
+  const post = await db('user_posts').where('id', postId).first();
+  if (!post) throw new NotFoundError('Post');
+  if (String(post.user_id) !== userId) throw new ForbiddenError('You can only unpin your own posts');
+
+  await db('user_posts').where('id', postId).update({ is_pinned: false });
+  return getPost(postId);
+}
+
 // ─── List Posts ───
 
 export async function listPosts(
@@ -194,7 +214,7 @@ export async function listPosts(
       'users.base_color as author_base_color',
       'users.accent_color as author_accent_color',
     )
-    .orderBy('up.id', 'desc')
+    .orderBy([{ column: 'up.is_pinned', order: 'desc' }, { column: 'up.id', order: 'desc' }])
     .limit(options.limit);
 
   if (options.before) {
@@ -715,6 +735,7 @@ function formatPost(
     userId: String(row.user_id),
     body: row.body,
     visibility: row.visibility,
+    isPinned: !!row.is_pinned,
     attachments: attachments.map(formatPostAttachment),
     tags: tags.map((t: any) => ({
       userId: String(t.user_id),

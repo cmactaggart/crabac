@@ -21,6 +21,7 @@ export const refreshSchema = z.object({
 export const updateUserSchema = z.object({
   displayName: z.string().min(1).max(64).optional(),
   avatarUrl: z.string().url().max(512).nullable().optional(),
+  bio: z.string().max(255).nullable().optional(),
   baseColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
   accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
 });
@@ -484,6 +485,7 @@ export const createReportSchema = z.object({
   galleryItemId: z.string().optional(),
   routeId: z.string().optional(),
   forumPostId: z.string().optional(),
+  postId: z.string().optional(),
   reason: z.string().min(1).max(2000),
 });
 
@@ -814,4 +816,20 @@ export const anonymousSubscribeSchema = z.object({
 export const updateAnonymousPreferencesSchema = z.object({
   frequency: z.enum(['immediate', 'daily_digest', 'weekly_digest']).optional(),
   isActive: z.boolean().optional(),
+});
+
+// ─── Profile Links ───
+
+export const createProfileLinkSchema = z.object({
+  label: z.string().min(1).max(100),
+  url: z.string().url().max(512),
+});
+
+export const updateProfileLinkSchema = z.object({
+  label: z.string().min(1).max(100).optional(),
+  url: z.string().url().max(512).optional(),
+});
+
+export const reorderProfileLinksSchema = z.object({
+  linkIds: z.array(z.string().min(1)).min(1).max(10),
 });

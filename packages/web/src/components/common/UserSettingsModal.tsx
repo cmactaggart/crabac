@@ -1,9 +1,11 @@
-import { useState, useRef } from 'react';
-import { X, Shuffle } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { X, Shuffle, Plus, Trash2, ExternalLink } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth.js';
 import { getSocket } from '../../lib/socket.js';
+import { api } from '../../lib/api.js';
 import { Avatar } from './Avatar.js';
 import { LetterIcon } from '../icons/LetterIcon.js';
+import type { UserProfileLink } from '@crabac/shared';
 
 const COLOR_PALETTE = [
   { base: '#667eea', accent: '#764ba2' },
@@ -46,11 +48,20 @@ export function UserSettingsModal({ onClose }: Props) {
   const uploadAvatar = useAuthStore((s) => s.uploadAvatar);
   const setStatus = useAuthStore((s) => s.setStatus);
   const [displayName, setDisplayName] = useState(user?.displayName || '');
+  const [bio, setBio] = useState(user?.bio || '');
   const [baseColor, setBaseColor] = useState(user?.baseColor || '#667eea');
   const [accentColor, setAccentColor] = useState(user?.accentColor || '#764ba2');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [profileLinks, setProfileLinks] = useState<UserProfileLink[]>([]);
+  const [newLinkLabel, setNewLinkLabel] = useState('');
+  const [newLinkUrl, setNewLinkUrl] = useState('');
+  const [addingLink, setAddingLink] = useState(false);
+
+  useEffect(() => {
+    api<UserProfileLink[]>('/users/me/profile-links').then(setProfileLinks).catch(() => {});
+  }, []);
 
   const handleSave = async () => {
     if (!displayName.trim() || saving) return;
@@ -58,6 +69,7 @@ export function UserSettingsModal({ onClose }: Props) {
     try {
       await updateProfile({
         displayName: displayName.trim(),
+        bio: bio.trim() || null,
         baseColor,
         accentColor,
       });
@@ -216,6 +228,84 @@ export function UserSettingsModal({ onClose }: Props) {
               style={styles.input}
               maxLength={64}
             />
+          </div>
+
+          <div style={styles.field}>
+            <label style={styles.label}>Bio</label>
+            <textarea
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              placeholder="Tell people about yourself..."
+              style={{ ...styles.input, minHeight: 60, resize: 'vertical', fontFamily: 'inherit' }}
+              maxLength={255}
+            />
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'right' }}>{bio.length}/255</div>
+          </div>
+
+          {/* Profile Links */}
+          <div style={styles.field}>
+            <label style={styles.label}>Profile Links</label>
+            {profileLinks.map((link) => (
+              <div key={link.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
+                <ExternalLink size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{link.label}</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{link.url}</div>
+                </div>
+                <button
+                  onClick={async () => {
+                    try {
+                      await api(`/users/me/profile-links/${link.id}`, { method: 'DELETE' });
+                      setProfileLinks((l) => l.filter((x) => x.id !== link.id));
+                    } catch {}
+                  }}
+                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}
+                  title="Remove link"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+            {profileLinks.length < 10 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    value={newLinkLabel}
+                    onChange={(e) => setNewLinkLabel(e.target.value)}
+                    placeholder="Label"
+                    style={{ ...styles.input, flex: 1 }}
+                    maxLength={100}
+                  />
+                  <input
+                    value={newLinkUrl}
+                    onChange={(e) => setNewLinkUrl(e.target.value)}
+                    placeholder="https://..."
+                    style={{ ...styles.input, flex: 2 }}
+                    maxLength={512}
+                  />
+                </div>
+                <button
+                  disabled={!newLinkLabel.trim() || !newLinkUrl.trim() || addingLink}
+                  onClick={async () => {
+                    if (!newLinkLabel.trim() || !newLinkUrl.trim()) return;
+                    setAddingLink(true);
+                    try {
+                      const link = await api<UserProfileLink>('/users/me/profile-links', {
+                        method: 'POST',
+                        body: JSON.stringify({ label: newLinkLabel.trim(), url: newLinkUrl.trim() }),
+                      });
+                      setProfileLinks((l) => [...l, link]);
+                      setNewLinkLabel('');
+                      setNewLinkUrl('');
+                    } catch {}
+                    setAddingLink(false);
+                  }}
+                  style={{ ...styles.uploadBtn, display: 'flex', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}
+                >
+                  <Plus size={14} /> Add
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

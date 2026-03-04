@@ -15,6 +15,7 @@ interface UserProfile {
   username: string;
   displayName: string;
   avatarUrl: string | null;
+  bio?: string | null;
   baseColor?: string | null;
   accentColor?: string | null;
   status: string;
@@ -178,6 +179,11 @@ export function UserProfilePopover({ userId, anchorRect, onClose, onMessage, cur
       <div style={styles.body}>
         <div style={styles.displayName}>{profile.displayName}</div>
         <div style={styles.username}>{profile.username}</div>
+        {profile.bio && (
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.4 }}>
+            {profile.bio}
+          </div>
+        )}
         <button
           onClick={() => {
             navigate(userId === currentUserId ? '/you' : `/p/${profile.username}`);

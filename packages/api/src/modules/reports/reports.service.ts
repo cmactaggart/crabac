@@ -15,6 +15,7 @@ export async function createReport(
     galleryItemId?: string;
     routeId?: string;
     forumPostId?: string;
+    postId?: string;
     reason: string;
   },
 ) {
@@ -53,12 +54,19 @@ export async function createReport(
       .first();
     if (existing) throw new ConflictError('You have already reported this post');
   }
+  if (data.postId) {
+    const existing = await db('reports')
+      .where({ reporter_id: reporterId, post_id: data.postId, status: 'pending' })
+      .first();
+    if (existing) throw new ConflictError('You have already reported this post');
+  }
 
   // Determine content_type
   let contentType: string | null = null;
   if (data.galleryItemId) contentType = 'gallery';
   else if (data.routeId) contentType = 'route';
   else if (data.forumPostId) contentType = 'forum_post';
+  else if (data.postId) contentType = 'post';
 
   const id = snowflake.generate();
   await db('reports').insert({
@@ -73,6 +81,7 @@ export async function createReport(
     gallery_item_id: data.galleryItemId || null,
     route_id: data.routeId || null,
     forum_post_id: data.forumPostId || null,
+    post_id: data.postId || null,
     content_type: contentType,
     reason: data.reason,
     status: 'pending',
@@ -144,8 +153,9 @@ export async function listSpaceReports(spaceId: string) {
   const galleryItemIds = rows.filter((r: any) => r.gallery_item_id).map((r: any) => r.gallery_item_id);
   const routeIds = rows.filter((r: any) => r.route_id).map((r: any) => r.route_id);
   const forumPostIds = rows.filter((r: any) => r.forum_post_id).map((r: any) => r.forum_post_id);
+  const postIds = rows.filter((r: any) => r.post_id).map((r: any) => r.post_id);
 
-  const contentPreviews = await getContentPreviews(messageIds, dmMessageIds, galleryItemIds, routeIds, forumPostIds);
+  const contentPreviews = await getContentPreviews(messageIds, dmMessageIds, galleryItemIds, routeIds, forumPostIds, postIds);
 
   return rows.map((r: any) => formatReport(r, contentPreviews));
 }
@@ -176,7 +186,8 @@ export async function listAllReports(statusFilter?: string) {
   const galleryItemIds = rows.filter((r: any) => r.gallery_item_id).map((r: any) => r.gallery_item_id);
   const routeIds = rows.filter((r: any) => r.route_id).map((r: any) => r.route_id);
   const forumPostIds = rows.filter((r: any) => r.forum_post_id).map((r: any) => r.forum_post_id);
-  const contentPreviews = await getContentPreviews(messageIds, dmMessageIds, galleryItemIds, routeIds, forumPostIds);
+  const postIds = rows.filter((r: any) => r.post_id).map((r: any) => r.post_id);
+  const contentPreviews = await getContentPreviews(messageIds, dmMessageIds, galleryItemIds, routeIds, forumPostIds, postIds);
 
   return rows.map((r: any) => formatReport(r, contentPreviews));
 }
@@ -200,6 +211,7 @@ async function getContentPreviews(
   galleryItemIds: string[],
   routeIds: string[],
   forumPostIds: string[],
+  postIds: string[] = [],
 ) {
   const previews = new Map<string, string>();
 
@@ -248,6 +260,15 @@ async function getContentPreviews(
     }
   }
 
+  if (postIds.length > 0) {
+    const userPosts = await db('user_posts')
+      .whereIn('id', postIds)
+      .select('id', 'body');
+    for (const p of userPosts) {
+      previews.set(`post:${p.id}`, p.body?.slice(0, 200) || '(post)');
+    }
+  }
+
   return previews;
 }
 
@@ -260,6 +281,8 @@ function formatReport(row: any, contentPreviews?: Map<string, string>) {
       messagePreview = contentPreviews.get(`route:${row.route_id}`) || null;
     } else if (row.forum_post_id) {
       messagePreview = contentPreviews.get(`forum:${row.forum_post_id}`) || null;
+    } else if (row.post_id) {
+      messagePreview = contentPreviews.get(`post:${row.post_id}`) || null;
     } else if (row.message_id) {
       messagePreview = contentPreviews.get(`msg:${row.message_id}`) || null;
     } else if (row.dm_message_id) {
@@ -279,6 +302,7 @@ function formatReport(row: any, contentPreviews?: Map<string, string>) {
     galleryItemId: row.gallery_item_id,
     routeId: row.route_id,
     forumPostId: row.forum_post_id,
+    postId: row.post_id,
     contentType: row.content_type,
     reason: row.reason,
     status: row.status,

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { useFeedStore } from '../stores/feed.js';
@@ -10,6 +10,7 @@ import { useIsMobile } from '../hooks/useIsMobile.js';
 import { SpaceSidebar } from '../components/layout/SpaceSidebar.js';
 import { ProfileSidebar } from '../components/layout/ProfileSidebar.js';
 import { PostCard } from '../components/posts/PostCard.js';
+import { ReportModal } from '../components/moderation/ReportModal.js';
 import { api } from '../lib/api.js';
 import type { UserPost } from '@crabac/shared';
 
@@ -21,6 +22,7 @@ export function FeedView() {
   const { posts, loading, hasMore, fetchFeed } = useFeedStore();
   const { togglePostReaction, fetchComments, addComment, deleteComment, toggleCommentReaction } = usePersonalCollectionsStore();
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const [reportPost, setReportPost] = useState<UserPost | null>(null);
 
   useEffect(() => {
     fetchFeed();
@@ -91,9 +93,21 @@ export function FeedView() {
             onCommentReaction={(commentId, emoji, hasReacted) => toggleCommentReaction(commentId, emoji, hasReacted)}
             onRepost={post.userId !== currentUser?.id ? () => {} : undefined}
             onShare={() => {}}
+            onReport={post.userId !== currentUser?.id ? () => setReportPost(post) : undefined}
           />
         ))}
       </div>
+
+      {reportPost && (
+        <ReportModal
+          reportedUserId={reportPost.userId}
+          reportedUsername={reportPost.author?.username || ''}
+          postId={reportPost.id}
+          messagePreview={reportPost.body?.slice(0, 200) || undefined}
+          contentLabel="Post"
+          onClose={() => setReportPost(null)}
+        />
+      )}
 
       {/* Infinite scroll sentinel */}
       <div ref={sentinelRef} style={{ height: 1 }} />
@@ -144,6 +158,7 @@ export function FeedPage() {
           avatarUrl={user?.avatarUrl ?? null}
           displayName={user?.displayName || '?'}
           username={user?.username || ''}
+          bio={user?.bio}
           baseColor={user?.baseColor}
           accentColor={user?.accentColor}
           followingCount={followCounts.followingCount}

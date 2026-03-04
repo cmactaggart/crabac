@@ -13,6 +13,7 @@ interface Props {
   galleryItemId?: string;
   routeId?: string;
   forumPostId?: string;
+  postId?: string;
   messagePreview?: string;
   contentLabel?: string;
   onClose: () => void;
@@ -29,6 +30,7 @@ export function ReportModal({
   galleryItemId,
   routeId,
   forumPostId,
+  postId,
   messagePreview,
   contentLabel = 'Message',
   onClose,
@@ -55,6 +57,7 @@ export function ReportModal({
           galleryItemId: galleryItemId || undefined,
           routeId: routeId || undefined,
           forumPostId: forumPostId || undefined,
+          postId: postId || undefined,
           reason: reason.trim(),
         }),
       });

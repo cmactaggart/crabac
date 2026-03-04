@@ -39,6 +39,7 @@ export interface Report {
   galleryItemId: string | null;
   routeId: string | null;
   forumPostId: string | null;
+  postId: string | null;
   contentType: string | null;
   reason: string;
   status: ReportStatus;

@@ -10,10 +10,11 @@ export async function getUser(userId: string) {
   return formatUser(user);
 }
 
-export async function updateUser(userId: string, updates: { displayName?: string; avatarUrl?: string | null; baseColor?: string | null; accentColor?: string | null }) {
+export async function updateUser(userId: string, updates: { displayName?: string; avatarUrl?: string | null; bio?: string | null; baseColor?: string | null; accentColor?: string | null }) {
   const data: Record<string, any> = {};
   if (updates.displayName !== undefined) data.display_name = updates.displayName;
   if (updates.avatarUrl !== undefined) data.avatar_url = updates.avatarUrl;
+  if (updates.bio !== undefined) data.bio = updates.bio;
   if (updates.baseColor !== undefined) data.base_color = updates.baseColor;
   if (updates.accentColor !== undefined) data.accent_color = updates.accentColor;
 
@@ -43,6 +44,7 @@ function formatUser(row: any) {
     username: row.username,
     displayName: row.display_name,
     avatarUrl: row.avatar_url,
+    bio: row.bio || null,
     baseColor: row.base_color || null,
     accentColor: row.accent_color || null,
     status: row.status,
@@ -110,6 +112,7 @@ function formatPublicUser(row: any) {
     username: row.username,
     displayName: row.display_name,
     avatarUrl: row.avatar_url,
+    bio: row.bio || null,
     baseColor: row.base_color || null,
     accentColor: row.accent_color || null,
     status: row.status,

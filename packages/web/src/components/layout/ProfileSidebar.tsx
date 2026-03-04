@@ -1,10 +1,13 @@
-import { LogOut } from 'lucide-react';
+import { useState } from 'react';
+import { LogOut, Pencil } from 'lucide-react';
 import { Avatar } from '../common/Avatar.js';
+import { UserSettingsModal } from '../common/UserSettingsModal.js';
 
 interface Props {
   avatarUrl: string | null;
   displayName: string;
   username: string;
+  bio?: string | null;
   baseColor?: string | null;
   accentColor?: string | null;
   followingCount: number;
@@ -18,6 +21,7 @@ export function ProfileSidebar({
   avatarUrl,
   displayName,
   username,
+  bio,
   baseColor,
   accentColor,
   followingCount,
@@ -26,6 +30,8 @@ export function ProfileSidebar({
   onFollowersClick,
   onLogout,
 }: Props) {
+  const [showSettings, setShowSettings] = useState(false);
+
   return (
     <div style={styles.sidebar}>
       <div style={styles.content}>
@@ -40,6 +46,14 @@ export function ProfileSidebar({
           <div style={styles.displayName}>{displayName}</div>
           <div style={styles.username}>@{username}</div>
         </div>
+        {bio && (
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', textAlign: 'center', lineHeight: 1.4, padding: '0 0.25rem' }}>
+            {bio}
+          </div>
+        )}
+        <button onClick={() => setShowSettings(true)} style={styles.editBtn}>
+          <Pencil size={12} /> Edit Profile
+        </button>
         <div style={styles.followRow}>
           <span
             style={onFollowingClick ? styles.followClickable : styles.followStatic}
@@ -63,6 +77,7 @@ export function ProfileSidebar({
           </button>
         </div>
       )}
+      {showSettings && <UserSettingsModal onClose={() => setShowSettings(false)} />}
     </div>
   );
 }
@@ -115,6 +130,19 @@ const styles: Record<string, React.CSSProperties> = {
     borderTop: '1px solid var(--border)',
     display: 'flex',
     justifyContent: 'center',
+  },
+  editBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    padding: '5px 12px',
+    borderRadius: 'var(--radius)',
+    border: '1px solid var(--border)',
+    background: 'none',
+    color: 'var(--text-secondary)',
+    fontSize: '0.75rem',
+    fontWeight: 500,
+    cursor: 'pointer',
   },
   logoutBtn: {
     display: 'flex',

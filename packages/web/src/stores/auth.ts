@@ -15,7 +15,7 @@ interface AuthState {
   register: (email: string, username: string, displayName: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   restore: () => Promise<void>;
-  updateProfile: (data: { displayName?: string; baseColor?: string | null; accentColor?: string | null }) => Promise<void>;
+  updateProfile: (data: { displayName?: string; bio?: string | null; baseColor?: string | null; accentColor?: string | null }) => Promise<void>;
   uploadAvatar: (file: File) => Promise<void>;
   setStatus: (status: string) => void;
 }

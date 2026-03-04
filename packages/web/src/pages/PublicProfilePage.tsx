@@ -11,6 +11,7 @@ import { useLayoutStore } from '../stores/layout.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 import { Avatar } from '../components/common/Avatar.js';
 import { PostCard as SharedPostCard } from '../components/posts/PostCard.js';
+import { ReportModal } from '../components/moderation/ReportModal.js';
 import { SpaceSidebar } from '../components/layout/SpaceSidebar.js';
 import { ProfileSidebar } from '../components/layout/ProfileSidebar.js';
 import { useFollowsStore } from '../stores/follows.js';
@@ -22,12 +23,14 @@ interface ProfileUser {
   username: string;
   displayName: string;
   avatarUrl: string | null;
+  bio?: string | null;
   baseColor?: string | null;
   accentColor?: string | null;
   status: string;
   createdAt: string;
   canViewProfile: boolean;
   newsletterEnabled?: boolean;
+  profileLinks?: { id: string; label: string; url: string; position: number }[];
 }
 
 type SubTab = 'feed' | 'photos' | 'routes' | 'events';
@@ -341,6 +344,11 @@ export function PublicProfilePage() {
             style={{ fontSize: '0.85rem', color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }}
             onClick={() => navigate(`/p/${profile.username}`)}
           >@{profile.username}</div>
+          {profile.bio && (
+            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.4 }}>
+              {profile.bio}
+            </div>
+          )}
           {memberSince && (
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
               Member since {memberSince}
@@ -348,6 +356,23 @@ export function PublicProfilePage() {
           )}
         </div>
       </div>
+
+      {/* Profile Links */}
+      {profile.profileLinks && profile.profileLinks.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+          {profile.profileLinks.map((link) => (
+            <a
+              key={link.id}
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 12, fontSize: '0.75rem', fontWeight: 600, background: 'var(--bg-tertiary)', color: 'var(--accent)', textDecoration: 'none', border: '1px solid var(--border)' }}
+            >
+              {link.label}
+            </a>
+          ))}
+        </div>
+      )}
 
       {/* Follower/Following counts */}
       <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
@@ -494,6 +519,7 @@ function ReadOnlyFeedTab({ posts, setPosts, profileUserId, friendStatus, handleF
   const currentUser = useAuthStore((s) => s.user);
   const { togglePostReaction, fetchComments, addComment, deleteComment, toggleCommentReaction, createRepost } = usePersonalCollectionsStore();
   const currentUserId = currentUser?.id || '';
+  const [reportPost, setReportPost] = useState<UserPost | null>(null);
 
   // Scroll to highlighted post after posts load
   useEffect(() => {
@@ -577,11 +603,23 @@ function ReadOnlyFeedTab({ posts, setPosts, profileUserId, friendStatus, handleF
             onCommentReaction={(commentId, emoji, hasReacted) => toggleCommentReaction(commentId, emoji, hasReacted)}
             onRepost={post.userId !== currentUserId && !post.repostOfId ? () => {} : undefined}
             onShare={() => {}}
+            onReport={post.userId !== currentUserId ? () => setReportPost(post) : undefined}
             showAuthorLink={true}
             initialShowComments={highlightPostId === post.id && !!highlightCommentId}
           />
         ))}
       </div>
+
+      {reportPost && (
+        <ReportModal
+          reportedUserId={reportPost.userId}
+          reportedUsername={reportPost.author?.username || ''}
+          postId={reportPost.id}
+          messagePreview={reportPost.body?.slice(0, 200) || undefined}
+          contentLabel="Post"
+          onClose={() => setReportPost(null)}
+        />
+      )}
     </div>
   );
 }

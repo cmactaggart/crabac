@@ -9,6 +9,7 @@ import * as usersService from './users.service.js';
 import * as mutesService from './mutes.service.js';
 import * as blocksService from './blocks.service.js';
 import * as preferencesService from './preferences.service.js';
+import * as profileLinksService from './profile-links.service.js';
 
 export const usersRoutes = Router();
 
@@ -189,6 +190,55 @@ usersRoutes.get('/search', async (req: Request, res: Response, next: NextFunctio
   }
 });
 
+// ─── Profile Links ───
+
+usersRoutes.get('/me/profile-links', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const links = await profileLinksService.listProfileLinks(req.user!.userId);
+    res.json(links);
+  } catch (err) { next(err); }
+});
+
+usersRoutes.post(
+  '/me/profile-links',
+  validate(validation.createProfileLinkSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const link = await profileLinksService.createProfileLink(req.user!.userId, req.body);
+      res.status(201).json(link);
+    } catch (err) { next(err); }
+  },
+);
+
+usersRoutes.patch(
+  '/me/profile-links/:linkId',
+  validate(validation.updateProfileLinkSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const link = await profileLinksService.updateProfileLink(req.params.linkId, req.user!.userId, req.body);
+      res.json(link);
+    } catch (err) { next(err); }
+  },
+);
+
+usersRoutes.delete('/me/profile-links/:linkId', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await profileLinksService.deleteProfileLink(req.params.linkId, req.user!.userId);
+    res.json({ success: true });
+  } catch (err) { next(err); }
+});
+
+usersRoutes.put(
+  '/me/profile-links/reorder',
+  validate(validation.reorderProfileLinksSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const links = await profileLinksService.reorderProfileLinks(req.user!.userId, req.body.linkIds);
+      res.json(links);
+    } catch (err) { next(err); }
+  },
+);
+
 // ─── Username Lookup ───
 
 usersRoutes.get('/by-username/:username', async (req: Request, res: Response, next: NextFunction) => {
@@ -202,10 +252,20 @@ usersRoutes.get('/by-username/:username', async (req: Request, res: Response, ne
     const { canViewProfile } = await import('../personal-collections/privacy.service.js');
     const canView = await canViewProfile(user.id, req.user!.userId);
     const prefs = await preferencesService.getPreferences(user.id);
-    res.json({ ...user, canViewProfile: canView, newsletterEnabled: prefs.newsletterEnabled });
+    const profileLinks = await profileLinksService.listProfileLinks(user.id);
+    res.json({ ...user, canViewProfile: canView, newsletterEnabled: prefs.newsletterEnabled, profileLinks });
   } catch (err) {
     next(err);
   }
+});
+
+// ─── Public Profile Links ───
+
+usersRoutes.get('/:userId/profile-links', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const links = await profileLinksService.listProfileLinks(req.params.userId);
+    res.json(links);
+  } catch (err) { next(err); }
 });
 
 // ─── Public Profile ───

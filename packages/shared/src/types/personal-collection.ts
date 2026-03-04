@@ -113,6 +113,7 @@ export interface UserPost {
   tags: UserPostTag[];
   reactions: { emoji: string; count: number; users: { id: string; username: string }[] }[];
   commentCount: number;
+  isPinned?: boolean;
   repostOfId?: string | null;
   repostOf?: UserPost | null;
   author?: {
