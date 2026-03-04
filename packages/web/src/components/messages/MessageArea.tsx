@@ -12,7 +12,7 @@ import { MessageList } from './MessageList.js';
 import { MessageInput } from './MessageInput.js';
 import { PinnedMessages } from './PinnedMessages.js';
 import { ThreadPanel } from './ThreadPanel.js';
-import { SearchPanel } from './SearchPanel.js';
+import { SearchPanel } from '../search/SearchPanel.js';
 import { UserProfilePopover } from '../common/UserProfilePopover.js';
 import type { Channel, Message } from '@crabac/shared';
 
@@ -154,7 +154,7 @@ export function MessageArea({ channelId, channel, spaceId, showBackButton, onBac
               <Pin size={18} />
             </button>
             <button
-              onClick={toggleSearch}
+              onClick={() => toggleSearch(channelId, channel?.name)}
               style={{ ...styles.headerBtn, color: showSearch ? 'var(--accent)' : 'var(--text-secondary)' }}
               title="Search"
             >
@@ -205,7 +205,15 @@ export function MessageArea({ channelId, channel, spaceId, showBackButton, onBac
       {/* Side panels */}
       {showPins && <PinnedMessages channelId={channelId} />}
       {showThread && <ThreadPanel channelId={channelId} />}
-      {showSearch && <SearchPanel spaceId={spaceId} />}
+      {showSearch && (
+        <SearchPanel
+          mode="space"
+          spaceId={spaceId}
+          channelId={channelId}
+          channelName={channel?.name}
+          onClose={() => useMessagesStore.getState().clearSearch()}
+        />
+      )}
 
       {profilePopover && (
         <UserProfilePopover

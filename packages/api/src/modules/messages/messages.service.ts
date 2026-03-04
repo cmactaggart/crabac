@@ -4,6 +4,7 @@ import { NotFoundError, ForbiddenError } from '../../lib/errors.js';
 import { eventBus } from '../../lib/event-bus.js';
 import * as mentionsService from './mentions.service.js';
 import * as notificationsService from '../notifications/notifications.service.js';
+import * as searchService from '../search/search.service.js';
 
 // ─── Messages CRUD ───
 
@@ -284,6 +285,48 @@ export async function searchMessages(spaceId: string, rawQuery: string, options:
     searchText = searchText.replace(inMatch[0], '').trim();
   }
 
+  // Try Typesense first
+  try {
+    const tsResults = await searchService.searchSpaceMessages(spaceId, searchText, {
+      channelId: options.channelId,
+      fromUsername: fromUsername || undefined,
+      inChannel: inChannel || undefined,
+      limit: options.limit,
+      before: options.before,
+    });
+
+    if (tsResults.length > 0) {
+      // Hydrate from MySQL by IDs to get full message format
+      const ids = tsResults.map((r) => r.id);
+      const rows = await db('messages')
+        .join('channels', 'messages.channel_id', 'channels.id')
+        .join('users', 'messages.author_id', 'users.id')
+        .whereIn('messages.id', ids)
+        .select(
+          'messages.*',
+          'users.username as author_username',
+          'users.display_name as author_display_name',
+          'users.avatar_url as author_avatar_url',
+          'users.base_color as author_base_color',
+          'users.accent_color as author_accent_color',
+          'channels.name as channel_name',
+        );
+
+      // Preserve Typesense relevance order
+      const rowMap = new Map(rows.map((r: any) => [String(r.id), r]));
+      return ids
+        .map((id) => rowMap.get(id))
+        .filter(Boolean)
+        .map((r: any) => ({
+          ...formatMessage(r, [], 0, []),
+          channelName: r.channel_name,
+        }));
+    }
+  } catch {
+    // Typesense unavailable — fall through to MySQL
+  }
+
+  // MySQL fallback
   let q = db('messages')
     .join('channels', 'messages.channel_id', 'channels.id')
     .join('users', 'messages.author_id', 'users.id')
@@ -300,25 +343,13 @@ export async function searchMessages(spaceId: string, rawQuery: string, options:
     .orderBy('messages.id', 'desc')
     .limit(options.limit);
 
-  // Apply content search
   if (searchText) {
-    // Try FULLTEXT first, fallback to LIKE for short words
     q = q.whereRaw('MATCH(messages.content) AGAINST(? IN NATURAL LANGUAGE MODE)', [searchText]);
   }
-
-  // Apply operator filters
-  if (fromUsername) {
-    q = q.where('users.username', fromUsername);
-  }
-  if (inChannel) {
-    q = q.where('channels.name', inChannel);
-  }
-  if (options.channelId) {
-    q = q.where('messages.channel_id', options.channelId);
-  }
-  if (options.before) {
-    q = q.where('messages.id', '<', options.before);
-  }
+  if (fromUsername) q = q.where('users.username', fromUsername);
+  if (inChannel) q = q.where('channels.name', inChannel);
+  if (options.channelId) q = q.where('messages.channel_id', options.channelId);
+  if (options.before) q = q.where('messages.id', '<', options.before);
 
   let rows = await q;
 

@@ -77,6 +77,29 @@ dmRoutes.get(
   },
 );
 
+// Search DMs
+dmRoutes.get(
+  '/search',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { q, conversationId, before, limit } = req.query as any;
+      if (!q || typeof q !== 'string' || q.trim().length === 0) {
+        return res.json([]);
+      }
+      const blockedUserIds = await blocksService.getBlockedUserIds(req.user!.userId);
+      const results = await dmService.searchDMs(req.user!.userId, q.trim(), {
+        conversationId,
+        before,
+        limit: Math.min(parseInt(limit) || 25, 50),
+        blockedUserIds,
+      });
+      res.json(results);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // List message requests (pending DMs)
 dmRoutes.get(
   '/requests',

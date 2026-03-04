@@ -79,6 +79,10 @@ img, video {
     height: 100%;
     touch-action: manipulation;
   }
+  body {
+    background: linear-gradient(to bottom, var(--bg-primary), color-mix(in srgb, var(--bg-primary), black 18%));
+    background-attachment: scroll;
+  }
   /* Prevent iOS auto-zoom on input focus (requires >= 16px) */
   input, select, textarea {
     font-size: 16px !important;

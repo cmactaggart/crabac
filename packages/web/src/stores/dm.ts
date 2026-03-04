@@ -12,6 +12,12 @@ interface DMState {
   typingUsers: Map<string, { username: string; timeout: ReturnType<typeof setTimeout> }>;
   dmUnreads: Record<string, number>; // conversationId → unread count
 
+  // DM Search
+  dmSearchResults: DirectMessage[];
+  dmSearchQuery: string;
+  showDMSearch: boolean;
+  dmSearchConversationId: string | undefined;
+
   fetchConversations: () => Promise<void>;
   fetchMessageRequests: () => Promise<void>;
   fetchDMUnreads: () => Promise<void>;
@@ -41,6 +47,12 @@ interface DMState {
   handleConversationCreated: (conversation: Conversation) => void;
   handleConversationUpdated: (conversation: Conversation) => void;
   handleMemberLeft: (payload: { conversationId: string; userId: string }) => void;
+
+  // DM Search actions
+  searchDMs: (query: string, conversationId?: string) => Promise<void>;
+  toggleDMSearch: (conversationId?: string) => void;
+  clearDMSearch: () => void;
+  setDMSearchConversationId: (id: string | undefined) => void;
 }
 
 export const useDMStore = create<DMState>((set, get) => ({
@@ -52,6 +64,10 @@ export const useDMStore = create<DMState>((set, get) => ({
   hasMore: true,
   typingUsers: new Map(),
   dmUnreads: {},
+  dmSearchResults: [],
+  dmSearchQuery: '',
+  showDMSearch: false,
+  dmSearchConversationId: undefined,
 
   fetchDMUnreads: async () => {
     try {
@@ -332,4 +348,29 @@ export const useDMStore = create<DMState>((set, get) => ({
       }),
     }));
   },
+
+  // DM Search
+  searchDMs: async (query, conversationId) => {
+    if (!query.trim()) { set({ dmSearchResults: [], dmSearchQuery: '' }); return; }
+    set({ dmSearchQuery: query });
+    try {
+      const params = new URLSearchParams({ q: query, limit: '25' });
+      if (conversationId) params.set('conversationId', conversationId);
+      const results = await api<DirectMessage[]>(`/conversations/search?${params}`);
+      set({ dmSearchResults: results });
+    } catch {
+      set({ dmSearchResults: [] });
+    }
+  },
+
+  toggleDMSearch: (conversationId) => set((s) => ({
+    showDMSearch: !s.showDMSearch,
+    dmSearchConversationId: !s.showDMSearch ? conversationId : undefined,
+    dmSearchResults: !s.showDMSearch ? s.dmSearchResults : [],
+    dmSearchQuery: !s.showDMSearch ? s.dmSearchQuery : '',
+  })),
+
+  clearDMSearch: () => set({ dmSearchResults: [], dmSearchQuery: '', showDMSearch: false, dmSearchConversationId: undefined }),
+
+  setDMSearchConversationId: (id) => set({ dmSearchConversationId: id }),
 }));

@@ -50,6 +50,13 @@ export const config = {
     eventHorizonDays: parseInt(process.env.NEWSLETTER_EVENT_HORIZON_DAYS || '14', 10),
   },
 
+  typesense: {
+    host: process.env.TYPESENSE_HOST || 'localhost',
+    port: parseInt(process.env.TYPESENSE_PORT || '8108', 10),
+    protocol: process.env.TYPESENSE_PROTOCOL || 'http',
+    apiKey: process.env.TYPESENSE_API_KEY || '',
+  },
+
   apns: {
     keyPath: process.env.APNS_KEY_PATH || '',
     keyId: process.env.APNS_KEY_ID || '',

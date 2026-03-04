@@ -19,6 +19,15 @@ services:
     volumes:
       - redis_data:/data
 
+  typesense:
+    image: typesense/typesense:27.1
+    ports:
+      - "8108:8108"
+    volumes:
+      - typesense_data:/data
+    command: --data-dir /data --api-key=xyz --enable-cors
+
 volumes:
   mysql_data:
   redis_data:
+  typesense_data:

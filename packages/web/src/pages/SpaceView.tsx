@@ -377,6 +377,7 @@ const mobileLayout: React.CSSProperties = {
   bottom: 56,
   display: 'flex',
   overflow: 'hidden',
+  background: 'linear-gradient(to bottom, var(--bg-primary), color-mix(in srgb, var(--bg-primary), black 18%))',
 };
 
 const styles: Record<string, React.CSSProperties> = {

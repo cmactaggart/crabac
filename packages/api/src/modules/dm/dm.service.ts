@@ -3,6 +3,7 @@ import { snowflake } from '../_shared.js';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../../lib/errors.js';
 import { eventBus } from '../../lib/event-bus.js';
 import { areFriends } from '../friends/friends.service.js';
+import * as searchService from '../search/search.service.js';
 
 // ─── Conversations ───
 
@@ -437,6 +438,62 @@ export async function createDMAttachment(
 export async function emitDMCreated(conversationId: string, messageId: string) {
   const message = await getDM(messageId);
   eventBus.emit('dm.created', { message, conversationId });
+}
+
+// ─── DM Search ───
+
+export async function searchDMs(
+  userId: string,
+  query: string,
+  options: { conversationId?: string; limit?: number; before?: string; blockedUserIds?: string[] } = {},
+) {
+  // Get user's accepted conversations (or verify single conversation membership)
+  let conversationIds: string[];
+
+  if (options.conversationId) {
+    const membership = await db('conversation_members')
+      .where({ conversation_id: options.conversationId, user_id: userId, status: 'accepted' })
+      .first();
+    if (!membership) throw new ForbiddenError('Not a member of this conversation');
+    conversationIds = [options.conversationId];
+  } else {
+    const memberships = await db('conversation_members')
+      .where({ user_id: userId, status: 'accepted' })
+      .select('conversation_id');
+    conversationIds = memberships.map((m: any) => String(m.conversation_id));
+    if (conversationIds.length === 0) return [];
+  }
+
+  const tsResults = await searchService.searchDirectMessages(conversationIds, query, {
+    conversationId: options.conversationId,
+    limit: options.limit || 25,
+    before: options.before,
+  });
+
+  if (tsResults.length === 0) return [];
+
+  // Hydrate from MySQL
+  const ids = tsResults.map((r) => r.id);
+  const rows = await db('direct_messages')
+    .join('users', 'direct_messages.author_id', 'users.id')
+    .whereIn('direct_messages.id', ids)
+    .select(
+      'direct_messages.*',
+      'users.username as author_username',
+      'users.display_name as author_display_name',
+      'users.avatar_url as author_avatar_url',
+      'users.base_color as author_base_color',
+      'users.accent_color as author_accent_color',
+    );
+
+  // Filter blocked users
+  const blockedSet = new Set(options.blockedUserIds || []);
+  const rowMap = new Map(rows.map((r: any) => [String(r.id), r]));
+
+  return ids
+    .map((id) => rowMap.get(id))
+    .filter((r: any) => r && !blockedSet.has(String(r.author_id)))
+    .map((r: any) => formatDM(r));
 }
 
 // ─── Read Tracking ───

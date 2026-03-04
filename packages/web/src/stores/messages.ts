@@ -21,6 +21,7 @@ interface MessagesState {
   searchResults: SearchResult[];
   searchQuery: string;
   showSearch: boolean;
+  searchFilters: { channelId?: string; channelName?: string; fromUsername?: string };
 
   // Reply
   replyingTo: Message | null;
@@ -52,8 +53,9 @@ interface MessagesState {
 
   // Search
   search: (spaceId: string, query: string) => Promise<void>;
-  toggleSearch: () => void;
+  toggleSearch: (channelId?: string, channelName?: string) => void;
   clearSearch: () => void;
+  setSearchFilters: (filters: { channelId?: string; channelName?: string; fromUsername?: string }) => void;
 
   // Reply
   setReplyingTo: (message: Message | null) => void;
@@ -76,6 +78,7 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
   searchResults: [],
   searchQuery: '',
   showSearch: false,
+  searchFilters: {},
   replyingTo: null,
 
   fetchMessages: async (channelId, before) => {
@@ -115,8 +118,8 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
   clearMessages: () => set({
     messages: [], hasMore: true, pinnedMessages: [], showPins: false,
     threadParent: null, threadReplies: [], showThread: false,
-    searchResults: [], searchQuery: '', showSearch: false, replyingTo: null,
-    typingUsers: new Map(),
+    searchResults: [], searchQuery: '', showSearch: false, searchFilters: {},
+    replyingTo: null, typingUsers: new Map(),
   }),
 
   sendMessage: async (channelId, content, replyToId) => {
@@ -250,8 +253,14 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
     set({ searchResults: results });
   },
 
-  toggleSearch: () => set((s) => ({ showSearch: !s.showSearch, showPins: false, showThread: false })),
-  clearSearch: () => set({ searchResults: [], searchQuery: '', showSearch: false }),
+  toggleSearch: (channelId?, channelName?) => set((s) => ({
+    showSearch: !s.showSearch,
+    showPins: false,
+    showThread: false,
+    searchFilters: !s.showSearch && channelId ? { channelId, channelName } : {},
+  })),
+  clearSearch: () => set({ searchResults: [], searchQuery: '', showSearch: false, searchFilters: {} }),
+  setSearchFilters: (filters) => set({ searchFilters: filters }),
 
   // Reply
   setReplyingTo: (message) => set({ replyingTo: message }),

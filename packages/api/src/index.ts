@@ -59,6 +59,9 @@ import { redis } from './lib/redis.js';
 import { loadPlugins, getLoadedPlugins } from './plugins/loader.js';
 import { db } from './database/connection.js';
 import { eventBus } from './lib/event-bus.js';
+import { initTypesense } from './lib/typesense.js';
+import { registerSearchListener } from './modules/search/search.listener.js';
+import { ensureCollections } from './modules/search/search.service.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -175,11 +178,14 @@ registerGalleryGateway();
 registerRouteLibraryGateway();
 registerWorkflowGateway();
 registerWorkflowListener();
+registerSearchListener();
 
 // Load plugins, connect Redis, and start server
 async function start() {
   await loadPlugins(app, eventBus, db);
   initApnProvider();
+  initTypesense();
+  await ensureCollections();
 
   try {
     await redis.connect();

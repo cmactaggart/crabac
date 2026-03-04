@@ -67,6 +67,7 @@ export function Home() {
         padding: '1rem',
         flexDirection: 'column',
         justifyContent: 'flex-start',
+        background: 'linear-gradient(to bottom, var(--bg-primary), color-mix(in srgb, var(--bg-primary), black 18%))',
       } : {
         minHeight: 'unset',
         padding: '2rem',

@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LogOut, Copy, Link2, Pencil, Trash2, PanelLeftClose, PanelLeft, UserPlus, Users, LogOut as LeaveIcon, Check, X, Clock, UserMinus, ArrowLeft, Flag, Ban, SmilePlus, Paperclip } from 'lucide-react';
+import { LogOut, Copy, Link2, Pencil, Trash2, PanelLeftClose, PanelLeft, UserPlus, Users, LogOut as LeaveIcon, Check, X, Clock, UserMinus, ArrowLeft, Flag, Ban, SmilePlus, Paperclip, Search } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { useDMStore } from '../stores/dm.js';
@@ -19,6 +19,7 @@ import { MessageEmbeds } from '../components/messages/MessageEmbeds.js';
 import { MessageAttachments } from '../components/messages/MessageAttachments.js';
 import { ReactionBar } from '../components/messages/ReactionBar.js';
 import { api } from '../lib/api.js';
+import { SearchPanel } from '../components/search/SearchPanel.js';
 import type { DirectMessage, Conversation, FriendshipStatus } from '@crabac/shared';
 
 export function DMView() {
@@ -36,6 +37,7 @@ export function DMView() {
     hasMore,
     typingUsers,
     dmUnreads,
+    showDMSearch,
     fetchConversations,
     fetchMessageRequests,
     fetchDMUnreads,
@@ -44,6 +46,8 @@ export function DMView() {
     sendMessage,
     sendMessageWithFiles,
     clearMessages,
+    toggleDMSearch,
+    clearDMSearch,
   } = useDMStore();
 
   useDMSocket(conversationId || null);
@@ -95,6 +99,13 @@ export function DMView() {
         ) : (
           <DMHeaderContent otherParticipant={otherParticipant} currentUserId={user?.id || ''} />
         )}
+        <button
+          onClick={() => toggleDMSearch(conversationId)}
+          style={{ background: 'none', border: 'none', color: showDMSearch ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', padding: '4px 8px', borderRadius: 4, flexShrink: 0 }}
+          title="Search"
+        >
+          <Search size={18} />
+        </button>
       </div>
 
       {/* Messages */}
@@ -123,6 +134,19 @@ export function DMView() {
 
       {/* Input */}
       <DMInput conversationId={conversationId} onSend={sendMessage} onSendWithFiles={sendMessageWithFiles} />
+    </div>
+  ) : null;
+
+  const chatWithSearch = chatContent ? (
+    <div style={{ display: 'flex', flex: 1, minWidth: 0, minHeight: 0 }}>
+      {chatContent}
+      {showDMSearch && (
+        <SearchPanel
+          mode="dm"
+          conversationId={conversationId}
+          onClose={clearDMSearch}
+        />
+      )}
     </div>
   ) : null;
 
@@ -181,7 +205,7 @@ export function DMView() {
             </button>
           </div>
         )}
-        {chatContent || (
+        {chatWithSearch || (
           <div style={styles.placeholder}>
             <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>
               Select a conversation to start messaging
@@ -1266,6 +1290,7 @@ const mobileLayout: React.CSSProperties = {
   bottom: 56,
   display: 'flex',
   overflow: 'hidden',
+  background: 'linear-gradient(to bottom, var(--bg-primary), color-mix(in srgb, var(--bg-primary), black 18%))',
 };
 
 const styles: Record<string, React.CSSProperties> = {
