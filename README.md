@@ -13,7 +13,7 @@ The platform is especially well-suited for outdoor activity communities (cycling
 
 [GitHub](https://github.com/cmactaggart/crabac) | [Bluesky](https://bsky.app/profile/crabac.bsky.social) | [bingo@crab.ac](mailto:bingo@crab.ac)
 
-![Screenshot: Space view with channels and chat](docs/screenshots/space-view.png)
+![Screenshot: Crabac promo shot](docs/screenshots/header.png)
 
 ---
 
