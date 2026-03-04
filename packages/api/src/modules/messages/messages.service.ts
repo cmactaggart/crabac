@@ -5,6 +5,7 @@ import { eventBus } from '../../lib/event-bus.js';
 import * as mentionsService from './mentions.service.js';
 import * as notificationsService from '../notifications/notifications.service.js';
 import * as searchService from '../search/search.service.js';
+import { getVisibleChannelIds, getMutedChannels } from '../channels/channels.service.js';
 
 // ─── Messages CRUD ───
 
@@ -267,7 +268,7 @@ export async function getThreadMessages(channelId: string, parentId: string, opt
 
 // ─── Search ───
 
-export async function searchMessages(spaceId: string, rawQuery: string, options: { channelId?: string; limit: number; before?: string }) {
+export async function searchMessages(spaceId: string, rawQuery: string, options: { channelId?: string; limit: number; before?: string; userId?: string; blockedUserIds?: string[] }) {
   // Parse operators: from:username, in:channel
   let searchText = rawQuery;
   let fromUsername: string | null = null;
@@ -285,6 +286,22 @@ export async function searchMessages(spaceId: string, rawQuery: string, options:
     searchText = searchText.replace(inMatch[0], '').trim();
   }
 
+  // Compute visible channel IDs for permission filtering (also excludes muted channels)
+  let allowedChannelIds: Set<string> | null = null;
+  if (options.userId) {
+    allowedChannelIds = await getVisibleChannelIds(spaceId, options.userId);
+    if (allowedChannelIds.size === 0) return [];
+
+    // Remove muted channels
+    const mutedIds = await getMutedChannels(spaceId, options.userId);
+    for (const id of mutedIds) {
+      allowedChannelIds.delete(id);
+    }
+    if (allowedChannelIds.size === 0) return [];
+  }
+
+  const blockedSet = new Set(options.blockedUserIds || []);
+
   // Try Typesense first
   try {
     const tsResults = await searchService.searchSpaceMessages(spaceId, searchText, {
@@ -296,37 +313,48 @@ export async function searchMessages(spaceId: string, rawQuery: string, options:
     });
 
     if (tsResults.length > 0) {
-      // Hydrate from MySQL by IDs to get full message format
-      const ids = tsResults.map((r) => r.id);
-      const rows = await db('messages')
-        .join('channels', 'messages.channel_id', 'channels.id')
-        .join('users', 'messages.author_id', 'users.id')
-        .whereIn('messages.id', ids)
-        .select(
-          'messages.*',
-          'users.username as author_username',
-          'users.display_name as author_display_name',
-          'users.avatar_url as author_avatar_url',
-          'users.base_color as author_base_color',
-          'users.accent_color as author_accent_color',
-          'channels.name as channel_name',
-        );
+      // Filter by channel permissions and blocked users
+      const permittedResults = tsResults.filter((r) => {
+        if (allowedChannelIds && !allowedChannelIds.has(r.channelId)) return false;
+        if (blockedSet.has(r.authorId)) return false;
+        return true;
+      });
 
-      // Preserve Typesense relevance order
-      const rowMap = new Map(rows.map((r: any) => [String(r.id), r]));
-      return ids
-        .map((id) => rowMap.get(id))
-        .filter(Boolean)
-        .map((r: any) => ({
-          ...formatMessage(r, [], 0, []),
-          channelName: r.channel_name,
-        }));
+      if (permittedResults.length > 0) {
+        // Hydrate from MySQL by IDs to get full message format
+        const ids = permittedResults.map((r) => r.id);
+        const rows = await db('messages')
+          .join('channels', 'messages.channel_id', 'channels.id')
+          .join('users', 'messages.author_id', 'users.id')
+          .whereIn('messages.id', ids)
+          .select(
+            'messages.*',
+            'users.username as author_username',
+            'users.display_name as author_display_name',
+            'users.avatar_url as author_avatar_url',
+            'users.base_color as author_base_color',
+            'users.accent_color as author_accent_color',
+            'channels.name as channel_name',
+          );
+
+        // Preserve Typesense relevance order
+        const rowMap = new Map(rows.map((r: any) => [String(r.id), r]));
+        return ids
+          .map((id) => rowMap.get(id))
+          .filter(Boolean)
+          .map((r: any) => ({
+            ...formatMessage(r, [], 0, []),
+            channelName: r.channel_name,
+          }));
+      }
     }
   } catch {
     // Typesense unavailable — fall through to MySQL
   }
 
   // MySQL fallback
+  const allowedIds = allowedChannelIds ? [...allowedChannelIds] : null;
+
   let q = db('messages')
     .join('channels', 'messages.channel_id', 'channels.id')
     .join('users', 'messages.author_id', 'users.id')
@@ -343,6 +371,8 @@ export async function searchMessages(spaceId: string, rawQuery: string, options:
     .orderBy('messages.id', 'desc')
     .limit(options.limit);
 
+  if (allowedIds) q = q.whereIn('messages.channel_id', allowedIds);
+  if (options.blockedUserIds?.length) q = q.whereNotIn('messages.author_id', options.blockedUserIds);
   if (searchText) {
     q = q.whereRaw('MATCH(messages.content) AGAINST(? IN NATURAL LANGUAGE MODE)', [searchText]);
   }
@@ -371,6 +401,8 @@ export async function searchMessages(spaceId: string, rawQuery: string, options:
       .orderBy('messages.id', 'desc')
       .limit(options.limit);
 
+    if (allowedIds) fallback = fallback.whereIn('messages.channel_id', allowedIds);
+    if (options.blockedUserIds?.length) fallback = fallback.whereNotIn('messages.author_id', options.blockedUserIds);
     if (fromUsername) fallback = fallback.where('users.username', fromUsername);
     if (inChannel) fallback = fallback.where('channels.name', inChannel);
     if (options.channelId) fallback = fallback.where('messages.channel_id', options.channelId);

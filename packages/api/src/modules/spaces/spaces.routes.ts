@@ -12,6 +12,7 @@ import { hasPermission } from '@crabac/shared';
 import { db } from '../../database/connection.js';
 import * as spacesService from './spaces.service.js';
 import * as messagesService from '../messages/messages.service.js';
+import * as blocksService from '../users/blocks.service.js';
 import * as spaceSettingsService from './space-settings.service.js';
 import * as spaceAdminSettingsService from './space-admin-settings.service.js';
 import * as reportsService from '../reports/reports.service.js';
@@ -274,10 +275,13 @@ spacesRoutes.get(
       if (!q || typeof q !== 'string' || q.trim().length === 0) {
         return res.json([]);
       }
+      const blockedUserIds = await blocksService.getBlockedUserIds(req.user!.userId);
       const results = await messagesService.searchMessages(req.params.spaceId, q.trim(), {
         channelId,
         before,
         limit: Math.min(parseInt(limit) || 25, 50),
+        userId: req.user!.userId,
+        blockedUserIds,
       });
       res.json(results);
     } catch (err) {

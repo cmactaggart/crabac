@@ -91,6 +91,38 @@ export async function listChannelsForUser(spaceId: string, userId: string, cache
   return visible;
 }
 
+/**
+ * Return the set of channel IDs a user is allowed to view in a space.
+ * Used by search to filter results to only permitted channels.
+ */
+export async function getVisibleChannelIds(spaceId: string, userId: string): Promise<Set<string>> {
+  const spacePerms = await computePermissions(spaceId, userId);
+  const isAdmin = hasPermission(spacePerms, Permissions.ADMINISTRATOR);
+  const canViewAdmin = hasPermission(spacePerms, Permissions.VIEW_ADMIN_CHANNEL);
+
+  const allChannels = await db('channels')
+    .where('space_id', spaceId)
+    .select('id', 'is_admin');
+
+  const ids = new Set<string>();
+
+  for (const ch of allChannels) {
+    if (ch.is_admin && !canViewAdmin && !isAdmin) continue;
+
+    if (isAdmin) {
+      ids.add(String(ch.id));
+      continue;
+    }
+
+    const chanPerms = await computeChannelPermissions(spaceId, ch.id, userId);
+    if (hasPermission(chanPerms, Permissions.VIEW_CHANNELS)) {
+      ids.add(String(ch.id));
+    }
+  }
+
+  return ids;
+}
+
 export async function getChannel(channelId: string) {
   const channel = await db('channels').where('id', channelId).first();
   if (!channel) throw new NotFoundError('Channel');
