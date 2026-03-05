@@ -47,6 +47,10 @@ export async function register(email: string, username: string, displayName: str
     throw new ConflictError('Username already taken');
   }
 
+  // Cross-check against space slugs
+  const slugConflict = await db('spaces').whereRaw('LOWER(slug) = LOWER(?)', [username]).first();
+  if (slugConflict) throw new ConflictError('Username already taken');
+
   const id = snowflake.generate();
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
   const colorCombo = COLOR_PALETTE[Math.floor(Math.random() * COLOR_PALETTE.length)];

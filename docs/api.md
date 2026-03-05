@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.8.0
+## API Version 0.9.0
 
 Base URL: `https://app.crab.ac/api`
 
@@ -57,6 +57,7 @@ Access control uses a bitfield RBAC system. Permissions are assigned to roles, a
 | `MANAGE_BLOG` | Create/edit/delete blog posts and upload images |
 | `MANAGE_NEWSLETTER` | Create/edit/delete newsletters, view analytics |
 | `MANAGE_WORKFLOWS` | Create/edit/delete workflows, commands, and card templates |
+| `MANAGE_SOCIAL` | Post to the social feed on behalf of a space |
 
 ### Ban Enforcement
 
@@ -83,6 +84,8 @@ Create a new account.
 | `password` | string | yes | 8-128 chars |
 
 **Response:** `{ accessToken, refreshToken, user }`
+
+Username must not conflict with any existing space slug (case-insensitive).
 
 ### POST /auth/login
 
@@ -261,6 +264,45 @@ Search users by username or display name. Requires auth.
 
 Look up a user by username. Requires auth. Returns the user object with an additional `canViewProfile` boolean indicating whether the requesting user can see this profile's content (based on visibility settings and friendship status).
 
+### GET /users/profiles/:handle
+
+Resolve a profile handle to either a user or a space. Looks up by username first, then by space slug (where `socialEnabled = true`). Requires auth.
+
+**Response (user):**
+```json
+{
+  "type": "user",
+  "id": "...",
+  "username": "...",
+  "displayName": "...",
+  "avatarUrl": "...",
+  "baseColor": "...",
+  "accentColor": "...",
+  "canViewProfile": true
+}
+```
+
+**Response (space):**
+```json
+{
+  "type": "space",
+  "id": "...",
+  "name": "...",
+  "slug": "...",
+  "description": "...",
+  "iconUrl": "...",
+  "memberCount": 42,
+  "baseColor": "...",
+  "accentColor": "..."
+}
+```
+
+### GET /users/me/managed-social-spaces
+
+List spaces where the current user has `MANAGE_SOCIAL` permission and `socialEnabled` is true. Used for the identity switcher.
+
+**Response:** Array of `{ id, name, slug, iconUrl, baseColor, accentColor }`
+
 ### GET /users/:userId
 
 Get public profile for a user. Requires auth.
@@ -291,7 +333,7 @@ Unblock a user.
 
 ### POST /spaces
 
-Create a new space. Requires auth.
+Create a new space. Requires auth. Slug must not conflict with any existing username (case-insensitive).
 
 **Body:**
 | Field | Type | Required |
@@ -380,6 +422,7 @@ Get space admin settings. Requires `MANAGE_SPACE`.
   "allowPublicNewsletter": false,
   "allowPublicNewsletterSubscription": false,
   "newsletterTrackingEnabled": true,
+  "socialEnabled": false,
   "allowAnonymousBrowsing": false,
   "calendarEnabled": false,
   "blogEnabled": false,
@@ -973,6 +1016,8 @@ Create an event. Requires `MANAGE_CALENDAR`.
 | `activityType` | string \| null | no | `ride`, `run`, or `walk` |
 | `routeId` | string \| null | no | Link to a route library item |
 
+**Side effects:** Creating an event sends a `new_event` notification to all space members (excluding the creator) and triggers push notifications. If the space has `socialEnabled = true`, an auto-generated social post is created on behalf of the space with `metadata: { type: 'calendar_event', eventId, spaceId }`.
+
 #### PATCH /spaces/:spaceId/calendar/events/:id
 
 Update an event. Requires `MANAGE_CALENDAR`.
@@ -1425,7 +1470,7 @@ One-way follows for public profiles. Friends count as implicit bidirectional fol
 
 ### GET /follows/feed
 
-Get an aggregated feed of posts from followed users, friends, and self.
+Get an aggregated feed of posts from followed users, friends, self, and member spaces with social enabled.
 
 **Query:**
 | Param | Type | Default | Description |
@@ -1437,8 +1482,21 @@ Get an aggregated feed of posts from followed users, friends, and self.
 - Own posts: all visibilities
 - Friends' posts: `public` and `friends`
 - Followed (non-friend) posts: `public` only
+- Space posts: always `public`, included for all space members
 
-**Response:** Array of UserPost objects with author info, attachments, tags, reactions, comment counts, and repost data.
+**Response:** Array of UserPost objects with author info, attachments, tags, reactions, comment counts, repost data, and optional `spaceAuthor` for space-authored posts.
+
+### GET /follows/spaces/:spaceId/posts
+
+List social posts authored by a specific space. Public. Requires the space to have `socialEnabled = true`.
+
+**Query:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `before` | string | - | Cursor for keyset pagination (post ID) |
+| `limit` | number | 20 | Max 50 |
+
+**Response:** Array of UserPost objects with `spaceAuthor` populated.
 
 ### GET /follows/status/:userId
 
@@ -1645,7 +1703,7 @@ Get summary for another user's collections. Filtered by visibility.
 
 ## User Posts
 
-Social posts that live on a user's profile. Posts support text, file attachments, tagged friends, visibility controls, reactions, comments, and reposts. All endpoints require auth.
+Social posts that live on a user's or space's profile. Posts support text, file attachments, tagged friends, visibility controls, reactions, comments, and reposts. Posts can optionally be authored on behalf of a space (requires `MANAGE_SOCIAL` permission and `socialEnabled` on the space). Space-authored posts are always `public` visibility. All endpoints require auth.
 
 ### Own Posts
 
@@ -1659,7 +1717,7 @@ List own posts.
 | `before` | string | - |
 | `limit` | number | 20 |
 
-**Response:** Array of UserPost objects with attachments, tags, reactions, comment counts, and repost data.
+**Response:** Array of UserPost objects with attachments, tags, reactions, comment counts, repost data, and optional `spaceId`, `metadata`, and `spaceAuthor` fields for space-authored posts.
 
 #### POST /users/me/posts
 
@@ -1669,10 +1727,11 @@ Create a post. Multipart form data with optional `files` field (max 20).
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `body` | string | no | Post text (required if no attachments) |
-| `visibility` | string | no | `public`, `friends`, or `private` |
+| `visibility` | string | no | `public`, `friends`, or `private` (forced to `public` for space posts) |
 | `taggedUserIds` | string | no | JSON array of user IDs to tag |
 | `existingGalleryItemIds` | string | no | JSON array of gallery item IDs to attach |
 | `existingRouteItemIds` | string | no | JSON array of route item IDs to attach |
+| `spaceId` | string | no | Space ID to post on behalf of. Requires `MANAGE_SOCIAL` permission and `socialEnabled` on the space. |
 
 #### PATCH /users/me/posts/:postId
 
@@ -1775,7 +1834,9 @@ Remove a reaction from a comment.
 
 List notifications (paginated). Requires auth.
 
-Notification types: `mention`, `reply`, `reaction`, `dm`, `dm_request`, `friend_request`, `portal_invite`, `event_cancelled`, `post_tag`, `post_comment`.
+Notification types: `mention`, `reply`, `reaction`, `dm`, `dm_request`, `friend_request`, `portal_invite`, `event_cancelled`, `new_event`, `post_tag`, `post_comment`.
+
+The `new_event` notification is sent to all space members when a calendar event is created. It includes `spaceName`, `eventName`, `eventDate`, `eventTime`, `spaceId`, and `eventId` in the notification data. It also triggers a push notification and deep links to the event in the space calendar.
 
 ### GET /notifications/unread-count
 

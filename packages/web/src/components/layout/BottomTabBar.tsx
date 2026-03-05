@@ -20,7 +20,7 @@ export function BottomTabBar() {
   ];
 
   const activeTab = tabs.find((t) => location.pathname === t.path || (t.path === '/dm' && location.pathname.startsWith('/dm')))?.path
-    || (location.pathname.startsWith('/space') ? null : '/');
+    || (location.pathname.startsWith('/space') || location.pathname.startsWith('/p/') ? null : '/');
 
   return (
     <div style={styles.bar}>

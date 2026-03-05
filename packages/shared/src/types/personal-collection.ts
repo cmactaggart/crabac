@@ -107,7 +107,9 @@ export interface UserCollectionsSummary {
 export interface UserPost {
   id: string;
   userId: string;
+  spaceId?: string | null;
   body: string | null;
+  metadata?: any;
   visibility: PersonalVisibility;
   attachments: UserPostAttachment[];
   tags: UserPostTag[];
@@ -124,6 +126,14 @@ export interface UserPost {
     baseColor?: string | null;
     accentColor?: string | null;
   };
+  spaceAuthor?: {
+    id: string;
+    name: string;
+    slug: string;
+    iconUrl: string | null;
+    baseColor?: string | null;
+    accentColor?: string | null;
+  } | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -258,35 +258,59 @@ export async function getFeed(
   const allIds = new Set([userId, ...explicitFollowIds, ...friendIds]);
   const allIdsArr = [...allIds];
 
-  if (allIdsArr.length === 0) return [];
+  // Get spaces with social_enabled where user is a member
+  const memberSpaces = await db('space_members')
+    .join('space_settings', 'space_members.space_id', 'space_settings.space_id')
+    .where('space_members.user_id', userId)
+    .where('space_settings.social_enabled', true)
+    .select('space_members.space_id');
+  const memberSpaceIds = memberSpaces.map((r: any) => String(r.space_id));
+
+  if (allIdsArr.length === 0 && memberSpaceIds.length === 0) return [];
 
   // Build query with visibility filtering per user relationship
   // Own posts: all visibilities
   // Friends' posts: public + friends
   // Followed (non-friend) posts: public only
+  // Space posts: always included (public)
   let query = db('user_posts as up')
     .join('users', 'up.user_id', 'users.id')
-    .whereIn('up.user_id', allIdsArr)
+    .leftJoin('spaces', 'up.space_id', 'spaces.id')
+    .leftJoin('space_settings as ss', 'up.space_id', 'ss.space_id')
     .where(function () {
-      // Own posts: any visibility
+      // User posts (non-space)
       this.where(function () {
-        this.where('up.user_id', userId);
+        this.whereNull('up.space_id')
+          .where(function () {
+            // Own posts: any visibility
+            this.where(function () {
+              this.where('up.user_id', userId);
+            })
+              // Friends' posts: public + friends
+              .orWhere(function () {
+                if (friendIds.length > 0) {
+                  this.whereIn('up.user_id', friendIds)
+                    .whereIn('up.visibility', ['public', 'friends']);
+                } else {
+                  this.whereRaw('1=0');
+                }
+              })
+              // Followed non-friends: public only
+              .orWhere(function () {
+                const followOnlyIds = explicitFollowIds.filter((id) => !friendIdSet.has(id));
+                if (followOnlyIds.length > 0) {
+                  this.whereIn('up.user_id', followOnlyIds)
+                    .where('up.visibility', 'public');
+                } else {
+                  this.whereRaw('1=0');
+                }
+              });
+          });
       })
-        // Friends' posts: public + friends
+        // Space posts from member spaces
         .orWhere(function () {
-          if (friendIds.length > 0) {
-            this.whereIn('up.user_id', friendIds)
-              .whereIn('up.visibility', ['public', 'friends']);
-          } else {
-            this.whereRaw('1=0'); // no friends
-          }
-        })
-        // Followed non-friends: public only
-        .orWhere(function () {
-          const followOnlyIds = explicitFollowIds.filter((id) => !friendIdSet.has(id));
-          if (followOnlyIds.length > 0) {
-            this.whereIn('up.user_id', followOnlyIds)
-              .where('up.visibility', 'public');
+          if (memberSpaceIds.length > 0) {
+            this.whereIn('up.space_id', memberSpaceIds);
           } else {
             this.whereRaw('1=0');
           }
@@ -299,6 +323,11 @@ export async function getFeed(
       'users.avatar_url as author_avatar_url',
       'users.base_color as author_base_color',
       'users.accent_color as author_accent_color',
+      'spaces.name as space_name',
+      'spaces.slug as space_slug',
+      'spaces.icon_url as space_icon_url',
+      'ss.base_color as space_base_color',
+      'ss.accent_color as space_accent_color',
     )
     .orderBy('up.id', 'desc')
     .limit(options.limit);
@@ -413,6 +442,8 @@ async function hydrateReposts(rows: any[]) {
 
   const originals = await db('user_posts as up')
     .join('users', 'up.user_id', 'users.id')
+    .leftJoin('spaces', 'up.space_id', 'spaces.id')
+    .leftJoin('space_settings as ss', 'up.space_id', 'ss.space_id')
     .whereIn('up.id', uniqueIds)
     .select(
       'up.*',
@@ -421,6 +452,11 @@ async function hydrateReposts(rows: any[]) {
       'users.avatar_url as author_avatar_url',
       'users.base_color as author_base_color',
       'users.accent_color as author_accent_color',
+      'spaces.name as space_name',
+      'spaces.slug as space_slug',
+      'spaces.icon_url as space_icon_url',
+      'ss.base_color as space_base_color',
+      'ss.accent_color as space_accent_color',
     );
 
   const originalIds = originals.map((o: any) => String(o.id));
@@ -481,10 +517,19 @@ function formatPost(
   commentCount: number = 0,
   repostOf: any = null,
 ) {
-  return {
+  const isSpacePost = !!row.space_id;
+
+  let metadata = row.metadata;
+  if (typeof metadata === 'string') {
+    try { metadata = JSON.parse(metadata); } catch { metadata = null; }
+  }
+
+  const post: any = {
     id: String(row.id),
     userId: String(row.user_id),
+    spaceId: row.space_id ? String(row.space_id) : null,
     body: row.body,
+    metadata: metadata || null,
     visibility: row.visibility,
     attachments: attachments.map(formatPostAttachment),
     tags: tags.map((t: any) => ({
@@ -497,17 +542,40 @@ function formatPost(
     commentCount,
     repostOfId: row.repost_of_id ? String(row.repost_of_id) : null,
     repostOf,
-    author: {
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+
+  if (isSpacePost && row.space_name) {
+    post.author = {
+      id: String(row.space_id),
+      username: row.space_slug,
+      displayName: row.space_name,
+      avatarUrl: row.space_icon_url || null,
+      baseColor: row.space_base_color || null,
+      accentColor: row.space_accent_color || null,
+    };
+    post.spaceAuthor = {
+      id: String(row.space_id),
+      name: row.space_name,
+      slug: row.space_slug,
+      iconUrl: row.space_icon_url || null,
+      baseColor: row.space_base_color || null,
+      accentColor: row.space_accent_color || null,
+    };
+  } else {
+    post.author = {
       id: String(row.user_id),
       username: row.author_username,
       displayName: row.author_display_name,
       avatarUrl: row.author_avatar_url,
       baseColor: row.author_base_color || null,
       accentColor: row.author_accent_color || null,
-    },
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
+    };
+    post.spaceAuthor = null;
+  }
+
+  return post;
 }
 
 function formatPostAttachment(att: any) {

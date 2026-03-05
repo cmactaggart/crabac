@@ -13,6 +13,7 @@ import { SpaceSidebar } from '../components/layout/SpaceSidebar.js';
 import { ProfileSidebar } from '../components/layout/ProfileSidebar.js';
 import { PostCard } from '../components/posts/PostCard.js';
 import { ReportModal } from '../components/moderation/ReportModal.js';
+import { IdentitySwitcher } from '../components/common/IdentitySwitcher.js';
 import { api } from '../lib/api.js';
 import type { UserPost } from '@crabac/shared';
 
@@ -248,6 +249,9 @@ export function FeedPage() {
   if (isMobile) {
     return (
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 56, overflowY: 'auto', padding: '1rem', background: 'linear-gradient(to bottom, var(--bg-primary), color-mix(in srgb, var(--bg-primary), black 18%))' }}>
+        <div style={{ marginBottom: 12 }}>
+          <IdentitySwitcher />
+        </div>
         <FeedView />
       </div>
     );

@@ -1,6 +1,7 @@
 import { db } from '../../database/connection.js';
 import { snowflake } from '../_shared.js';
 import { NotFoundError } from '../../lib/errors.js';
+import { eventBus } from '../../lib/event-bus.js';
 import type { RecurrenceRule } from '@crabac/shared';
 
 // ─── Categories ───
@@ -139,7 +140,11 @@ export async function createEvent(
     route_id: data.routeId || null,
     image_url: data.imageUrl || null,
   });
-  return getEvent(id);
+
+  const event = await getEvent(id);
+  eventBus.emit('calendar.event.created', { event, spaceId });
+
+  return event;
 }
 
 export async function updateEvent(

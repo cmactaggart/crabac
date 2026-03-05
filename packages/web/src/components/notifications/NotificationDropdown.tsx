@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCheck, AtSign, Reply, Zap, Tag, Users, Mail, CalendarX, MessageCircle } from 'lucide-react';
+import { CheckCheck, AtSign, Reply, Zap, Tag, Users, Mail, CalendarX, CalendarPlus, MessageCircle } from 'lucide-react';
 import { useNotificationsStore } from '../../stores/notifications.js';
 import { Avatar } from '../common/Avatar.js';
 import type { Notification, MentionNotificationData, ReplyNotificationData, PostCommentNotificationData, PostTagNotificationData } from '@crabac/shared';
@@ -47,6 +47,13 @@ export function NotificationDropdown({ onClose }: Props) {
     } else if (notification.type === 'post_tag') {
       const d = data as PostTagNotificationData;
       navigate(`/p/${d.taggedByUsername}?post=${d.postId}`);
+      onClose();
+    } else if (notification.type === 'new_event' && data.spaceId) {
+      if (data.postId && data.spaceSlug) {
+        navigate(`/p/${data.spaceSlug}?post=${data.postId}`);
+      } else {
+        navigate(`/space/${data.spaceId}?tab=calendar&event=${data.eventId}`);
+      }
       onClose();
     } else if (data.spaceId && data.channelId) {
       navigate(`/space/${data.spaceId}/channel/${data.channelId}`);
@@ -141,6 +148,12 @@ function formatTitle(n: Notification): string {
       return `${data.fromDisplayName} sent you a message`;
     case 'event_cancelled':
       return `${data.eventName} was cancelled`;
+    case 'new_event': {
+      let title = `${data.spaceName || 'A space'} has posted a new event: ${data.eventName || 'an event'}`;
+      if (data.eventDate) title += ` ${data.eventDate}`;
+      if (data.eventTime) title += ` ${data.eventTime}`;
+      return title;
+    }
     case 'post_tag':
       return `${data.taggedByDisplayName} tagged you in a post`;
     case 'post_comment':
@@ -174,6 +187,8 @@ function getNotificationAvatar(n: Notification): { src: string | null; name: str
       const d = data as PostCommentNotificationData;
       return { src: d.commenterAvatarUrl || null, name: d.commenterDisplayName || '?' };
     }
+    case 'new_event':
+      return { src: data.spaceIconUrl || null, name: data.spaceName || '?' };
     default:
       return { src: null, name: '' };
   }
@@ -189,6 +204,7 @@ function getNotificationIcon(type: string) {
     case 'dm_request': return <Mail size={16} style={{ color: 'var(--accent)' }} />;
     case 'post_comment': return <MessageCircle size={16} style={{ color: 'var(--accent)' }} />;
     case 'event_cancelled': return <CalendarX size={16} style={{ color: 'var(--danger)' }} />;
+    case 'new_event': return <CalendarPlus size={16} style={{ color: 'var(--accent)' }} />;
     default: return null;
   }
 }

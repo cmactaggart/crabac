@@ -2,8 +2,9 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import { authenticate } from '../auth/auth.middleware.js';
 import * as followsService from './follows.service.js';
 import { searchSocialPosts } from '../search/search.service.js';
-import { getPost as getPostById } from '../personal-collections/user-posts.service.js';
+import { getPost as getPostById, listSpacePosts } from '../personal-collections/user-posts.service.js';
 import { resolveVisibleLevels } from '../personal-collections/privacy.service.js';
+import { validation } from '@crabac/shared';
 
 export const followsRoutes = Router();
 
@@ -25,7 +26,7 @@ followsRoutes.get(
   },
 );
 
-// Search public social posts (full-text + hashtag)
+// Search social posts (full-text + hashtag), respecting visibility
 followsRoutes.get(
   '/feed/search',
   async (req: Request, res: Response, next: NextFunction) => {
@@ -34,21 +35,49 @@ followsRoutes.get(
       const hashtag = req.query.hashtag as string | undefined;
       const before = req.query.before as string | undefined;
       const limit = Math.min(Number(req.query.limit) || 25, 50);
+      const viewerId = req.user!.userId;
 
       if (!q && !hashtag) {
         res.json([]);
         return;
       }
 
-      const hits = await searchSocialPosts(q || '*', { hashtag, before, limit });
+      // Search with all non-private visibility levels (we'll filter per-author below)
+      const hits = await searchSocialPosts(q || '*', {
+        hashtag,
+        before,
+        limit: limit * 2, // fetch extra to account for post-filtering
+        visibilityLevels: ['public', 'friends', 'spaces'],
+      });
       if (hits.length === 0) {
+        res.json([]);
+        return;
+      }
+
+      // Group hits by author to batch-resolve visibility
+      const authorIds = [...new Set(hits.map((h) => h.userId))];
+      const visibilityByAuthor = new Map<string, Set<string>>();
+      await Promise.all(
+        authorIds.map(async (authorId) => {
+          const levels = await resolveVisibleLevels(authorId, viewerId);
+          visibilityByAuthor.set(authorId, levels);
+        }),
+      );
+
+      // Filter hits by what the viewer can actually see
+      const visibleHits = hits.filter((hit) => {
+        const allowed = visibilityByAuthor.get(hit.userId);
+        return allowed && allowed.has(hit.visibility);
+      }).slice(0, limit);
+
+      if (visibleHits.length === 0) {
         res.json([]);
         return;
       }
 
       // Hydrate full post objects
       const posts = await Promise.all(
-        hits.map(async (hit) => {
+        visibleHits.map(async (hit) => {
           try {
             return await getPostById(hit.id);
           } catch {
@@ -71,6 +100,12 @@ followsRoutes.get(
     try {
       const post = await getPostById(req.params.postId);
 
+      // Space posts are always public
+      if (post.spaceId) {
+        res.json(post);
+        return;
+      }
+
       // Check visibility
       const visibleLevels = await resolveVisibleLevels(post.userId, req.user!.userId);
       if (!visibleLevels.has(post.visibility as any)) {
@@ -79,6 +114,23 @@ followsRoutes.get(
       }
 
       res.json(post);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Get posts for a space's social profile
+followsRoutes.get(
+  '/spaces/:spaceId/posts',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const query = validation.userPostsQuerySchema.parse(req.query);
+      const posts = await listSpacePosts(req.params.spaceId, {
+        before: query.before,
+        limit: query.limit,
+      });
+      res.json(posts);
     } catch (err) {
       next(err);
     }

@@ -61,6 +61,7 @@ import { db } from './database/connection.js';
 import { eventBus } from './lib/event-bus.js';
 import { initTypesense } from './lib/typesense.js';
 import { registerSearchListener } from './modules/search/search.listener.js';
+import { registerCalendarListener } from './modules/calendar/calendar.listener.js';
 import { ensureCollections } from './modules/search/search.service.js';
 
 const app = express();
@@ -179,6 +180,7 @@ registerRouteLibraryGateway();
 registerWorkflowGateway();
 registerWorkflowListener();
 registerSearchListener();
+registerCalendarListener();
 
 // Load plugins, connect Redis, and start server
 async function start() {

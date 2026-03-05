@@ -9,6 +9,10 @@ export async function createSpace(userId: string, data: { name: string; slug: st
   const existing = await db('spaces').where('slug', data.slug).first();
   if (existing) throw new ConflictError('Slug already taken');
 
+  // Cross-check against usernames
+  const usernameConflict = await db('users').whereRaw('LOWER(username) = LOWER(?)', [data.slug]).first();
+  if (usernameConflict) throw new ConflictError('Slug already taken');
+
   const spaceId = snowflake.generate();
 
   await db.transaction(async (trx) => {
@@ -96,7 +100,7 @@ export async function listUserSpaces(userId: string) {
     .join('space_members', 'spaces.id', 'space_members.space_id')
     .leftJoin('space_settings', 'spaces.id', 'space_settings.space_id')
     .where('space_members.user_id', userId)
-    .select('spaces.*', 'space_settings.calendar_enabled', 'space_settings.blog_enabled', 'space_settings.newsletter_enabled', 'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color', 'space_settings.public_theme');
+    .select('spaces.*', 'space_settings.calendar_enabled', 'space_settings.blog_enabled', 'space_settings.newsletter_enabled', 'space_settings.social_enabled', 'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color', 'space_settings.public_theme');
 
   return spaces.map(formatSpace);
 }
@@ -105,7 +109,7 @@ export async function getSpace(spaceId: string) {
   const space = await db('spaces')
     .leftJoin('space_settings', 'spaces.id', 'space_settings.space_id')
     .where('spaces.id', spaceId)
-    .select('spaces.*', 'space_settings.calendar_enabled', 'space_settings.blog_enabled', 'space_settings.newsletter_enabled', 'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color', 'space_settings.public_theme')
+    .select('spaces.*', 'space_settings.calendar_enabled', 'space_settings.blog_enabled', 'space_settings.newsletter_enabled', 'space_settings.social_enabled', 'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color', 'space_settings.public_theme')
     .first();
   if (!space) throw new NotFoundError('Space');
   return formatSpace(space);
@@ -115,7 +119,7 @@ export async function getSpaceBySlug(slug: string) {
   const space = await db('spaces')
     .leftJoin('space_settings', 'spaces.id', 'space_settings.space_id')
     .where('spaces.slug', slug)
-    .select('spaces.*', 'space_settings.calendar_enabled', 'space_settings.blog_enabled', 'space_settings.newsletter_enabled', 'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color', 'space_settings.public_theme')
+    .select('spaces.*', 'space_settings.calendar_enabled', 'space_settings.blog_enabled', 'space_settings.newsletter_enabled', 'space_settings.social_enabled', 'space_settings.is_public', 'space_settings.base_color', 'space_settings.accent_color', 'space_settings.text_color', 'space_settings.public_theme')
     .first();
   if (!space) throw new NotFoundError('Space');
   return formatSpace(space);
@@ -623,6 +627,7 @@ function formatSpace(row: any) {
     calendarEnabled: !!row.calendar_enabled,
     blogEnabled: !!row.blog_enabled,
     newsletterEnabled: !!row.newsletter_enabled,
+    socialEnabled: !!row.social_enabled,
     isPublic: !!row.is_public,
     baseColor: row.base_color || null,
     accentColor: row.accent_color || null,

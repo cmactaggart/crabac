@@ -5,6 +5,7 @@ import { Avatar } from '../common/Avatar.js';
 import { EmojiPicker } from '../messages/EmojiPicker.js';
 import { ShareToSpacePicker } from '../common/ShareToSpacePicker.js';
 import { SpaceLinkEmbed, extractSpaceLinks } from '../spaces/SpaceLinkEmbed.js';
+import { EventPostCard } from './EventPostCard.js';
 import { usePersonalCollectionsStore } from '../../stores/personalCollections.js';
 import { useFollowsStore } from '../../stores/follows.js';
 import type { UserPost, UserPostComment, PersonalVisibility } from '@crabac/shared';
@@ -291,8 +292,8 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
     // Don't navigate if clicking on interactive elements
     const target = e.target as HTMLElement;
     if (target.closest('button, a, input, textarea, select, [role="button"]')) return;
-    // Don't navigate if clicking on clickable spans (mentions, hashtags, links)
-    if (target.closest('span[style*="cursor: pointer"], span[style*="cursor:pointer"]')) return;
+    // Don't navigate if clicking on clickable elements (mentions, hashtags, links, author names/avatars)
+    if (target.closest('[style*="cursor: pointer"], [style*="cursor:pointer"]')) return;
     navigate(postDetailUrl);
   };
 
@@ -480,6 +481,11 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
           <SpaceLinkEmbed key={ref.key} spaceId={ref.type === 'id' ? ref.value : undefined} spaceSlug={ref.type === 'slug' ? ref.value : undefined} />
         ));
       })()}
+
+      {/* Event post card */}
+      {post.metadata?.type === 'calendar_event' && post.metadata.eventId && post.metadata.spaceId && (
+        <EventPostCard eventId={post.metadata.eventId} spaceId={post.metadata.spaceId} />
+      )}
 
       {/* Reaction chips */}
       {post.reactions && post.reactions.length > 0 && (

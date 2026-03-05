@@ -30,6 +30,12 @@ function formatNotificationForPush(notification: any): { title: string; body: st
       return { title: actor, body: 'tagged you in a post' };
     case 'post_comment':
       return { title: actor, body: d.commentPreview || 'commented on your post' };
+    case 'new_event': {
+      let eventBody = `${d.spaceName || 'A space'} has posted a new event: ${d.eventName || 'an event'}`;
+      if (d.eventDate) eventBody += ` ${d.eventDate}`;
+      if (d.eventTime) eventBody += ` ${d.eventTime}`;
+      return { title: d.spaceName || 'New Event', body: eventBody };
+    }
     default:
       return { title: 'crab.ac', body: `${actor} sent you a notification` };
   }
@@ -54,11 +60,16 @@ export function registerNotificationGateway() {
     if (d.channelId) pushData.channelId = d.channelId;
     if (d.messageId) pushData.messageId = d.messageId;
     if (d.conversationId) pushData.conversationId = d.conversationId;
+    if (d.eventId) pushData.eventId = d.eventId;
 
     // Resolve actor avatar URL for rich notifications
     const actorUserId = d.fromUserId || d.taggedByUserId || d.commenterUserId;
     const actorUsername = d.authorUsername || d.repliedByUsername || d.reactedByUsername || d.fromUsername;
-    if (actorUserId) {
+    if (notification.type === 'new_event' && d.spaceId) {
+      // Use space icon for event notifications
+      const space = await db('spaces').where('id', d.spaceId).select('icon_url').first();
+      if (space?.icon_url) pushData.avatarUrl = `${config.apiUrl}${space.icon_url}`;
+    } else if (actorUserId) {
       const actor = await db('users').where('id', actorUserId).select('avatar_url').first();
       if (actor?.avatar_url) pushData.avatarUrl = `${config.apiUrl}${actor.avatar_url}`;
     } else if (actorUsername) {

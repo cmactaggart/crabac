@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { LogOut, Pencil } from 'lucide-react';
 import { Avatar } from '../common/Avatar.js';
 import { UserSettingsModal } from '../common/UserSettingsModal.js';
+import { IdentitySwitcher } from '../common/IdentitySwitcher.js';
 
 interface Props {
   avatarUrl: string | null;
@@ -71,6 +72,7 @@ export function ProfileSidebar({
       </div>
       {onLogout && (
         <div style={styles.footer}>
+          <IdentitySwitcher />
           <button onClick={onLogout} style={styles.logoutBtn}>
             <LogOut size={14} />
             Log Out
@@ -129,7 +131,9 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0.75rem 1rem',
     borderTop: '1px solid var(--border)',
     display: 'flex',
-    justifyContent: 'center',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 8,
   },
   editBtn: {
     display: 'flex',

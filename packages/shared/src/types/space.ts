@@ -65,6 +65,7 @@ export interface SpaceAdminSettings {
   allowPublicNewsletter: boolean;
   allowPublicNewsletterSubscription: boolean;
   newsletterTrackingEnabled: boolean;
+  socialEnabled: boolean;
   isPublic: boolean;
   requireVerifiedEmail: boolean;
   isFeatured: boolean;

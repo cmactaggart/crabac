@@ -5,7 +5,7 @@
 import 'dotenv/config';
 import { db } from '../database/connection.js';
 import { initTypesense, getTypesenseClient } from '../lib/typesense.js';
-import { ensureCollections } from '../modules/search/search.service.js';
+import { ensureCollections, extractHashtags } from '../modules/search/search.service.js';
 
 const BATCH_SIZE = 1000;
 const EPOCH = 1735689600000n;
@@ -154,7 +154,7 @@ async function backfillSocialPosts() {
     const rows = await query;
     if (rows.length === 0) break;
 
-    // Batch load hashtags
+    // Batch load hashtags from DB, falling back to body extraction
     const postIds = rows.map((r: any) => String(r.id));
     const hashtagRows = await db('user_post_hashtags')
       .whereIn('post_id', postIds)
@@ -166,6 +166,22 @@ async function backfillSocialPosts() {
       const list = hashtagsByPost.get(key) || [];
       list.push(h.hashtag);
       hashtagsByPost.set(key, list);
+    }
+
+    // Backfill missing hashtags into the DB table and map
+    for (const r of rows) {
+      const pid = String(r.id);
+      if (!hashtagsByPost.has(pid) && r.body) {
+        const extracted = extractHashtags(r.body);
+        if (extracted.length > 0) {
+          hashtagsByPost.set(pid, extracted);
+          try {
+            await db('user_post_hashtags').insert(
+              extracted.map((tag: string) => ({ post_id: pid, hashtag: tag })),
+            ).onConflict(['post_id', 'hashtag']).ignore();
+          } catch {}
+        }
+      }
     }
 
     const documents = rows.map((r: any) => ({

@@ -239,6 +239,47 @@ usersRoutes.put(
   },
 );
 
+// ─── Managed Social Spaces ───
+
+usersRoutes.get('/me/managed-social-spaces', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { db } = await import('../../database/connection.js');
+    const { computePermissions } = await import('../rbac/rbac.service.js');
+    const { Permissions, hasPermission } = await import('@crabac/shared');
+
+    // Get all spaces user is a member of with social_enabled
+    const spaces = await db('space_members')
+      .join('spaces', 'space_members.space_id', 'spaces.id')
+      .join('space_settings', 'space_members.space_id', 'space_settings.space_id')
+      .where('space_members.user_id', req.user!.userId)
+      .where('space_settings.social_enabled', true)
+      .select(
+        'spaces.id', 'spaces.name', 'spaces.slug', 'spaces.icon_url',
+        'space_settings.base_color', 'space_settings.accent_color',
+      );
+
+    // Filter by MANAGE_SOCIAL permission
+    const result: any[] = [];
+    for (const space of spaces) {
+      const perms = await computePermissions(String(space.id), req.user!.userId);
+      if (hasPermission(perms, Permissions.MANAGE_SOCIAL)) {
+        result.push({
+          id: String(space.id),
+          name: space.name,
+          slug: space.slug,
+          iconUrl: space.icon_url || null,
+          baseColor: space.base_color || null,
+          accentColor: space.accent_color || null,
+        });
+      }
+    }
+
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── Username Lookup ───
 
 usersRoutes.get('/by-username/:username', async (req: Request, res: Response, next: NextFunction) => {
@@ -254,6 +295,71 @@ usersRoutes.get('/by-username/:username', async (req: Request, res: Response, ne
     const prefs = await preferencesService.getPreferences(user.id);
     const profileLinks = await profileLinksService.listProfileLinks(user.id);
     res.json({ ...user, canViewProfile: canView, newsletterEnabled: prefs.newsletterEnabled, profileLinks });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Profile Resolution (user-first, then space) ───
+
+usersRoutes.get('/profiles/:handle', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const handle = req.params.handle;
+    const { db } = await import('../../database/connection.js');
+
+    // Try user first (case-insensitive)
+    const user = await usersService.getUserByUsername(handle);
+    if (user) {
+      const { canViewProfile } = await import('../personal-collections/privacy.service.js');
+      const canView = await canViewProfile(user.id, req.user!.userId);
+      const prefs = await preferencesService.getPreferences(user.id);
+      const links = await profileLinksService.listProfileLinks(user.id);
+      res.json({
+        type: 'user',
+        ...user,
+        canViewProfile: canView,
+        newsletterEnabled: prefs.newsletterEnabled,
+        profileLinks: links,
+      });
+      return;
+    }
+
+    // Try space slug where social_enabled
+    const space = await db('spaces')
+      .leftJoin('space_settings', 'spaces.id', 'space_settings.space_id')
+      .whereRaw('LOWER(spaces.slug) = LOWER(?)', [handle])
+      .where('space_settings.social_enabled', true)
+      .select(
+        'spaces.id', 'spaces.name', 'spaces.slug', 'spaces.description',
+        'spaces.icon_url', 'spaces.owner_id',
+        'space_settings.base_color', 'space_settings.accent_color',
+        'space_settings.text_color',
+      )
+      .first();
+
+    if (space) {
+      const memberCount = await db('space_members')
+        .where('space_id', space.id)
+        .count('* as count')
+        .first();
+
+      res.json({
+        type: 'space',
+        id: String(space.id),
+        name: space.name,
+        slug: space.slug,
+        description: space.description,
+        iconUrl: space.icon_url || null,
+        ownerId: String(space.owner_id),
+        baseColor: space.base_color || null,
+        accentColor: space.accent_color || null,
+        textColor: space.text_color || null,
+        memberCount: Number(memberCount?.count || 0),
+      });
+      return;
+    }
+
+    res.status(404).json({ error: 'Profile not found' });
   } catch (err) {
     next(err);
   }

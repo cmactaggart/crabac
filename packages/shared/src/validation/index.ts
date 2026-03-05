@@ -258,6 +258,7 @@ export const updateSpaceAdminSettingsSchema = z.object({
   allowPublicNewsletter: z.boolean().optional(),
   allowPublicNewsletterSubscription: z.boolean().optional(),
   newsletterTrackingEnabled: z.boolean().optional(),
+  socialEnabled: z.boolean().optional(),
   isPublic: z.boolean().optional(),
   requireVerifiedEmail: z.boolean().optional(),
   baseColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
@@ -724,6 +725,7 @@ export const createUserPostSchema = z.object({
   taggedUserIds: z.array(z.string()).max(20).optional(),
   existingGalleryItemIds: z.array(z.string()).max(20).optional(),
   existingRouteItemIds: z.array(z.string()).max(10).optional(),
+  spaceId: z.string().optional(),
 });
 
 export const updateUserPostSchema = z.object({

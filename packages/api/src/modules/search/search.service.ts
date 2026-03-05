@@ -319,12 +319,17 @@ export async function searchSocialPosts(
     hashtag?: string;
     limit?: number;
     before?: string;
+    visibilityLevels?: string[];
   } = {},
-): Promise<{ id: string; body: string; userId: string; authorUsername: string }[]> {
+): Promise<{ id: string; body: string; userId: string; authorUsername: string; visibility: string }[]> {
   const client = getTypesenseClient();
   if (!client) return [];
 
-  const filterParts: string[] = ['visibility:=public'];
+  const filterParts: string[] = [];
+
+  // Filter by allowed visibility levels
+  const levels = options.visibilityLevels || ['public'];
+  filterParts.push(`visibility:[${levels.join(',')}]`);
 
   if (options.hashtag) {
     filterParts.push(`hashtags:=${options.hashtag.toLowerCase()}`);
@@ -347,5 +352,6 @@ export async function searchSocialPosts(
     body: hit.document.body,
     userId: hit.document.user_id,
     authorUsername: hit.document.author_username,
+    visibility: hit.document.visibility,
   }));
 }

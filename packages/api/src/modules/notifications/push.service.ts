@@ -71,7 +71,7 @@ export async function sendPushNotification(userId: string, title: string, body: 
 
   // Clean up invalid tokens
   for (const failure of result.failed) {
-    if (failure.status === '410' || failure.response?.reason === 'Unregistered') {
+    if (String(failure.status) === '410' || failure.response?.reason === 'Unregistered') {
       await db('device_tokens').where('token', failure.device).delete();
     }
   }

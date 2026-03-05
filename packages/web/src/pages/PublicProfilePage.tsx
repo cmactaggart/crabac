@@ -33,6 +33,20 @@ interface ProfileUser {
   profileLinks?: { id: string; label: string; url: string; position: number }[];
 }
 
+interface SpaceProfile {
+  type: 'space';
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  iconUrl: string | null;
+  ownerId: string;
+  baseColor?: string | null;
+  accentColor?: string | null;
+  textColor?: string | null;
+  memberCount: number;
+}
+
 type SubTab = 'feed' | 'photos' | 'routes' | 'events';
 
 const VISIBILITY_LABELS: Record<PersonalVisibility, string> = {
@@ -60,6 +74,8 @@ export function PublicProfilePage() {
   const { fetchUnreadCount } = useNotificationsStore();
 
   const [profile, setProfile] = useState<ProfileUser | null>(null);
+  const [spaceProfile, setSpaceProfile] = useState<SpaceProfile | null>(null);
+  const [spacePosts, setSpacePosts] = useState<UserPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const highlightPostId = searchParams.get('post');
@@ -81,6 +97,7 @@ export function PublicProfilePage() {
   const [followLoading, setFollowLoading] = useState(false);
   const [followCounts, setFollowCounts] = useState<FollowCounts>({ followingCount: 0, followerCount: 0 });
   const { followUser: doFollow, unfollowUser: doUnfollow, getFollowStatus, fetchCounts, counts: currentUserFollowCounts } = useFollowsStore();
+  const { fetchComments, addComment, deleteComment, toggleCommentReaction } = usePersonalCollectionsStore();
   const sendFriendRequest = useFriendsStore((s) => s.sendFriendRequest);
   const acceptFriendRequest = useFriendsStore((s) => s.acceptFriendRequest);
   const removeFriend = useFriendsStore((s) => s.removeFriend);
@@ -100,30 +117,43 @@ export function PublicProfilePage() {
     fetchSpaces();
   }, []);
 
-  // Fetch profile
+  // Fetch profile (user-first, then space)
   useEffect(() => {
     if (!username) return;
     setLoading(true);
     setNotFound(false);
-    api<ProfileUser>(`/users/by-username/${encodeURIComponent(username)}`)
+    setProfile(null);
+    setSpaceProfile(null);
+
+    api<any>(`/users/profiles/${encodeURIComponent(username)}`)
       .then((data) => {
-        setProfile(data);
-        // Fetch friend status + follow status if not self
-        if (currentUser && data.id !== currentUser.id) {
-          api<FriendshipStatus | null>(`/friends/status/${data.id}`)
-            .then(setFriendStatus)
-            .catch(() => setFriendStatus(null));
-          getFollowStatus(data.id).then(setFollowStatus);
-        }
-        // Fetch follow counts
-        api<FollowCounts>(`/follows/counts/${data.id}`)
-          .then(setFollowCounts)
-          .catch(() => {});
-        // Fetch summary if can view
-        if (data.canViewProfile) {
-          api<UserCollectionsSummary>(`/users/${data.id}/collections/summary`)
-            .then((s) => { if (s && !('profilePrivate' in (s as any))) setSummary(s); })
+        if (data.type === 'space') {
+          setSpaceProfile(data as SpaceProfile);
+          // Fetch space posts
+          api<UserPost[]>(`/follows/spaces/${data.id}/posts`)
+            .then(setSpacePosts)
             .catch(() => {});
+        } else {
+          // User profile (type === 'user' or no type field from by-username)
+          const userData = data as ProfileUser;
+          setProfile(userData);
+          // Fetch friend status + follow status if not self
+          if (currentUser && userData.id !== currentUser.id) {
+            api<FriendshipStatus | null>(`/friends/status/${userData.id}`)
+              .then(setFriendStatus)
+              .catch(() => setFriendStatus(null));
+            getFollowStatus(userData.id).then(setFollowStatus);
+          }
+          // Fetch follow counts
+          api<FollowCounts>(`/follows/counts/${userData.id}`)
+            .then(setFollowCounts)
+            .catch(() => {});
+          // Fetch summary if can view
+          if (userData.canViewProfile) {
+            api<UserCollectionsSummary>(`/users/${userData.id}/collections/summary`)
+              .then((s) => { if (s && !('profilePrivate' in (s as any))) setSummary(s); })
+              .catch(() => {});
+          }
         }
       })
       .catch(() => setNotFound(true))
@@ -191,6 +221,98 @@ export function PublicProfilePage() {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
         <div style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>Loading...</div>
+      </div>
+    );
+  }
+
+  // Space profile view
+  if (spaceProfile) {
+    const spaceContent = (
+      <div style={{ width: '100%', maxWidth: 700 }}>
+        {/* Space Profile Card */}
+        <div style={styles.profileSection}>
+          <Avatar
+            src={spaceProfile.iconUrl}
+            name={spaceProfile.name}
+            size={isMobile ? 56 : 80}
+            baseColor={spaceProfile.baseColor}
+            accentColor={spaceProfile.accentColor}
+          />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h2 style={{ margin: 0, fontSize: isMobile ? '1.1rem' : '1.3rem' }}>{spaceProfile.name}</h2>
+            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 2 }}>
+              {spaceProfile.memberCount} member{spaceProfile.memberCount !== 1 ? 's' : ''}
+            </div>
+            {spaceProfile.description && (
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.4 }}>
+                {spaceProfile.description}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Space Posts */}
+        <div style={{ marginTop: '1rem' }}>
+          {spacePosts.length === 0 ? (
+            <div style={styles.emptyState}>No posts yet</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {spacePosts.map((post) => (
+                <SharedPostCard
+                  key={post.id}
+                  post={post}
+                  currentUserId={currentUser?.id || ''}
+                  isOwn={false}
+                  showAuthorLink
+                  onReaction={(emoji, hasReacted) => {
+                    const method = hasReacted ? 'DELETE' : 'PUT';
+                    api(`/users/${post.userId}/posts/${post.id}/reactions/${encodeURIComponent(emoji)}`, { method })
+                      .then(() => api<UserPost[]>(`/follows/spaces/${spaceProfile.id}/posts`).then(setSpacePosts))
+                      .catch(() => {});
+                  }}
+                  onFetchComments={() => fetchComments(post.id, { userId: post.userId })}
+                  onAddComment={(body, parentCommentId) => addComment(post.id, body, post.userId, parentCommentId)}
+                  onDeleteComment={(commentId) => deleteComment(post.id, commentId, post.userId)}
+                  onCommentReaction={(commentId, emoji, hasReacted) => toggleCommentReaction(commentId, emoji, hasReacted)}
+                  onShare={() => {}}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+
+    if (isMobile) {
+      return (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 56, overflowY: 'auto', padding: '1rem', background: 'linear-gradient(to bottom, var(--bg-primary), color-mix(in srgb, var(--bg-primary), black 18%))' }}>
+          <button onClick={() => navigate(-1)} style={{ ...styles.backBtn, marginBottom: 12 }}>
+            <ArrowLeft size={16} /> Back
+          </button>
+          {spaceContent}
+        </div>
+      );
+    }
+
+    return (
+      <div style={styles.outerContainer}>
+        <div style={styles.sidebarWrap}>
+          <SpaceSidebar spaces={spaces} activeSpaceId={null} />
+        </div>
+        <div style={{ ...styles.sidebarWrap, width: channelSidebarOpen ? 240 : 0 }}>
+          <ProfileSidebar
+            avatarUrl={spaceProfile.iconUrl}
+            displayName={spaceProfile.name}
+            username={spaceProfile.slug}
+            baseColor={spaceProfile.baseColor}
+            accentColor={spaceProfile.accentColor}
+            followingCount={0}
+            followerCount={spaceProfile.memberCount}
+          />
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '2rem', display: 'flex', justifyContent: 'center' }}>
+          {spaceContent}
+        </div>
       </div>
     );
   }
@@ -436,7 +558,7 @@ export function PublicProfilePage() {
 
   if (isMobile) {
     return (
-      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 56, overflowY: 'auto', padding: '1rem' }}>
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 56, overflowY: 'auto', padding: '1rem', background: 'linear-gradient(to bottom, var(--bg-primary), color-mix(in srgb, var(--bg-primary), black 18%))' }}>
         <button onClick={() => navigate(-1)} style={{ ...styles.backBtn, marginBottom: 12 }}>
           <ArrowLeft size={16} /> Back
         </button>
@@ -769,6 +891,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     height: '100vh',
     overflow: 'hidden',
+    background: 'linear-gradient(to bottom, var(--bg-primary), color-mix(in srgb, var(--bg-primary), black 18%))',
   },
   sidebarWrap: {
     overflow: 'hidden',

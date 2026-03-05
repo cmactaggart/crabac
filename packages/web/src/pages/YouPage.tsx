@@ -16,9 +16,11 @@ import { FriendTagPicker } from '../components/common/FriendTagPicker.js';
 import { FriendMentionAutocomplete } from '../components/common/FriendMentionAutocomplete.js';
 import { PostCard as SharedPostCard, VisibilityBadge } from '../components/posts/PostCard.js';
 import { useFollowsStore } from '../stores/follows.js';
+import { useIdentityStore } from '../stores/identity.js';
 import { SpaceSidebar } from '../components/layout/SpaceSidebar.js';
 import { ProfileSidebar } from '../components/layout/ProfileSidebar.js';
 import { PersonalNewsletterView } from '../components/newsletter/PersonalNewsletterView.js';
+import { IdentitySwitcher } from '../components/common/IdentitySwitcher.js';
 import { api } from '../lib/api.js';
 import type { PersonalGalleryItem, PersonalRouteItem, PersonalEvent, PersonalEventCategory, PersonalVisibility, UserPost } from '@crabac/shared';
 
@@ -124,6 +126,8 @@ export function YouPage() {
             <LogOut size={12} />
           </button>
         </div>
+
+        <IdentitySwitcher />
 
         <div style={{ maxWidth: '100%' }}>
           {/* Collection Counts */}
@@ -908,6 +912,7 @@ function FeedTab({ posts, loading, hasMore, defaultVisibility = 'private', onCre
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState('');
   const [editVisibility, setEditVisibility] = useState<PersonalVisibility>('private');
+  const activeSpaceId = useIdentityStore((s) => s.activeSpaceId);
 
   // Scroll to highlighted post after posts load
   useEffect(() => {
@@ -1013,9 +1018,10 @@ function FeedTab({ posts, loading, hasMore, defaultVisibility = 'private', onCre
 
       const formData = new FormData();
       if (body.trim()) formData.append('body', body.trim());
-      formData.append('visibility', visibility);
+      formData.append('visibility', activeSpaceId ? 'public' : visibility);
       files.forEach((f) => formData.append('files', f));
       if (allTaggedIds.length > 0) formData.append('taggedUserIds', JSON.stringify(allTaggedIds));
+      if (activeSpaceId) formData.append('spaceId', activeSpaceId);
       await onCreatePost(formData);
       setBody('');
       setFiles([]);
@@ -1056,7 +1062,7 @@ function FeedTab({ posts, loading, hasMore, defaultVisibility = 'private', onCre
             value={body}
             onChange={handleBodyChange}
             onKeyDown={handleTextareaKeyDown}
-            placeholder="What's on your mind?"
+            placeholder={activeSpaceId ? 'Post as your space...' : "What's on your mind?"}
             style={{ ...styles.formInput, minHeight: 60, resize: 'vertical', fontFamily: 'inherit' }}
             maxLength={10000}
           />

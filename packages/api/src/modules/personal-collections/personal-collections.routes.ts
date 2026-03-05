@@ -438,7 +438,9 @@ personalCollectionsRoutes.post(
         return next(new BadRequestError('Post must have text or at least one attachment'));
       }
 
-      const post = await postsService.createPost(req.user!.userId, body, uploadedFiles);
+      // Extract spaceId from body/form data
+      const spaceId = req.body.spaceId || body.spaceId;
+      const post = await postsService.createPost(req.user!.userId, { ...body, spaceId }, uploadedFiles);
       res.status(201).json(post);
     } catch (err) { next(err); }
   },

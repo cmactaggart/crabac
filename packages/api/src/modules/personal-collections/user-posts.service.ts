@@ -7,6 +7,8 @@ import { createNotification } from '../notifications/notifications.service.js';
 import { parseGpxFile } from '../messages/gpx.service.js';
 import * as collectionsService from './personal-collections.service.js';
 import { extractHashtags, indexSocialPost, updateSocialPost, removeSocialPost } from '../search/search.service.js';
+import { computePermissions } from '../rbac/rbac.service.js';
+import { Permissions, hasPermission } from '@crabac/shared';
 
 // ─── Create Post ───
 
@@ -18,16 +20,35 @@ export async function createPost(
     taggedUserIds?: string[];
     existingGalleryItemIds?: string[];
     existingRouteItemIds?: string[];
+    spaceId?: string;
+    metadata?: any;
   },
   files: Express.Multer.File[],
 ) {
+  // If posting as a space, verify permission and social_enabled
+  let spaceId: string | null = null;
+  if (data.spaceId) {
+    const settings = await db('space_settings').where('space_id', data.spaceId).first();
+    if (!settings?.social_enabled) {
+      throw new ForbiddenError('Social profile is not enabled for this space');
+    }
+    const perms = await computePermissions(data.spaceId, userId);
+    if (!hasPermission(perms, Permissions.MANAGE_SOCIAL)) {
+      throw new ForbiddenError('You do not have MANAGE_SOCIAL permission in this space');
+    }
+    spaceId = data.spaceId;
+  }
+
   const postId = snowflake.generate();
+  const visibility = spaceId ? 'public' : (data.visibility || 'private');
 
   await db('user_posts').insert({
     id: postId,
     user_id: userId,
+    space_id: spaceId,
     body: data.body || null,
-    visibility: data.visibility || 'private',
+    metadata: data.metadata ? JSON.stringify(data.metadata) : null,
+    visibility,
   });
 
   let position = 0;
@@ -180,13 +201,20 @@ export async function createPost(
   }
 
   // Index in Typesense
-  const postAuthor = await db('users').where('id', userId).select('username').first();
+  let indexUsername = '';
+  if (spaceId) {
+    const space = await db('spaces').where('id', spaceId).select('slug').first();
+    indexUsername = space?.slug || '';
+  } else {
+    const postAuthor = await db('users').where('id', userId).select('username').first();
+    indexUsername = postAuthor?.username || '';
+  }
   indexSocialPost({
     id: String(postId),
     body: data.body || '',
     userId,
-    authorUsername: postAuthor?.username || '',
-    visibility: data.visibility || 'private',
+    authorUsername: indexUsername,
+    visibility,
     hashtags,
   }).catch(() => {});
 
@@ -224,7 +252,10 @@ export async function listPosts(
 
   let query = db('user_posts as up')
     .join('users', 'up.user_id', 'users.id')
+    .leftJoin('spaces', 'up.space_id', 'spaces.id')
+    .leftJoin('space_settings as ss', 'up.space_id', 'ss.space_id')
     .where('up.user_id', userId)
+    .whereNull('up.space_id')
     .whereIn('up.visibility', [...visibleLevels])
     .select(
       'up.*',
@@ -233,6 +264,11 @@ export async function listPosts(
       'users.avatar_url as author_avatar_url',
       'users.base_color as author_base_color',
       'users.accent_color as author_accent_color',
+      'spaces.name as space_name',
+      'spaces.slug as space_slug',
+      'spaces.icon_url as space_icon_url',
+      'ss.base_color as space_base_color',
+      'ss.accent_color as space_accent_color',
     )
     .orderBy([{ column: 'up.is_pinned', order: 'desc' }, { column: 'up.id', order: 'desc' }])
     .limit(options.limit);
@@ -300,6 +336,8 @@ export async function listPosts(
 export async function getPost(postId: string) {
   const row = await db('user_posts as up')
     .join('users', 'up.user_id', 'users.id')
+    .leftJoin('spaces', 'up.space_id', 'spaces.id')
+    .leftJoin('space_settings as ss', 'up.space_id', 'ss.space_id')
     .where('up.id', postId)
     .select(
       'up.*',
@@ -308,6 +346,11 @@ export async function getPost(postId: string) {
       'users.avatar_url as author_avatar_url',
       'users.base_color as author_base_color',
       'users.accent_color as author_accent_color',
+      'spaces.name as space_name',
+      'spaces.slug as space_slug',
+      'spaces.icon_url as space_icon_url',
+      'ss.base_color as space_base_color',
+      'ss.accent_color as space_accent_color',
     )
     .first();
 
@@ -340,6 +383,81 @@ export async function getPost(postId: string) {
     commentCounts.get(postId) || 0,
     repostData.get(postId) || null,
   );
+}
+
+// ─── List Space Posts ───
+
+export async function listSpacePosts(
+  spaceId: string,
+  options: { before?: string; limit: number },
+) {
+  let query = db('user_posts as up')
+    .join('users', 'up.user_id', 'users.id')
+    .leftJoin('spaces', 'up.space_id', 'spaces.id')
+    .leftJoin('space_settings as ss', 'up.space_id', 'ss.space_id')
+    .where('up.space_id', spaceId)
+    .select(
+      'up.*',
+      'users.username as author_username',
+      'users.display_name as author_display_name',
+      'users.avatar_url as author_avatar_url',
+      'users.base_color as author_base_color',
+      'users.accent_color as author_accent_color',
+      'spaces.name as space_name',
+      'spaces.slug as space_slug',
+      'spaces.icon_url as space_icon_url',
+      'ss.base_color as space_base_color',
+      'ss.accent_color as space_accent_color',
+    )
+    .orderBy('up.id', 'desc')
+    .limit(options.limit);
+
+  if (options.before) {
+    query = query.where('up.id', '<', options.before);
+  }
+
+  const rows = await query;
+  const postIds = rows.map((r: any) => String(r.id));
+  if (postIds.length === 0) return [];
+
+  const [attachments, tags, reactions, commentCounts, repostData] = await Promise.all([
+    db('user_post_attachments').whereIn('post_id', postIds).orderBy('position', 'asc'),
+    db('user_post_tags as upt')
+      .join('users', 'upt.tagged_user_id', 'users.id')
+      .whereIn('upt.post_id', postIds)
+      .select('upt.post_id', 'users.id as user_id', 'users.username', 'users.display_name', 'users.avatar_url'),
+    getReactionsForPosts(postIds),
+    getCommentCountsForPosts(postIds),
+    hydrateReposts(rows),
+  ]);
+
+  const attachmentsByPost = new Map<string, any[]>();
+  for (const att of attachments) {
+    const key = String(att.post_id);
+    const list = attachmentsByPost.get(key) || [];
+    list.push(att);
+    attachmentsByPost.set(key, list);
+  }
+
+  const tagsByPost = new Map<string, any[]>();
+  for (const tag of tags) {
+    const key = String(tag.post_id);
+    const list = tagsByPost.get(key) || [];
+    list.push(tag);
+    tagsByPost.set(key, list);
+  }
+
+  return rows.map((row: any) => {
+    const pid = String(row.id);
+    return formatPost(
+      row,
+      attachmentsByPost.get(pid) || [],
+      tagsByPost.get(pid) || [],
+      reactions.get(pid) || [],
+      commentCounts.get(pid) || 0,
+      repostData.get(pid) || null,
+    );
+  });
 }
 
 // ─── Update Post ───
@@ -728,6 +846,8 @@ async function hydrateReposts(rows: any[]) {
 
   const originals = await db('user_posts as up')
     .join('users', 'up.user_id', 'users.id')
+    .leftJoin('spaces', 'up.space_id', 'spaces.id')
+    .leftJoin('space_settings as ss', 'up.space_id', 'ss.space_id')
     .whereIn('up.id', uniqueIds)
     .select(
       'up.*',
@@ -736,6 +856,11 @@ async function hydrateReposts(rows: any[]) {
       'users.avatar_url as author_avatar_url',
       'users.base_color as author_base_color',
       'users.accent_color as author_accent_color',
+      'spaces.name as space_name',
+      'spaces.slug as space_slug',
+      'spaces.icon_url as space_icon_url',
+      'ss.base_color as space_base_color',
+      'ss.accent_color as space_accent_color',
     );
 
   const originalIds = originals.map((o: any) => String(o.id));
@@ -798,10 +923,20 @@ function formatPost(
   commentCount: number = 0,
   repostOf: any = null,
 ) {
-  return {
+  const isSpacePost = !!row.space_id;
+
+  // Parse metadata if stored as string
+  let metadata = row.metadata;
+  if (typeof metadata === 'string') {
+    try { metadata = JSON.parse(metadata); } catch { metadata = null; }
+  }
+
+  const post: any = {
     id: String(row.id),
     userId: String(row.user_id),
+    spaceId: row.space_id ? String(row.space_id) : null,
     body: row.body,
+    metadata: metadata || null,
     visibility: row.visibility,
     isPinned: !!row.is_pinned,
     attachments: attachments.map(formatPostAttachment),
@@ -815,17 +950,41 @@ function formatPost(
     commentCount,
     repostOfId: row.repost_of_id ? String(row.repost_of_id) : null,
     repostOf,
-    author: {
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+
+  // When posting as a space, override author to show space info
+  if (isSpacePost && row.space_name) {
+    post.author = {
+      id: String(row.space_id),
+      username: row.space_slug,
+      displayName: row.space_name,
+      avatarUrl: row.space_icon_url || null,
+      baseColor: row.space_base_color || null,
+      accentColor: row.space_accent_color || null,
+    };
+    post.spaceAuthor = {
+      id: String(row.space_id),
+      name: row.space_name,
+      slug: row.space_slug,
+      iconUrl: row.space_icon_url || null,
+      baseColor: row.space_base_color || null,
+      accentColor: row.space_accent_color || null,
+    };
+  } else {
+    post.author = {
       id: String(row.user_id),
       username: row.author_username,
       displayName: row.author_display_name,
       avatarUrl: row.author_avatar_url,
       baseColor: row.author_base_color || null,
       accentColor: row.author_accent_color || null,
-    },
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
+    };
+    post.spaceAuthor = null;
+  }
+
+  return post;
 }
 
 function formatComment(row: any, reactions: any[]) {

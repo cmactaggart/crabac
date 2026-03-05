@@ -21,6 +21,7 @@ export async function getSpaceAdminSettings(spaceId: string) {
       blogEnabled: false,
       allowPublicBlog: false,
       newsletterEnabled: false,
+      socialEnabled: false,
       allowPublicNewsletter: false,
       allowPublicNewsletterSubscription: false,
       newsletterTrackingEnabled: true,
@@ -50,6 +51,7 @@ export async function updateSpaceAdminSettings(
     allowPublicRoutes?: boolean;
     allowPublicBlog?: boolean;
     newsletterEnabled?: boolean;
+    socialEnabled?: boolean;
     allowPublicNewsletter?: boolean;
     allowPublicNewsletterSubscription?: boolean;
     newsletterTrackingEnabled?: boolean;
@@ -80,6 +82,7 @@ export async function updateSpaceAdminSettings(
     if (data.blogEnabled !== undefined) updates.blog_enabled = data.blogEnabled;
     if (data.allowPublicBlog !== undefined) updates.allow_public_blog = data.allowPublicBlog;
     if (data.newsletterEnabled !== undefined) updates.newsletter_enabled = data.newsletterEnabled;
+    if (data.socialEnabled !== undefined) updates.social_enabled = data.socialEnabled;
     if (data.allowPublicNewsletter !== undefined) updates.allow_public_newsletter = data.allowPublicNewsletter;
     if (data.allowPublicNewsletterSubscription !== undefined) updates.allow_public_newsletter_subscription = data.allowPublicNewsletterSubscription;
     if (data.newsletterTrackingEnabled !== undefined) updates.newsletter_tracking_enabled = data.newsletterTrackingEnabled;
@@ -115,6 +118,7 @@ export async function updateSpaceAdminSettings(
       blog_enabled: data.blogEnabled ?? false,
       allow_public_blog: data.allowPublicBlog ?? false,
       newsletter_enabled: data.newsletterEnabled ?? false,
+      social_enabled: data.socialEnabled ?? false,
       allow_public_newsletter: data.allowPublicNewsletter ?? false,
       allow_public_newsletter_subscription: data.allowPublicNewsletterSubscription ?? false,
       newsletter_tracking_enabled: data.newsletterTrackingEnabled ?? true,
@@ -220,6 +224,7 @@ function formatSettings(row: any) {
     blogEnabled: !!row.blog_enabled,
     allowPublicBlog: !!row.allow_public_blog,
     newsletterEnabled: !!row.newsletter_enabled,
+    socialEnabled: !!row.social_enabled,
     allowPublicNewsletter: !!row.allow_public_newsletter,
     allowPublicNewsletterSubscription: !!row.allow_public_newsletter_subscription,
     newsletterTrackingEnabled: row.newsletter_tracking_enabled !== undefined ? !!row.newsletter_tracking_enabled : true,
