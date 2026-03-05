@@ -142,6 +142,7 @@ export interface UserPostComment {
   id: string;
   postId: string;
   userId: string;
+  spaceId?: string | null;
   parentCommentId?: string | null;
   body: string;
   reactions: { emoji: string; count: number; users: { id: string; username: string }[] }[];

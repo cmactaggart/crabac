@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.9.0
+## API Version 0.9.1
 
 Base URL: `https://app.crab.ac/api`
 
@@ -1786,35 +1786,51 @@ Remove a reaction from another user's post.
 
 ### Post Comments
 
+Comments can optionally be authored on behalf of a space by including `spaceId` in the body. Requires `MANAGE_SOCIAL` permission and `socialEnabled` on the space. When a comment has a `spaceId`, its `author` field shows the space's identity (name, slug, icon) instead of the user's.
+
 #### GET /users/me/posts/:postId/comments
 
-List comments on own post.
+List comments on own post. Returns nested comment tree.
 
 **Query:** `before`, `limit`
+
+**Response:** Array of comment objects with `author`, `reactions`, and nested `replies`.
 
 #### POST /users/me/posts/:postId/comments
 
 Add a comment to own post.
 
-**Body:** `{ body: string }`
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `body` | string | yes | 1-4000 chars |
+| `parentCommentId` | string | no | Reply to a specific comment |
+| `spaceId` | string | no | Comment as a space (requires `MANAGE_SOCIAL`) |
 
 #### DELETE /users/me/posts/:postId/comments/:commentId
 
-Delete a comment (author only).
+Delete a comment (comment author or post owner).
 
 #### GET /users/:userId/posts/:postId/comments
 
-List comments on another user's post.
+List comments on another user's post. Returns nested comment tree.
+
+**Query:** `before`, `limit`
 
 #### POST /users/:userId/posts/:postId/comments
 
 Add a comment to another user's post.
 
-**Body:** `{ body: string }`
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `body` | string | yes | 1-4000 chars |
+| `parentCommentId` | string | no | Reply to a specific comment |
+| `spaceId` | string | no | Comment as a space (requires `MANAGE_SOCIAL`) |
 
 #### DELETE /users/:userId/posts/:postId/comments/:commentId
 
-Delete a comment (author only).
+Delete a comment (comment author or post owner).
 
 ### Comment Reactions
 

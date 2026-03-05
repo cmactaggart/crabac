@@ -15,6 +15,7 @@ import { ReportModal } from '../components/moderation/ReportModal.js';
 import { SpaceSidebar } from '../components/layout/SpaceSidebar.js';
 import { ProfileSidebar } from '../components/layout/ProfileSidebar.js';
 import { useFollowsStore } from '../stores/follows.js';
+import { useIdentityStore } from '../stores/identity.js';
 import { api } from '../lib/api.js';
 import type { PersonalGalleryItem, PersonalRouteItem, PersonalEvent, UserPost, UserPostComment, UserCollectionsSummary, FriendshipStatus, PersonalVisibility, FollowCounts } from '@crabac/shared';
 
@@ -98,6 +99,7 @@ export function PublicProfilePage() {
   const [followCounts, setFollowCounts] = useState<FollowCounts>({ followingCount: 0, followerCount: 0 });
   const { followUser: doFollow, unfollowUser: doUnfollow, getFollowStatus, fetchCounts, counts: currentUserFollowCounts } = useFollowsStore();
   const { fetchComments, addComment, deleteComment, toggleCommentReaction } = usePersonalCollectionsStore();
+  const activeSpaceId = useIdentityStore((s) => s.activeSpaceId);
   const sendFriendRequest = useFriendsStore((s) => s.sendFriendRequest);
   const acceptFriendRequest = useFriendsStore((s) => s.acceptFriendRequest);
   const removeFriend = useFriendsStore((s) => s.removeFriend);
@@ -271,7 +273,7 @@ export function PublicProfilePage() {
                       .catch(() => {});
                   }}
                   onFetchComments={() => fetchComments(post.id, { userId: post.userId })}
-                  onAddComment={(body, parentCommentId) => addComment(post.id, body, post.userId, parentCommentId)}
+                  onAddComment={(body, parentCommentId) => addComment(post.id, body, post.userId, parentCommentId, activeSpaceId || undefined)}
                   onDeleteComment={(commentId) => deleteComment(post.id, commentId, post.userId)}
                   onCommentReaction={(commentId, emoji, hasReacted) => toggleCommentReaction(commentId, emoji, hasReacted)}
                   onShare={() => {}}
@@ -640,6 +642,7 @@ function ReadOnlyFeedTab({ posts, setPosts, profileUserId, friendStatus, handleF
   const navigate = useNavigate();
   const currentUser = useAuthStore((s) => s.user);
   const { togglePostReaction, fetchComments, addComment, deleteComment, toggleCommentReaction, createRepost } = usePersonalCollectionsStore();
+  const activeSpaceId = useIdentityStore((s) => s.activeSpaceId);
   const currentUserId = currentUser?.id || '';
   const [reportPost, setReportPost] = useState<UserPost | null>(null);
 
@@ -669,7 +672,7 @@ function ReadOnlyFeedTab({ posts, setPosts, profileUserId, friendStatus, handleF
   };
 
   const handleAddComment = async (postId: string, body: string, parentCommentId?: string) => {
-    const comment = await addComment(postId, body, profileUserId, parentCommentId);
+    const comment = await addComment(postId, body, profileUserId, parentCommentId, activeSpaceId || undefined);
     setPosts(posts.map((p) => p.id === postId ? { ...p, commentCount: p.commentCount + 1 } : p));
     return comment;
   };

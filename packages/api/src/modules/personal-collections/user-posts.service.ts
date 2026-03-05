@@ -563,7 +563,7 @@ async function getReactionsForPosts(postIds: string[]) {
 
 // ─── Comments ───
 
-export async function createComment(postId: string, userId: string, body: string, parentCommentId?: string) {
+export async function createComment(postId: string, userId: string, body: string, parentCommentId?: string, spaceId?: string) {
   const post = await db('user_posts').where('id', postId).first();
   if (!post) throw new NotFoundError('Post');
 
@@ -575,28 +575,54 @@ export async function createComment(postId: string, userId: string, body: string
     }
   }
 
+  // If commenting as a space, verify MANAGE_SOCIAL permission
+  let resolvedSpaceId: string | null = null;
+  if (spaceId) {
+    const settings = await db('space_settings').where('space_id', spaceId).first();
+    if (!settings?.social_enabled) throw new ForbiddenError('Social not enabled for this space');
+    const perms = await computePermissions(userId, spaceId);
+    if (!hasPermission(perms, Permissions.MANAGE_SOCIAL)) {
+      throw new ForbiddenError('Missing MANAGE_SOCIAL permission');
+    }
+    resolvedSpaceId = spaceId;
+  }
+
   const commentId = snowflake.generate();
   await db('user_post_comments').insert({
     id: commentId,
     post_id: postId,
     user_id: userId,
+    space_id: resolvedSpaceId,
     body,
     parent_comment_id: parentCommentId || null,
   });
 
   // Notify post owner if commenter is someone else
   if (String(post.user_id) !== userId) {
-    const [commenter, postOwner] = await Promise.all([
-      db('users').where('id', userId).select('username', 'display_name', 'avatar_url').first(),
-      db('users').where('id', post.user_id).select('username').first(),
-    ]);
+    let commenterName: string;
+    let commenterDisplayName: string;
+    let commenterAvatarUrl: string | null;
+
+    if (resolvedSpaceId) {
+      const space = await db('spaces').where('id', resolvedSpaceId).select('name', 'slug', 'icon_url').first();
+      commenterName = space?.slug || '';
+      commenterDisplayName = space?.name || '';
+      commenterAvatarUrl = space?.icon_url || null;
+    } else {
+      const commenter = await db('users').where('id', userId).select('username', 'display_name', 'avatar_url').first();
+      commenterName = commenter?.username || '';
+      commenterDisplayName = commenter?.display_name || '';
+      commenterAvatarUrl = commenter?.avatar_url || null;
+    }
+
+    const postOwner = await db('users').where('id', post.user_id).select('username').first();
     createNotification(String(post.user_id), 'post_comment', {
       postId: String(postId),
       commentId: String(commentId),
-      commenterUsername: commenter?.username || '',
-      commenterDisplayName: commenter?.display_name || '',
+      commenterUsername: commenterName,
+      commenterDisplayName,
       commenterUserId: userId,
-      commenterAvatarUrl: commenter?.avatar_url || null,
+      commenterAvatarUrl,
       postOwnerUsername: postOwner?.username || '',
       commentPreview: body.substring(0, 100),
     }).catch(() => {});
@@ -612,6 +638,7 @@ export async function listComments(
   // Fetch all comments for this post (top-level and replies)
   let query = db('user_post_comments as c')
     .join('users', 'c.user_id', 'users.id')
+    .leftJoin('spaces as cs', 'c.space_id', 'cs.id')
     .where('c.post_id', postId)
     .select(
       'c.*',
@@ -620,6 +647,11 @@ export async function listComments(
       'users.avatar_url as author_avatar_url',
       'users.base_color as author_base_color',
       'users.accent_color as author_accent_color',
+      'cs.name as space_name',
+      'cs.slug as space_slug',
+      'cs.icon_url as space_icon_url',
+      'cs.base_color as space_base_color',
+      'cs.accent_color as space_accent_color',
     )
     .orderBy('c.id', 'asc')
     .limit(options.limit);
@@ -673,6 +705,7 @@ export async function deleteComment(commentId: string, userId: string) {
 async function getComment(commentId: string) {
   const row = await db('user_post_comments as c')
     .join('users', 'c.user_id', 'users.id')
+    .leftJoin('spaces as cs', 'c.space_id', 'cs.id')
     .where('c.id', commentId)
     .select(
       'c.*',
@@ -681,6 +714,11 @@ async function getComment(commentId: string) {
       'users.avatar_url as author_avatar_url',
       'users.base_color as author_base_color',
       'users.accent_color as author_accent_color',
+      'cs.name as space_name',
+      'cs.slug as space_slug',
+      'cs.icon_url as space_icon_url',
+      'cs.base_color as space_base_color',
+      'cs.accent_color as space_accent_color',
     )
     .first();
 
@@ -988,21 +1026,34 @@ function formatPost(
 }
 
 function formatComment(row: any, reactions: any[]) {
+  // If comment was made as a space, show space identity
+  const author = row.space_id && row.space_name
+    ? {
+        id: String(row.space_id),
+        username: row.space_slug,
+        displayName: row.space_name,
+        avatarUrl: row.space_icon_url || null,
+        baseColor: row.space_base_color || null,
+        accentColor: row.space_accent_color || null,
+      }
+    : {
+        id: String(row.user_id),
+        username: row.author_username,
+        displayName: row.author_display_name,
+        avatarUrl: row.author_avatar_url,
+        baseColor: row.author_base_color || null,
+        accentColor: row.author_accent_color || null,
+      };
+
   return {
     id: String(row.id),
     postId: String(row.post_id),
     userId: String(row.user_id),
+    spaceId: row.space_id ? String(row.space_id) : null,
     parentCommentId: row.parent_comment_id ? String(row.parent_comment_id) : null,
     body: row.body,
     reactions,
-    author: {
-      id: String(row.user_id),
-      username: row.author_username,
-      displayName: row.author_display_name,
-      avatarUrl: row.author_avatar_url,
-      baseColor: row.author_base_color || null,
-      accentColor: row.author_accent_color || null,
-    },
+    author,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

@@ -33,10 +33,10 @@ export function VisibilityBadge({ visibility }: { visibility: PersonalVisibility
 function renderTextWithMentions(text: string, navigate: (path: string) => void, onHashtagClick?: (tag: string) => void): React.ReactNode {
   const origin = window.location.origin;
   const escapedOrigin = origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  // Matches: markdown links [text](/space/...), #hashtag, @username, full space URLs, or bare /space/... paths
+  // Matches: **bold**, markdown links [text](/space/...), #hashtag, @username, full space URLs, or bare /space/... paths
   // Supports both /space/{id} and /space/slug/{slug}
   const pattern = new RegExp(
-    `(\\[[^\\]]+\\]\\(\\/space\\/(?:slug\\/[a-zA-Z0-9_-]+|\\d+)\\))|(#[a-zA-Z0-9_]+)|(@[a-zA-Z0-9_-]+)|(${escapedOrigin}\\/space\\/(?:slug\\/[a-zA-Z0-9_-]+|\\d+))|\\/space\\/(?:slug\\/[a-zA-Z0-9_-]+|\\d+)`,
+    `(\\*\\*[^*]+\\*\\*)|(\\[[^\\]]+\\]\\(\\/space\\/(?:slug\\/[a-zA-Z0-9_-]+|\\d+)\\))|(#[a-zA-Z0-9_]+)|(@[a-zA-Z0-9_-]+)|(${escapedOrigin}\\/space\\/(?:slug\\/[a-zA-Z0-9_-]+|\\d+))|\\/space\\/(?:slug\\/[a-zA-Z0-9_-]+|\\d+)`,
     'g',
   );
 
@@ -53,6 +53,11 @@ function renderTextWithMentions(text: string, navigate: (path: string) => void, 
     const full = match[0];
 
     if (match[1]) {
+      // **bold** text
+      result.push(
+        <strong key={match.index}>{full.slice(2, -2)}</strong>,
+      );
+    } else if (match[2]) {
       // Markdown link [text](/space/{id}) or [text](/space/slug/{slug})
       const inner = full.match(/^\[([^\]]+)\]\((\/space\/(?:slug\/[a-zA-Z0-9_-]+|\d+))\)$/);
       if (inner) {
@@ -66,7 +71,7 @@ function renderTextWithMentions(text: string, navigate: (path: string) => void, 
           </span>,
         );
       }
-    } else if (match[2]) {
+    } else if (match[3]) {
       // #hashtag
       const tag = full.slice(1);
       result.push(
@@ -78,7 +83,7 @@ function renderTextWithMentions(text: string, navigate: (path: string) => void, 
           {full}
         </span>,
       );
-    } else if (match[3]) {
+    } else if (match[4]) {
       // @username mention
       const username = full.slice(1);
       result.push(
@@ -90,7 +95,7 @@ function renderTextWithMentions(text: string, navigate: (path: string) => void, 
           {full}
         </span>,
       );
-    } else if (match[4]) {
+    } else if (match[5]) {
       // Full space URL
       const pathMatch = full.match(/(\/space\/(?:slug\/[a-zA-Z0-9_-]+|\d+))/);
       if (pathMatch) {

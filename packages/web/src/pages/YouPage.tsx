@@ -69,6 +69,11 @@ export function YouPage() {
   const { channelSidebarOpen } = useLayoutStore();
   const { counts: followCounts, fetchCounts: fetchFollowCounts, followers, following, fetchFollowers, fetchFollowing } = useFollowsStore();
   const [followListMode, setFollowListMode] = useState<'followers' | 'following' | null>(null);
+  const activeSpaceId = useIdentityStore((s) => s.activeSpaceId);
+  const managedSpaces = useIdentityStore((s) => s.managedSpaces);
+  const activeSpace = managedSpaces.find((s) => s.id === activeSpaceId) || null;
+  const [spacePosts, setSpacePosts] = useState<UserPost[]>([]);
+  const [spacePostsLoading, setSpacePostsLoading] = useState(false);
 
   useEffect(() => {
     fetchSummary();
@@ -81,12 +86,27 @@ export function YouPage() {
     }).catch(() => {});
   }, []);
 
+  // Fetch space posts when identity is switched
   useEffect(() => {
+    if (activeSpaceId) {
+      setSpacePostsLoading(true);
+      api<UserPost[]>(`/follows/spaces/${activeSpaceId}/posts`)
+        .then(setSpacePosts)
+        .catch(() => setSpacePosts([]))
+        .finally(() => setSpacePostsLoading(false));
+      setActiveTab('feed');
+    } else {
+      setSpacePosts([]);
+    }
+  }, [activeSpaceId]);
+
+  useEffect(() => {
+    if (activeSpaceId) return; // Skip personal fetches when viewing space
     if (activeTab === 'feed') fetchPosts();
     if (activeTab === 'photos') fetchGallery();
     if (activeTab === 'routes') fetchRoutes();
     if (activeTab === 'events') { fetchEvents(); fetchEventCategories(); }
-  }, [activeTab]);
+  }, [activeTab, activeSpaceId]);
 
   const memberSince = user?.createdAt
     ? new Date(user.createdAt).toLocaleDateString([], { year: 'numeric', month: 'long' })
@@ -96,105 +116,147 @@ export function YouPage() {
     // Mobile: no sidebar, profile card at top, BottomTabBar handles navigation
     return (
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 56, overflowY: 'auto', padding: '1rem', background: 'linear-gradient(to bottom, var(--bg-primary), color-mix(in srgb, var(--bg-primary), black 18%))' }}>
-        {/* Compact Profile Card */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1rem', padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)' }}>
-          <Avatar
-            src={user?.avatarUrl ?? null}
-            name={user?.displayName || '?'}
-            size={48}
-            baseColor={user?.baseColor ?? null}
-            accentColor={user?.accentColor ?? null}
-          />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{user?.displayName}</div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>@{user?.username}</div>
-            {user?.bio && (
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.3 }}>
-                {user.bio}
-              </div>
-            )}
-            {memberSince && (
-              <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                Member since {memberSince}
-              </div>
-            )}
+        {/* Compact Profile Card — show space or user */}
+        {activeSpace ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1rem', padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)' }}>
+            <Avatar
+              src={activeSpace.iconUrl}
+              name={activeSpace.name}
+              size={48}
+              baseColor={activeSpace.baseColor ?? null}
+              accentColor={activeSpace.accentColor ?? null}
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{activeSpace.name}</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>@{activeSpace.slug}</div>
+            </div>
           </div>
-          <button onClick={() => setShowSettings(true)} style={{ ...styles.editBtn, fontSize: '0.72rem', padding: '0.3rem 0.6rem' }}>
-            <Edit3 size={12} /> Edit
-          </button>
-          <button onClick={logout} style={{ ...styles.editBtn, fontSize: '0.72rem', padding: '0.3rem 0.6rem', color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
-            <LogOut size={12} />
-          </button>
-        </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1rem', padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)' }}>
+            <Avatar
+              src={user?.avatarUrl ?? null}
+              name={user?.displayName || '?'}
+              size={48}
+              baseColor={user?.baseColor ?? null}
+              accentColor={user?.accentColor ?? null}
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{user?.displayName}</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>@{user?.username}</div>
+              {user?.bio && (
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.3 }}>
+                  {user.bio}
+                </div>
+              )}
+              {memberSince && (
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                  Member since {memberSince}
+                </div>
+              )}
+            </div>
+            <button onClick={() => setShowSettings(true)} style={{ ...styles.editBtn, fontSize: '0.72rem', padding: '0.3rem 0.6rem' }}>
+              <Edit3 size={12} /> Edit
+            </button>
+            <button onClick={logout} style={{ ...styles.editBtn, fontSize: '0.72rem', padding: '0.3rem 0.6rem', color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
+              <LogOut size={12} />
+            </button>
+          </div>
+        )}
 
         <IdentitySwitcher />
 
         <div style={{ maxWidth: '100%' }}>
-          {/* Collection Counts */}
-          {summary && (
-            <div style={styles.summaryRow}>
-              <SummaryBadge icon={<FileText size={14} />} label="Feed" count={summary.postCount} active={activeTab === 'feed'} onClick={() => setActiveTab('feed')} />
-              <SummaryBadge icon={<Image size={14} />} label="Photos" count={summary.galleryCount} active={activeTab === 'photos'} onClick={() => setActiveTab('photos')} />
-              <SummaryBadge icon={<Map size={14} />} label="Routes" count={summary.routeCount} active={activeTab === 'routes'} onClick={() => setActiveTab('routes')} />
-              <SummaryBadge icon={<CalendarDays size={14} />} label="Events" count={summary.eventCount} active={activeTab === 'events'} onClick={() => setActiveTab('events')} />
-              {newsletterEnabled && <SummaryBadge icon={<Newspaper size={14} />} label="Newsletter" count={0} active={activeTab === 'newsletter'} onClick={() => setActiveTab('newsletter')} />}
-            </div>
-          )}
-
-          {/* Sub-tab Content */}
-          <div style={{ marginTop: '1rem', paddingBottom: '2rem' }}>
-            {activeTab === 'feed' && (
+          {/* When viewing as a space, only show feed */}
+          {activeSpace ? (
+            <div style={{ marginTop: '1rem', paddingBottom: '2rem' }}>
               <FeedTab
-                posts={posts}
-                loading={postsLoading}
-                hasMore={postsHasMore}
-                onCreatePost={createPost}
-                onDeletePost={deletePost}
-                onUpdatePost={updatePost}
-                onLoadMore={() => {
-                  if (posts.length > 0) fetchPosts({ before: posts[posts.length - 1].id });
+                posts={spacePosts}
+                loading={spacePostsLoading}
+                hasMore={false}
+                onCreatePost={async (formData) => {
+                  await createPost(formData);
+                  // Refresh space posts
+                  api<UserPost[]>(`/follows/spaces/${activeSpaceId}/posts`).then(setSpacePosts).catch(() => {});
                 }}
+                onDeletePost={async (postId) => {
+                  await api(`/users/me/posts/${postId}`, { method: 'DELETE' });
+                  setSpacePosts((prev) => prev.filter((p) => p.id !== postId));
+                }}
+                onUpdatePost={updatePost}
+                onLoadMore={() => {}}
                 highlightPostId={highlightPostId}
                 highlightCommentId={highlightCommentId}
               />
-            )}
-            {activeTab === 'photos' && (
-              <PhotosTab
-                items={galleryItems}
-                loading={loading}
-                onUpload={uploadGalleryItem}
-                onDelete={deleteGalleryItem}
-                onUpdate={updateGalleryItem}
-                onShare={(id) => setShareItem({ type: 'gallery', id })}
-              />
-            )}
-            {activeTab === 'routes' && (
-              <RoutesTab
-                items={routeItems}
-                loading={loading}
-                onUpload={uploadRoute}
-                onDelete={deleteRoute}
-                onUpdate={updateRoute}
-                onShare={(id) => setShareItem({ type: 'route', id })}
-              />
-            )}
-            {activeTab === 'events' && (
-              <EventsTab
-                items={events}
-                loading={loading}
-                categories={eventCategories}
-                routes={routeItems}
-                onCreate={createEvent}
-                onDelete={deleteEvent}
-                onUpdate={updateEvent}
-                onShare={(id) => setShareItem({ type: 'event', id })}
-                onCreateCategory={createEventCategory}
-                onDeleteCategory={deleteEventCategory}
-                onFetchRoutes={fetchRoutes}
-              />
-            )}
-            {activeTab === 'newsletter' && <PersonalNewsletterView />}
-          </div>
+            </div>
+          ) : (
+            <>
+              {/* Collection Counts */}
+              {summary && (
+                <div style={styles.summaryRow}>
+                  <SummaryBadge icon={<FileText size={14} />} label="Feed" count={summary.postCount} active={activeTab === 'feed'} onClick={() => setActiveTab('feed')} />
+                  <SummaryBadge icon={<Image size={14} />} label="Photos" count={summary.galleryCount} active={activeTab === 'photos'} onClick={() => setActiveTab('photos')} />
+                  <SummaryBadge icon={<Map size={14} />} label="Routes" count={summary.routeCount} active={activeTab === 'routes'} onClick={() => setActiveTab('routes')} />
+                  <SummaryBadge icon={<CalendarDays size={14} />} label="Events" count={summary.eventCount} active={activeTab === 'events'} onClick={() => setActiveTab('events')} />
+                  {newsletterEnabled && <SummaryBadge icon={<Newspaper size={14} />} label="Newsletter" count={0} active={activeTab === 'newsletter'} onClick={() => setActiveTab('newsletter')} />}
+                </div>
+              )}
+
+              {/* Sub-tab Content */}
+              <div style={{ marginTop: '1rem', paddingBottom: '2rem' }}>
+                {activeTab === 'feed' && (
+                  <FeedTab
+                    posts={posts}
+                    loading={postsLoading}
+                    hasMore={postsHasMore}
+                    onCreatePost={createPost}
+                    onDeletePost={deletePost}
+                    onUpdatePost={updatePost}
+                    onLoadMore={() => {
+                      if (posts.length > 0) fetchPosts({ before: posts[posts.length - 1].id });
+                    }}
+                    highlightPostId={highlightPostId}
+                    highlightCommentId={highlightCommentId}
+                  />
+                )}
+                {activeTab === 'photos' && (
+                  <PhotosTab
+                    items={galleryItems}
+                    loading={loading}
+                    onUpload={uploadGalleryItem}
+                    onDelete={deleteGalleryItem}
+                    onUpdate={updateGalleryItem}
+                    onShare={(id) => setShareItem({ type: 'gallery', id })}
+                  />
+                )}
+                {activeTab === 'routes' && (
+                  <RoutesTab
+                    items={routeItems}
+                    loading={loading}
+                    onUpload={uploadRoute}
+                    onDelete={deleteRoute}
+                    onUpdate={updateRoute}
+                    onShare={(id) => setShareItem({ type: 'route', id })}
+                  />
+                )}
+                {activeTab === 'events' && (
+                  <EventsTab
+                    items={events}
+                    loading={loading}
+                    categories={eventCategories}
+                    routes={routeItems}
+                    onCreate={createEvent}
+                    onDelete={deleteEvent}
+                    onUpdate={updateEvent}
+                    onShare={(id) => setShareItem({ type: 'event', id })}
+                    onCreateCategory={createEventCategory}
+                    onDeleteCategory={deleteEventCategory}
+                    onFetchRoutes={fetchRoutes}
+                  />
+                )}
+                {activeTab === 'newsletter' && <PersonalNewsletterView />}
+              </div>
+            </>
+          )}
         </div>
 
         {showSettings && <UserSettingsModal onClose={() => setShowSettings(false)} />}
@@ -217,19 +279,31 @@ export function YouPage() {
         <SpaceSidebar spaces={spaces} activeSpaceId={null} />
       </div>
       <div style={{ ...styles.sidebarWrap, width: channelSidebarOpen ? 240 : 0 }}>
-        <ProfileSidebar
-          avatarUrl={user?.avatarUrl ?? null}
-          displayName={user?.displayName || '?'}
-          username={user?.username || ''}
-          bio={user?.bio}
-          baseColor={user?.baseColor}
-          accentColor={user?.accentColor}
-          followingCount={followCounts.followingCount}
-          followerCount={followCounts.followerCount}
-          onFollowingClick={() => { if (user?.id) { fetchFollowing(user.id); setFollowListMode('following'); } }}
-          onFollowersClick={() => { if (user?.id) { fetchFollowers(user.id); setFollowListMode('followers'); } }}
-          onLogout={logout}
-        />
+        {activeSpace ? (
+          <ProfileSidebar
+            avatarUrl={activeSpace.iconUrl}
+            displayName={activeSpace.name}
+            username={activeSpace.slug}
+            baseColor={activeSpace.baseColor}
+            accentColor={activeSpace.accentColor}
+            followingCount={0}
+            followerCount={0}
+          />
+        ) : (
+          <ProfileSidebar
+            avatarUrl={user?.avatarUrl ?? null}
+            displayName={user?.displayName || '?'}
+            username={user?.username || ''}
+            bio={user?.bio}
+            baseColor={user?.baseColor}
+            accentColor={user?.accentColor}
+            followingCount={followCounts.followingCount}
+            followerCount={followCounts.followerCount}
+            onFollowingClick={() => { if (user?.id) { fetchFollowing(user.id); setFollowListMode('following'); } }}
+            onFollowersClick={() => { if (user?.id) { fetchFollowers(user.id); setFollowListMode('followers'); } }}
+            onLogout={logout}
+          />
+        )}
       </div>
 
       {/* Main Content */}
@@ -242,94 +316,137 @@ export function YouPage() {
       }}>
         <div style={{ ...styles.card, maxWidth: 700 }}>
           {/* Profile Card */}
-          <div style={styles.profileSection}>
-            <Avatar
-              src={user?.avatarUrl ?? null}
-              name={user?.displayName || '?'}
-              size={80}
-              baseColor={user?.baseColor ?? null}
-              accentColor={user?.accentColor ?? null}
-            />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <h2 style={{ margin: 0, fontSize: '1.3rem' }}>{user?.displayName}</h2>
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>@{user?.username}</div>
-              {memberSince && (
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
-                  Member since {memberSince}
-                </div>
-              )}
+          {activeSpace ? (
+            <div style={styles.profileSection}>
+              <Avatar
+                src={activeSpace.iconUrl}
+                name={activeSpace.name}
+                size={80}
+                baseColor={activeSpace.baseColor ?? null}
+                accentColor={activeSpace.accentColor ?? null}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h2 style={{ margin: 0, fontSize: '1.3rem' }}>{activeSpace.name}</h2>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>@{activeSpace.slug}</div>
+              </div>
             </div>
-          </div>
-
-          {/* Collection Counts */}
-          {summary && (
-            <div style={styles.summaryRow}>
-              <SummaryBadge icon={<FileText size={14} />} label="Feed" count={summary.postCount} active={activeTab === 'feed'} onClick={() => setActiveTab('feed')} />
-              <SummaryBadge icon={<Image size={14} />} label="Photos" count={summary.galleryCount} active={activeTab === 'photos'} onClick={() => setActiveTab('photos')} />
-              <SummaryBadge icon={<Map size={14} />} label="Routes" count={summary.routeCount} active={activeTab === 'routes'} onClick={() => setActiveTab('routes')} />
-              <SummaryBadge icon={<CalendarDays size={14} />} label="Events" count={summary.eventCount} active={activeTab === 'events'} onClick={() => setActiveTab('events')} />
-              {newsletterEnabled && <SummaryBadge icon={<Newspaper size={14} />} label="Newsletter" count={0} active={activeTab === 'newsletter'} onClick={() => setActiveTab('newsletter')} />}
+          ) : (
+            <div style={styles.profileSection}>
+              <Avatar
+                src={user?.avatarUrl ?? null}
+                name={user?.displayName || '?'}
+                size={80}
+                baseColor={user?.baseColor ?? null}
+                accentColor={user?.accentColor ?? null}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h2 style={{ margin: 0, fontSize: '1.3rem' }}>{user?.displayName}</h2>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>@{user?.username}</div>
+                {memberSince && (
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
+                    Member since {memberSince}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
-          {/* Sub-tab Content */}
-          <div style={{ marginTop: '1rem' }}>
-            {activeTab === 'feed' && (
+          {activeSpace ? (
+            // Space view: only feed with composer
+            <div style={{ marginTop: '1rem' }}>
               <FeedTab
-                posts={posts}
-                loading={postsLoading}
-                hasMore={postsHasMore}
+                posts={spacePosts}
+                loading={spacePostsLoading}
+                hasMore={false}
                 defaultVisibility={defaultVisibility}
-                onCreatePost={createPost}
-                onDeletePost={deletePost}
-                onUpdatePost={updatePost}
-                onLoadMore={() => {
-                  if (posts.length > 0) fetchPosts({ before: posts[posts.length - 1].id });
+                onCreatePost={async (formData) => {
+                  await createPost(formData);
+                  // Refresh space posts
+                  api<UserPost[]>(`/follows/spaces/${activeSpaceId}/posts`).then(setSpacePosts).catch(() => {});
                 }}
+                onDeletePost={async (postId) => {
+                  await api(`/users/me/posts/${postId}`, { method: 'DELETE' });
+                  setSpacePosts((prev) => prev.filter((p) => p.id !== postId));
+                }}
+                onUpdatePost={updatePost}
+                onLoadMore={() => {}}
                 highlightPostId={highlightPostId}
                 highlightCommentId={highlightCommentId}
               />
-            )}
-            {activeTab === 'photos' && (
-              <PhotosTab
-                items={galleryItems}
-                loading={loading}
-                defaultVisibility={defaultVisibility}
-                onUpload={uploadGalleryItem}
-                onDelete={deleteGalleryItem}
-                onUpdate={updateGalleryItem}
-                onShare={(id) => setShareItem({ type: 'gallery', id })}
-              />
-            )}
-            {activeTab === 'routes' && (
-              <RoutesTab
-                items={routeItems}
-                loading={loading}
-                defaultVisibility={defaultVisibility}
-                onUpload={uploadRoute}
-                onDelete={deleteRoute}
-                onUpdate={updateRoute}
-                onShare={(id) => setShareItem({ type: 'route', id })}
-              />
-            )}
-            {activeTab === 'events' && (
-              <EventsTab
-                items={events}
-                loading={loading}
-                categories={eventCategories}
-                routes={routeItems}
-                defaultVisibility={defaultVisibility}
-                onCreate={createEvent}
-                onDelete={deleteEvent}
-                onUpdate={updateEvent}
-                onShare={(id) => setShareItem({ type: 'event', id })}
-                onCreateCategory={createEventCategory}
-                onDeleteCategory={deleteEventCategory}
-                onFetchRoutes={fetchRoutes}
-              />
-            )}
-            {activeTab === 'newsletter' && <PersonalNewsletterView />}
-          </div>
+            </div>
+          ) : (
+            <>
+              {/* Collection Counts */}
+              {summary && (
+                <div style={styles.summaryRow}>
+                  <SummaryBadge icon={<FileText size={14} />} label="Feed" count={summary.postCount} active={activeTab === 'feed'} onClick={() => setActiveTab('feed')} />
+                  <SummaryBadge icon={<Image size={14} />} label="Photos" count={summary.galleryCount} active={activeTab === 'photos'} onClick={() => setActiveTab('photos')} />
+                  <SummaryBadge icon={<Map size={14} />} label="Routes" count={summary.routeCount} active={activeTab === 'routes'} onClick={() => setActiveTab('routes')} />
+                  <SummaryBadge icon={<CalendarDays size={14} />} label="Events" count={summary.eventCount} active={activeTab === 'events'} onClick={() => setActiveTab('events')} />
+                  {newsletterEnabled && <SummaryBadge icon={<Newspaper size={14} />} label="Newsletter" count={0} active={activeTab === 'newsletter'} onClick={() => setActiveTab('newsletter')} />}
+                </div>
+              )}
+
+              {/* Sub-tab Content */}
+              <div style={{ marginTop: '1rem' }}>
+                {activeTab === 'feed' && (
+                  <FeedTab
+                    posts={posts}
+                    loading={postsLoading}
+                    hasMore={postsHasMore}
+                    defaultVisibility={defaultVisibility}
+                    onCreatePost={createPost}
+                    onDeletePost={deletePost}
+                    onUpdatePost={updatePost}
+                    onLoadMore={() => {
+                      if (posts.length > 0) fetchPosts({ before: posts[posts.length - 1].id });
+                    }}
+                    highlightPostId={highlightPostId}
+                    highlightCommentId={highlightCommentId}
+                  />
+                )}
+                {activeTab === 'photos' && (
+                  <PhotosTab
+                    items={galleryItems}
+                    loading={loading}
+                    defaultVisibility={defaultVisibility}
+                    onUpload={uploadGalleryItem}
+                    onDelete={deleteGalleryItem}
+                    onUpdate={updateGalleryItem}
+                    onShare={(id) => setShareItem({ type: 'gallery', id })}
+                  />
+                )}
+                {activeTab === 'routes' && (
+                  <RoutesTab
+                    items={routeItems}
+                    loading={loading}
+                    defaultVisibility={defaultVisibility}
+                    onUpload={uploadRoute}
+                    onDelete={deleteRoute}
+                    onUpdate={updateRoute}
+                    onShare={(id) => setShareItem({ type: 'route', id })}
+                  />
+                )}
+                {activeTab === 'events' && (
+                  <EventsTab
+                    items={events}
+                    loading={loading}
+                    categories={eventCategories}
+                    routes={routeItems}
+                    defaultVisibility={defaultVisibility}
+                    onCreate={createEvent}
+                    onDelete={deleteEvent}
+                    onUpdate={updateEvent}
+                    onShare={(id) => setShareItem({ type: 'event', id })}
+                    onCreateCategory={createEventCategory}
+                    onDeleteCategory={deleteEventCategory}
+                    onFetchRoutes={fetchRoutes}
+                  />
+                )}
+                {activeTab === 'newsletter' && <PersonalNewsletterView />}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -1154,7 +1271,7 @@ function FeedTab({ posts, loading, hasMore, defaultVisibility = 'private', onCre
             onDelete={() => { if (confirm('Delete this post?')) onDeletePost(post.id); }}
             onReaction={(emoji, hasReacted) => togglePostReaction(post.id, emoji, hasReacted)}
             onFetchComments={(opts) => fetchComments(post.id, opts)}
-            onAddComment={(text, parentCommentId) => addComment(post.id, text, undefined, parentCommentId)}
+            onAddComment={(text, parentCommentId) => addComment(post.id, text, undefined, parentCommentId, activeSpaceId || undefined)}
             onDeleteComment={(commentId) => deleteComment(post.id, commentId)}
             onCommentReaction={(commentId, emoji, hasReacted) => toggleCommentReaction(commentId, emoji, hasReacted)}
             onRepost={undefined}

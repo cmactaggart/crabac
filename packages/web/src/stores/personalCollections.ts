@@ -54,7 +54,7 @@ interface PersonalCollectionsState {
 
   // Comments
   fetchComments: (postId: string, opts?: { before?: string; userId?: string }) => Promise<UserPostComment[]>;
-  addComment: (postId: string, body: string, userId?: string, parentCommentId?: string) => Promise<UserPostComment>;
+  addComment: (postId: string, body: string, userId?: string, parentCommentId?: string, spaceId?: string) => Promise<UserPostComment>;
   deleteComment: (postId: string, commentId: string, userId?: string) => Promise<void>;
 
   // Comment reactions
@@ -336,10 +336,11 @@ export const usePersonalCollectionsStore = create<PersonalCollectionsState>((set
     return api<UserPostComment[]>(`${prefix}/posts/${postId}/comments?${params}`);
   },
 
-  addComment: async (postId, body, userId, parentCommentId) => {
+  addComment: async (postId, body, userId, parentCommentId, spaceId) => {
     const prefix = userId ? `/users/${userId}` : '/users/me';
     const payload: any = { body };
     if (parentCommentId) payload.parentCommentId = parentCommentId;
+    if (spaceId) payload.spaceId = spaceId;
     const comment = await api<UserPostComment>(`${prefix}/posts/${postId}/comments`, {
       method: 'POST',
       body: JSON.stringify(payload),

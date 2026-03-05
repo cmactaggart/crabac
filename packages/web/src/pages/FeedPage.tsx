@@ -7,6 +7,7 @@ import { useFeedStore } from '../stores/feed.js';
 import { usePersonalCollectionsStore } from '../stores/personalCollections.js';
 import { useNotificationsStore } from '../stores/notifications.js';
 import { useFollowsStore } from '../stores/follows.js';
+import { useIdentityStore } from '../stores/identity.js';
 import { useLayoutStore } from '../stores/layout.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 import { SpaceSidebar } from '../components/layout/SpaceSidebar.js';
@@ -24,6 +25,7 @@ export function FeedView() {
   const currentUser = useAuthStore((s) => s.user);
   const { posts, loading, hasMore, searchQuery, searchHashtag, fetchFeed, searchPosts, clearSearch } = useFeedStore();
   const { togglePostReaction, fetchComments, addComment, deleteComment, toggleCommentReaction } = usePersonalCollectionsStore();
+  const activeSpaceId = useIdentityStore((s) => s.activeSpaceId);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [reportPost, setReportPost] = useState<UserPost | null>(null);
   const [searchInput, setSearchInput] = useState('');
@@ -120,7 +122,7 @@ export function FeedView() {
   };
 
   const handleAddComment = async (postId: string, body: string, post: UserPost, parentCommentId?: string) => {
-    return addComment(postId, body, post.userId, parentCommentId);
+    return addComment(postId, body, post.userId, parentCommentId, activeSpaceId || undefined);
   };
 
   const handleDeleteComment = async (postId: string, commentId: string, post: UserPost) => {

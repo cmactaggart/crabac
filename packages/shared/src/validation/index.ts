@@ -741,6 +741,7 @@ export const userPostsQuerySchema = z.object({
 export const createPostCommentSchema = z.object({
   body: z.string().min(1).max(4000),
   parentCommentId: z.string().optional(),
+  spaceId: z.string().optional(),
 });
 
 export const postCommentsQuerySchema = z.object({
