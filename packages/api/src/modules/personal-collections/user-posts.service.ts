@@ -6,6 +6,7 @@ import { areFriends } from '../friends/friends.service.js';
 import { createNotification } from '../notifications/notifications.service.js';
 import { parseGpxFile } from '../messages/gpx.service.js';
 import * as collectionsService from './personal-collections.service.js';
+import { extractHashtags, indexSocialPost, updateSocialPost, removeSocialPost } from '../search/search.service.js';
 
 // ─── Create Post ───
 
@@ -169,6 +170,25 @@ export async function createPost(
       });
     }
   }
+
+  // Extract and store hashtags
+  const hashtags = extractHashtags(data.body || '');
+  if (hashtags.length > 0) {
+    await db('user_post_hashtags').insert(
+      hashtags.map((tag) => ({ post_id: String(postId), hashtag: tag })),
+    );
+  }
+
+  // Index in Typesense
+  const postAuthor = await db('users').where('id', userId).select('username').first();
+  indexSocialPost({
+    id: String(postId),
+    body: data.body || '',
+    userId,
+    authorUsername: postAuthor?.username || '',
+    visibility: data.visibility || 'private',
+    hashtags,
+  }).catch(() => {});
 
   return getPost(String(postId));
 }
@@ -338,6 +358,23 @@ export async function updatePost(
   if (data.visibility !== undefined) updates.visibility = data.visibility;
 
   await db('user_posts').where('id', postId).update(updates);
+
+  // Re-extract hashtags if body changed
+  if (data.body !== undefined) {
+    const hashtags = extractHashtags(data.body || '');
+    await db('user_post_hashtags').where('post_id', postId).delete();
+    if (hashtags.length > 0) {
+      await db('user_post_hashtags').insert(
+        hashtags.map((tag) => ({ post_id: postId, hashtag: tag })),
+      );
+    }
+    const currentPost = await db('user_posts').where('id', postId).first();
+    updateSocialPost(postId, data.body || '', currentPost?.visibility || post.visibility, hashtags).catch(() => {});
+  } else if (data.visibility !== undefined) {
+    const currentHashtags = (await db('user_post_hashtags').where('post_id', postId).select('hashtag')).map((r: any) => r.hashtag);
+    updateSocialPost(postId, post.body || '', data.visibility, currentHashtags).catch(() => {});
+  }
+
   return getPost(postId);
 }
 
@@ -349,6 +386,7 @@ export async function deletePost(postId: string, userId: string) {
   if (String(post.user_id) !== userId) throw new ForbiddenError('You can only delete your own posts');
 
   await db('user_posts').where('id', postId).delete();
+  removeSocialPost(postId).catch(() => {});
 }
 
 // ─── Post Reactions ───
@@ -407,9 +445,17 @@ async function getReactionsForPosts(postIds: string[]) {
 
 // ─── Comments ───
 
-export async function createComment(postId: string, userId: string, body: string) {
+export async function createComment(postId: string, userId: string, body: string, parentCommentId?: string) {
   const post = await db('user_posts').where('id', postId).first();
   if (!post) throw new NotFoundError('Post');
+
+  // Validate parent comment exists and belongs to the same post
+  if (parentCommentId) {
+    const parent = await db('user_post_comments').where('id', parentCommentId).first();
+    if (!parent || String(parent.post_id) !== postId) {
+      throw new BadRequestError('Parent comment not found');
+    }
+  }
 
   const commentId = snowflake.generate();
   await db('user_post_comments').insert({
@@ -417,6 +463,7 @@ export async function createComment(postId: string, userId: string, body: string
     post_id: postId,
     user_id: userId,
     body,
+    parent_comment_id: parentCommentId || null,
   });
 
   // Notify post owner if commenter is someone else
@@ -444,6 +491,7 @@ export async function listComments(
   postId: string,
   options: { before?: string; limit: number },
 ) {
+  // Fetch all comments for this post (top-level and replies)
   let query = db('user_post_comments as c')
     .join('users', 'c.user_id', 'users.id')
     .where('c.post_id', postId)
@@ -468,7 +516,27 @@ export async function listComments(
   const commentIds = rows.map((r: any) => String(r.id));
   const reactions = await getReactionsForComments(commentIds);
 
-  return rows.map((row: any) => formatComment(row, reactions.get(String(row.id)) || []));
+  // Build nested tree
+  const formatted: any[] = rows.map((row: any) => ({
+    ...formatComment(row, reactions.get(String(row.id)) || []),
+    replies: [],
+  }));
+  const byId = new Map<string, any>();
+  const topLevel: any[] = [];
+
+  for (const c of formatted) {
+    byId.set(c.id, c);
+  }
+
+  for (const c of formatted) {
+    if (c.parentCommentId && byId.has(c.parentCommentId)) {
+      byId.get(c.parentCommentId).replies.push(c);
+    } else {
+      topLevel.push(c);
+    }
+  }
+
+  return topLevel;
 }
 
 export async function deleteComment(commentId: string, userId: string) {
@@ -765,6 +833,7 @@ function formatComment(row: any, reactions: any[]) {
     id: String(row.id),
     postId: String(row.post_id),
     userId: String(row.user_id),
+    parentCommentId: row.parent_comment_id ? String(row.parent_comment_id) : null,
     body: row.body,
     reactions,
     author: {

@@ -126,6 +126,72 @@ async function backfillDirectMessages() {
   console.log(`\n  Done: ${total} direct messages indexed.`);
 }
 
+async function backfillSocialPosts() {
+  const client = getTypesenseClient();
+  if (!client) return;
+
+  console.log('Backfilling social posts...');
+  let cursor: string | null = null;
+  let total = 0;
+
+  while (true) {
+    let query = db('user_posts')
+      .join('users', 'user_posts.user_id', 'users.id')
+      .select(
+        'user_posts.id',
+        'user_posts.body',
+        'user_posts.user_id',
+        'user_posts.visibility',
+        'users.username as author_username',
+      )
+      .orderBy('user_posts.id', 'asc')
+      .limit(BATCH_SIZE);
+
+    if (cursor) {
+      query = query.where('user_posts.id', '>', cursor);
+    }
+
+    const rows = await query;
+    if (rows.length === 0) break;
+
+    // Batch load hashtags
+    const postIds = rows.map((r: any) => String(r.id));
+    const hashtagRows = await db('user_post_hashtags')
+      .whereIn('post_id', postIds)
+      .select('post_id', 'hashtag');
+
+    const hashtagsByPost = new Map<string, string[]>();
+    for (const h of hashtagRows) {
+      const key = String(h.post_id);
+      const list = hashtagsByPost.get(key) || [];
+      list.push(h.hashtag);
+      hashtagsByPost.set(key, list);
+    }
+
+    const documents = rows.map((r: any) => ({
+      id: String(r.id),
+      body: r.body || '',
+      user_id: String(r.user_id),
+      author_username: r.author_username,
+      visibility: r.visibility,
+      hashtags: hashtagsByPost.get(String(r.id)) || [],
+      created_at: snowflakeToTimestamp(String(r.id)),
+    }));
+
+    try {
+      await client.collections('social_posts').documents().import(documents, { action: 'upsert' });
+    } catch (err: any) {
+      console.error(`Batch error at cursor ${cursor}:`, err.message || err);
+    }
+
+    total += rows.length;
+    cursor = String(rows[rows.length - 1].id);
+    process.stdout.write(`\r  Social posts indexed: ${total}`);
+  }
+
+  console.log(`\n  Done: ${total} social posts indexed.`);
+}
+
 async function main() {
   console.log('=== Typesense Backfill ===\n');
 
@@ -139,6 +205,7 @@ async function main() {
   await ensureCollections();
   await backfillSpaceMessages();
   await backfillDirectMessages();
+  await backfillSocialPosts();
 
   console.log('\nBackfill complete.');
   await db.destroy();

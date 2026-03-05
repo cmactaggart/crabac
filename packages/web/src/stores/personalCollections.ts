@@ -54,7 +54,7 @@ interface PersonalCollectionsState {
 
   // Comments
   fetchComments: (postId: string, opts?: { before?: string; userId?: string }) => Promise<UserPostComment[]>;
-  addComment: (postId: string, body: string, userId?: string) => Promise<UserPostComment>;
+  addComment: (postId: string, body: string, userId?: string, parentCommentId?: string) => Promise<UserPostComment>;
   deleteComment: (postId: string, commentId: string, userId?: string) => Promise<void>;
 
   // Comment reactions
@@ -336,11 +336,13 @@ export const usePersonalCollectionsStore = create<PersonalCollectionsState>((set
     return api<UserPostComment[]>(`${prefix}/posts/${postId}/comments?${params}`);
   },
 
-  addComment: async (postId, body, userId) => {
+  addComment: async (postId, body, userId, parentCommentId) => {
     const prefix = userId ? `/users/${userId}` : '/users/me';
+    const payload: any = { body };
+    if (parentCommentId) payload.parentCommentId = parentCommentId;
     const comment = await api<UserPostComment>(`${prefix}/posts/${postId}/comments`, {
       method: 'POST',
-      body: JSON.stringify({ body }),
+      body: JSON.stringify(payload),
     });
     // Increment commentCount in local state
     set((s) => ({

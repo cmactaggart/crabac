@@ -546,8 +546,8 @@ function ReadOnlyFeedTab({ posts, setPosts, profileUserId, friendStatus, handleF
     return fetchComments(postId, { userId: profileUserId });
   };
 
-  const handleAddComment = async (postId: string, body: string) => {
-    const comment = await addComment(postId, body, profileUserId);
+  const handleAddComment = async (postId: string, body: string, parentCommentId?: string) => {
+    const comment = await addComment(postId, body, profileUserId, parentCommentId);
     setPosts(posts.map((p) => p.id === postId ? { ...p, commentCount: p.commentCount + 1 } : p));
     return comment;
   };
@@ -598,7 +598,7 @@ function ReadOnlyFeedTab({ posts, setPosts, profileUserId, friendStatus, handleF
             isOwn={false}
             onReaction={(emoji, hasReacted) => handleReaction(post.id, emoji, hasReacted)}
             onFetchComments={(opts) => handleFetchComments(post.id)}
-            onAddComment={(body) => handleAddComment(post.id, body)}
+            onAddComment={(body, parentCommentId) => handleAddComment(post.id, body, parentCommentId)}
             onDeleteComment={(commentId) => handleDeleteComment(post.id, commentId)}
             onCommentReaction={(commentId, emoji, hasReacted) => toggleCommentReaction(commentId, emoji, hasReacted)}
             onRepost={post.userId !== currentUserId && !post.repostOfId ? () => {} : undefined}

@@ -2,6 +2,7 @@ import { getTypesenseClient } from '../../lib/typesense.js';
 
 const SPACE_MESSAGES_COLLECTION = 'space_messages';
 const DIRECT_MESSAGES_COLLECTION = 'direct_messages';
+const SOCIAL_POSTS_COLLECTION = 'social_posts';
 
 // ─── Collection Setup ───
 
@@ -33,7 +34,19 @@ export async function ensureCollections(): Promise<void> {
     ],
   };
 
-  for (const schema of [spaceSchema, dmSchema]) {
+  const postsSchema = {
+    name: SOCIAL_POSTS_COLLECTION,
+    fields: [
+      { name: 'body', type: 'string' as const },
+      { name: 'user_id', type: 'string' as const, facet: true },
+      { name: 'author_username', type: 'string' as const, facet: true },
+      { name: 'visibility', type: 'string' as const, facet: true },
+      { name: 'hashtags', type: 'string[]' as const, facet: true },
+      { name: 'created_at', type: 'int64' as const, sort: true },
+    ],
+  };
+
+  for (const schema of [spaceSchema, dmSchema, postsSchema]) {
     try {
       await client.collections(schema.name).retrieve();
     } catch {
@@ -239,6 +252,100 @@ export async function searchDirectMessages(
     content: hit.document.content,
     conversationId: hit.document.conversation_id,
     authorId: hit.document.author_id,
+    authorUsername: hit.document.author_username,
+  }));
+}
+
+// ─── Social Posts ───
+
+export function extractHashtags(text: string): string[] {
+  if (!text) return [];
+  const matches = text.match(/#([a-zA-Z0-9_]+)/g);
+  if (!matches) return [];
+  return [...new Set(matches.map((m) => m.slice(1).toLowerCase()))];
+}
+
+export async function indexSocialPost(doc: {
+  id: string;
+  body: string;
+  userId: string;
+  authorUsername: string;
+  visibility: string;
+  hashtags: string[];
+}): Promise<void> {
+  const client = getTypesenseClient();
+  if (!client) return;
+
+  try {
+    await client.collections(SOCIAL_POSTS_COLLECTION).documents().upsert({
+      id: doc.id,
+      body: doc.body,
+      user_id: doc.userId,
+      author_username: doc.authorUsername,
+      visibility: doc.visibility,
+      hashtags: doc.hashtags,
+      created_at: snowflakeToTimestamp(doc.id),
+    });
+  } catch (err) {
+    console.error('[Search] Failed to index social post:', err);
+  }
+}
+
+export async function updateSocialPost(id: string, body: string, visibility: string, hashtags: string[]): Promise<void> {
+  const client = getTypesenseClient();
+  if (!client) return;
+
+  try {
+    await client.collections(SOCIAL_POSTS_COLLECTION).documents(id).update({ body, visibility, hashtags });
+  } catch (err) {
+    console.error('[Search] Failed to update social post:', err);
+  }
+}
+
+export async function removeSocialPost(id: string): Promise<void> {
+  const client = getTypesenseClient();
+  if (!client) return;
+
+  try {
+    await client.collections(SOCIAL_POSTS_COLLECTION).documents(id).delete();
+  } catch (err) {
+    console.error('[Search] Failed to remove social post:', err);
+  }
+}
+
+export async function searchSocialPosts(
+  query: string,
+  options: {
+    hashtag?: string;
+    limit?: number;
+    before?: string;
+  } = {},
+): Promise<{ id: string; body: string; userId: string; authorUsername: string }[]> {
+  const client = getTypesenseClient();
+  if (!client) return [];
+
+  const filterParts: string[] = ['visibility:=public'];
+
+  if (options.hashtag) {
+    filterParts.push(`hashtags:=${options.hashtag.toLowerCase()}`);
+  }
+  if (options.before) {
+    const ts = snowflakeToTimestamp(options.before);
+    filterParts.push(`created_at:<${ts}`);
+  }
+
+  const results = await client.collections(SOCIAL_POSTS_COLLECTION).documents().search({
+    q: query || '*',
+    query_by: 'body',
+    filter_by: filterParts.join(' && '),
+    sort_by: 'created_at:desc',
+    per_page: options.limit || 25,
+  });
+
+  return (results.hits || []).map((hit: any) => ({
+    id: hit.document.id,
+    body: hit.document.body,
+    userId: hit.document.user_id,
     authorUsername: hit.document.author_username,
   }));
 }

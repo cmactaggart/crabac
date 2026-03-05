@@ -21,6 +21,7 @@ import { NotificationsPage } from './pages/NotificationsPage.js';
 import { AccountPage } from './pages/AccountPage.js';
 import { YouPage } from './pages/YouPage.js';
 import { FeedPage } from './pages/FeedPage.js';
+import { PostDetailPage } from './pages/PostDetailPage.js';
 import { PublicProfilePage } from './pages/PublicProfilePage.js';
 import { OnboardingModal } from './components/common/OnboardingModal.js';
 import { api } from './lib/api.js';
@@ -97,6 +98,7 @@ export function App() {
         <Route path="/notifications" element={user ? <NotificationsPage /> : <Navigate to="/login" />} />
         <Route path="/feed" element={user ? <FeedPage /> : <Navigate to="/login" />} />
         <Route path="/you" element={user ? <YouPage /> : <Navigate to="/login" />} />
+        <Route path="/p/:username/post/:postId" element={user ? <PostDetailPage /> : <Navigate to="/login" />} />
         <Route path="/p/:username" element={user ? <PublicProfilePage /> : <Navigate to="/login" />} />
         <Route path="/account" element={user ? <AccountPage /> : <Navigate to="/login" />} />
         <Route path="/space/slug/:slug" element={<PublicSpaceLanding />} />

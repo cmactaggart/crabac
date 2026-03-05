@@ -567,8 +567,8 @@ personalCollectionsRoutes.post(
   '/me/posts/:postId/comments',
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { body } = validation.createPostCommentSchema.parse(req.body);
-      const comment = await postsService.createComment(req.params.postId, req.user!.userId, body);
+      const { body, parentCommentId } = validation.createPostCommentSchema.parse(req.body);
+      const comment = await postsService.createComment(req.params.postId, req.user!.userId, body, parentCommentId);
       res.status(201).json(comment);
     } catch (err) { next(err); }
   },
@@ -738,8 +738,8 @@ personalCollectionsRoutes.post(
   '/:userId/posts/:postId/comments',
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { body } = validation.createPostCommentSchema.parse(req.body);
-      const comment = await postsService.createComment(req.params.postId, req.user!.userId, body);
+      const { body, parentCommentId } = validation.createPostCommentSchema.parse(req.body);
+      const comment = await postsService.createComment(req.params.postId, req.user!.userId, body, parentCommentId);
       res.status(201).json(comment);
     } catch (err) { next(err); }
   },

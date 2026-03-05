@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trash2, Edit3, Eye, MapPin, SmilePlus, MessageCircle, Repeat2, Forward, X, Flag, Pin } from 'lucide-react';
+import { Trash2, Edit3, Eye, MapPin, SmilePlus, MessageCircle, Repeat2, Forward, X, Flag, Pin, Copy, Check, MessageSquare, Share2, Reply, UserPlus, UserMinus } from 'lucide-react';
 import { Avatar } from '../common/Avatar.js';
 import { EmojiPicker } from '../messages/EmojiPicker.js';
 import { ShareToSpacePicker } from '../common/ShareToSpacePicker.js';
 import { SpaceLinkEmbed, extractSpaceLinks } from '../spaces/SpaceLinkEmbed.js';
 import { usePersonalCollectionsStore } from '../../stores/personalCollections.js';
+import { useFollowsStore } from '../../stores/follows.js';
 import type { UserPost, UserPostComment, PersonalVisibility } from '@crabac/shared';
 
 const VISIBILITY_LABELS: Record<PersonalVisibility, string> = {
@@ -15,20 +16,12 @@ const VISIBILITY_LABELS: Record<PersonalVisibility, string> = {
   spaces: 'Spaces',
 };
 
-const VISIBILITY_COLORS: Record<PersonalVisibility, string> = {
-  public: '#43b581',
-  private: '#747f8d',
-  friends: '#faa61a',
-  spaces: '#5865f2',
-};
-
 export function VisibilityBadge({ visibility }: { visibility: PersonalVisibility }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 3,
       padding: '2px 6px', borderRadius: 10, fontSize: '0.65rem', fontWeight: 600,
-      background: `${VISIBILITY_COLORS[visibility]}22`,
-      color: VISIBILITY_COLORS[visibility],
+      color: 'var(--text-muted)',
     }}>
       <Eye size={10} />
       {VISIBILITY_LABELS[visibility]}
@@ -36,13 +29,13 @@ export function VisibilityBadge({ visibility }: { visibility: PersonalVisibility
   );
 }
 
-function renderTextWithMentions(text: string, navigate: (path: string) => void): React.ReactNode {
+function renderTextWithMentions(text: string, navigate: (path: string) => void, onHashtagClick?: (tag: string) => void): React.ReactNode {
   const origin = window.location.origin;
   const escapedOrigin = origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  // Matches: markdown links [text](/space/...), @username, full space URLs, or bare /space/... paths
+  // Matches: markdown links [text](/space/...), #hashtag, @username, full space URLs, or bare /space/... paths
   // Supports both /space/{id} and /space/slug/{slug}
   const pattern = new RegExp(
-    `(\\[[^\\]]+\\]\\(\\/space\\/(?:slug\\/[a-zA-Z0-9_-]+|\\d+)\\))|(@[a-zA-Z0-9_-]+)|(${escapedOrigin}\\/space\\/(?:slug\\/[a-zA-Z0-9_-]+|\\d+))|\\/space\\/(?:slug\\/[a-zA-Z0-9_-]+|\\d+)`,
+    `(\\[[^\\]]+\\]\\(\\/space\\/(?:slug\\/[a-zA-Z0-9_-]+|\\d+)\\))|(#[a-zA-Z0-9_]+)|(@[a-zA-Z0-9_-]+)|(${escapedOrigin}\\/space\\/(?:slug\\/[a-zA-Z0-9_-]+|\\d+))|\\/space\\/(?:slug\\/[a-zA-Z0-9_-]+|\\d+)`,
     'g',
   );
 
@@ -73,6 +66,18 @@ function renderTextWithMentions(text: string, navigate: (path: string) => void):
         );
       }
     } else if (match[2]) {
+      // #hashtag
+      const tag = full.slice(1);
+      result.push(
+        <span
+          key={match.index}
+          style={{ color: 'var(--accent)', fontWeight: 600, cursor: 'pointer' }}
+          onClick={() => onHashtagClick ? onHashtagClick(tag) : navigate(`/feed?hashtag=${encodeURIComponent(tag)}`)}
+        >
+          {full}
+        </span>,
+      );
+    } else if (match[3]) {
       // @username mention
       const username = full.slice(1);
       result.push(
@@ -84,6 +89,22 @@ function renderTextWithMentions(text: string, navigate: (path: string) => void):
           {full}
         </span>,
       );
+    } else if (match[4]) {
+      // Full space URL
+      const pathMatch = full.match(/(\/space\/(?:slug\/[a-zA-Z0-9_-]+|\d+))/);
+      if (pathMatch) {
+        result.push(
+          <span
+            key={match.index}
+            style={{ color: 'var(--accent)', cursor: 'pointer' }}
+            onClick={() => navigate(pathMatch[1])}
+          >
+            {full}
+          </span>,
+        );
+      } else {
+        result.push(full);
+      }
     } else {
       // Full or bare space URL — extract the /space/... path
       const pathMatch = full.match(/(\/space\/(?:slug\/[a-zA-Z0-9_-]+|\d+))/);
@@ -113,7 +134,7 @@ function renderTextWithMentions(text: string, navigate: (path: string) => void):
   return result;
 }
 
-export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, editVisibility, onEditBodyChange, onEditVisibilityChange, onStartEdit, onSaveEdit, onCancelEdit, onDelete, onReaction, onFetchComments, onAddComment, onDeleteComment, onCommentReaction, onRepost, onShare, onReport, onPin, onUnpin, showAuthorLink, initialShowComments }: {
+export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, editVisibility, onEditBodyChange, onEditVisibilityChange, onStartEdit, onSaveEdit, onCancelEdit, onDelete, onReaction, onFetchComments, onAddComment, onDeleteComment, onCommentReaction, onRepost, onShare, onReport, onPin, onUnpin, showAuthorLink, initialShowComments, onHashtagClick }: {
   post: UserPost;
   currentUserId: string;
   isOwn: boolean;
@@ -128,7 +149,7 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
   onDelete?: () => void;
   onReaction: (emoji: string, hasReacted: boolean) => void;
   onFetchComments: (opts?: { before?: string }) => Promise<UserPostComment[]>;
-  onAddComment: (body: string) => Promise<UserPostComment>;
+  onAddComment: (body: string, parentCommentId?: string) => Promise<UserPostComment>;
   onDeleteComment: (commentId: string) => Promise<void>;
   onCommentReaction: (commentId: string, emoji: string, hasReacted: boolean) => Promise<any>;
   onRepost?: ((post: UserPost) => void) | undefined;
@@ -138,6 +159,7 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
   onUnpin?: () => void;
   showAuthorLink?: boolean;
   initialShowComments?: boolean;
+  onHashtagClick?: (tag: string) => void;
 }) {
   const navigate = useNavigate();
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -159,6 +181,39 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
   const [reposting, setReposting] = useState(false);
   const { createRepost } = usePersonalCollectionsStore();
   const [sharePickerOpen, setSharePickerOpen] = useState(false);
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [isFollowing, setIsFollowing] = useState<boolean | null>(null);
+  const [isFriend, setIsFriend] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
+  const { followUser, unfollowUser, getFollowStatus } = useFollowsStore();
+
+  // Load follow status for non-own posts
+  useEffect(() => {
+    if (!isOwn && post.userId && currentUserId) {
+      getFollowStatus(post.userId).then((s) => {
+        setIsFollowing(s.isFollowing);
+        setIsFriend(s.isFriend);
+      }).catch(() => {});
+    }
+  }, [post.userId, isOwn, currentUserId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleFollowToggle = async () => {
+    if (followLoading || isFollowing === null) return;
+    setFollowLoading(true);
+    try {
+      if (isFollowing) {
+        await unfollowUser(post.userId);
+      } else {
+        await followUser(post.userId);
+      }
+      setIsFollowing(!isFollowing);
+    } catch (err) {
+      console.error('Follow toggle failed:', err);
+    } finally {
+      setFollowLoading(false);
+    }
+  };
 
   const dateStr = new Date(post.createdAt).toLocaleDateString([], {
     year: 'numeric', month: 'short', day: 'numeric',
@@ -182,19 +237,29 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
     if (next && comments.length === 0) loadComments();
   };
 
+  const [replyToId, setReplyToId] = useState<string | null>(null);
+  const [replyToUsername, setReplyToUsername] = useState<string | null>(null);
+
   const handleAddComment = async () => {
     if (!commentText.trim()) return;
     try {
-      const comment = await onAddComment(commentText.trim());
-      setComments((prev) => [...prev, comment]);
+      const comment = await onAddComment(commentText.trim(), replyToId || undefined);
+      if (replyToId) {
+        // Insert reply into nested structure
+        setComments((prev) => insertReply(prev, replyToId, comment));
+      } else {
+        setComments((prev) => [...prev, { ...comment, replies: [] }]);
+      }
       setCommentText('');
+      setReplyToId(null);
+      setReplyToUsername(null);
     } catch {}
   };
 
   const handleDeleteComment = async (commentId: string) => {
     try {
       await onDeleteComment(commentId);
-      setComments((prev) => prev.filter((c) => c.id !== commentId));
+      setComments((prev) => removeComment(prev, commentId));
     } catch {}
   };
 
@@ -219,8 +284,20 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
     ? () => navigate(`/p/${post.author!.username}`)
     : undefined;
 
+  const postDetailUrl = post.author?.username ? `/p/${post.author.username}/post/${post.id}` : null;
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    if (!postDetailUrl) return;
+    // Don't navigate if clicking on interactive elements
+    const target = e.target as HTMLElement;
+    if (target.closest('button, a, input, textarea, select, [role="button"]')) return;
+    // Don't navigate if clicking on clickable spans (mentions, hashtags, links)
+    if (target.closest('span[style*="cursor: pointer"], span[style*="cursor:pointer"]')) return;
+    navigate(postDetailUrl);
+  };
+
   return (
-    <div data-post-id={post.id} style={styles.postCard}>
+    <div data-post-id={post.id} style={{ ...styles.postCard, cursor: postDetailUrl ? 'pointer' : undefined }} onClick={handleCardClick}>
       {/* Repost header */}
       {post.repostOfId && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
@@ -243,7 +320,7 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
             >{post.repostOf.author?.displayName}</span>
             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{new Date(post.repostOf.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
           </div>
-          {post.repostOf.body && <div style={{ fontSize: '0.85rem', lineHeight: 1.4, marginBottom: 6, whiteSpace: 'pre-wrap' }}>{renderTextWithMentions(post.repostOf.body, navigate)}</div>}
+          {post.repostOf.body && <div style={{ fontSize: '0.85rem', lineHeight: 1.4, marginBottom: 6, whiteSpace: 'pre-wrap' }}>{renderTextWithMentions(post.repostOf.body, navigate, onHashtagClick)}</div>}
           {post.repostOf.attachments.filter((a) => a.type === 'image' || a.type === 'video').length > 0 && (
             <div style={{
               display: 'grid',
@@ -294,11 +371,43 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
                   onClick={(e) => { e.stopPropagation(); navigate(`/p/${post.author!.username}`); }}
                 >@{post.author.username}</span>
               )}
-              {dateStr} at {timeStr}
+              <span
+                style={{ cursor: 'pointer' }}
+                onClick={(e) => { e.stopPropagation(); if (post.author?.username) navigate(`/p/${post.author.username}/post/${post.id}`); }}
+                title="View post"
+              >{dateStr} at {timeStr}</span>
             </div>
           </div>
+          {!isOwn && isFollowing !== null && (
+            isFriend ? (
+              <span style={{
+                display: 'flex', alignItems: 'center', gap: 3,
+                padding: '3px 8px', borderRadius: 12, fontSize: '0.68rem', fontWeight: 600,
+                border: '1px solid var(--border)', color: 'var(--text-muted)',
+              }}>
+                Friends
+              </span>
+            ) : (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleFollowToggle(); }}
+                disabled={followLoading}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 3,
+                  padding: '3px 8px', borderRadius: 12, fontSize: '0.68rem', fontWeight: 600,
+                  border: isFollowing ? '1px solid var(--border)' : '1px solid var(--accent)',
+                  background: isFollowing ? 'transparent' : 'var(--accent)',
+                  color: isFollowing ? 'var(--text-muted)' : 'white',
+                  cursor: 'pointer', opacity: followLoading ? 0.6 : 1,
+                }}
+                title={isFollowing ? 'Unfollow' : 'Follow'}
+              >
+                {isFollowing ? <UserMinus size={10} /> : <UserPlus size={10} />}
+                {isFollowing ? 'Following' : 'Follow'}
+              </button>
+            )
+          )}
           {post.isPinned && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 10, fontSize: '0.65rem', fontWeight: 600, background: 'rgba(250, 166, 26, 0.15)', color: '#faa61a' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 10, fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-muted)' }}>
               <Pin size={10} /> Pinned
             </span>
           )}
@@ -329,7 +438,7 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
       ) : (
         post.body && (
           <div style={{ fontSize: '0.9rem', lineHeight: 1.5, marginBottom: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-            {renderTextWithMentions(post.body, navigate)}
+            {renderTextWithMentions(post.body, navigate, onHashtagClick)}
           </div>
         )
       )}
@@ -404,7 +513,7 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
         <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 4 }}>
           {/* Reaction button */}
           <div style={{ position: 'relative' }}>
-            <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} style={{ ...styles.iconBtn, background: 'var(--bg-tertiary)' }} title="Add reaction">
+            <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} style={styles.iconBtn} title="Add reaction">
               <SmilePlus size={13} />
             </button>
             {showEmojiPicker && (
@@ -413,26 +522,66 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
           </div>
 
           {/* Comment toggle */}
-          <button onClick={handleToggleComments} style={{ ...styles.iconBtn, background: 'var(--bg-tertiary)', gap: 4, width: 'auto', paddingLeft: 8, paddingRight: 8 }} title="Comments">
+          <button onClick={handleToggleComments} style={{ ...styles.iconBtn, gap: 4, width: 'auto', paddingLeft: 8, paddingRight: 8 }} title="Comments">
             <MessageCircle size={13} />
             {post.commentCount > 0 && <span style={{ fontSize: '0.72rem' }}>{post.commentCount}</span>}
           </button>
 
           {/* Repost button (only on other users' posts) */}
           {onRepost && (
-            <button onClick={() => setRepostForm(!repostForm)} style={{ ...styles.iconBtn, background: 'var(--bg-tertiary)' }} title="Repost">
+            <button onClick={() => setRepostForm(!repostForm)} style={styles.iconBtn} title="Repost">
               <Repeat2 size={13} />
             </button>
           )}
 
-          {/* Share to channel */}
-          <button onClick={() => setSharePickerOpen(true)} style={{ ...styles.iconBtn, background: 'var(--bg-tertiary)' }} title="Share to channel">
-            <Forward size={13} />
-          </button>
+          {/* Share menu */}
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setShareMenuOpen(!shareMenuOpen)} style={styles.iconBtn} title="Share">
+              <Share2 size={13} />
+            </button>
+            {shareMenuOpen && (
+              <>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setShareMenuOpen(false)} />
+                <div style={{
+                  position: 'absolute', left: 0, bottom: '100%', marginBottom: 4, zIndex: 100,
+                  background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius)', minWidth: 170, padding: 4,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                }}>
+                  <button
+                    onClick={() => {
+                      const url = `${window.location.origin}/p/${post.author?.username}/post/${post.id}`;
+                      navigate(`/dm?shareText=${encodeURIComponent(`Check out this post: ${url}`)}`);
+                      setShareMenuOpen(false);
+                    }}
+                    style={styles.shareMenuItem}
+                  >
+                    <MessageSquare size={14} /> Send in DM
+                  </button>
+                  <button onClick={() => { setSharePickerOpen(true); setShareMenuOpen(false); }} style={styles.shareMenuItem}>
+                    <Forward size={14} /> Share in channel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const url = `${window.location.origin}/p/${post.author?.username}/post/${post.id}`;
+                      await navigator.clipboard.writeText(url);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                      setShareMenuOpen(false);
+                    }}
+                    style={styles.shareMenuItem}
+                  >
+                    {copied ? <Check size={14} /> : <Copy size={14} />}
+                    {copied ? 'Copied!' : 'Copy link'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
 
           {/* Report (non-own posts) */}
           {onReport && !isOwn && (
-            <button onClick={onReport} style={{ ...styles.iconBtn, background: 'var(--bg-tertiary)' }} title="Report">
+            <button onClick={onReport} style={styles.iconBtn} title="Report">
               <Flag size={13} />
             </button>
           )}
@@ -441,24 +590,24 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
 
           {/* Pin/Unpin (own posts only) */}
           {isOwn && onPin && !post.isPinned && (
-            <button onClick={onPin} style={{ ...styles.iconBtn, background: 'var(--bg-tertiary)' }} title="Pin post">
+            <button onClick={onPin} style={styles.iconBtn} title="Pin post">
               <Pin size={13} />
             </button>
           )}
           {isOwn && onUnpin && post.isPinned && (
-            <button onClick={onUnpin} style={{ ...styles.iconBtn, background: 'var(--bg-tertiary)', color: '#faa61a' }} title="Unpin post">
+            <button onClick={onUnpin} style={{ ...styles.iconBtn, color: 'var(--text-muted)' }} title="Unpin post">
               <Pin size={13} />
             </button>
           )}
 
           {/* Edit/Delete (own posts only) */}
           {isOwn && onStartEdit && (
-            <button onClick={onStartEdit} style={{ ...styles.iconBtn, background: 'var(--bg-tertiary)' }} title="Edit">
+            <button onClick={onStartEdit} style={styles.iconBtn} title="Edit">
               <Edit3 size={13} />
             </button>
           )}
           {isOwn && onDelete && (
-            <button onClick={onDelete} style={{ ...styles.iconBtn, background: 'var(--bg-tertiary)', color: 'var(--danger)' }} title="Delete">
+            <button onClick={onDelete} style={{ ...styles.iconBtn, color: 'var(--danger)' }} title="Delete">
               <Trash2 size={13} />
             </button>
           )}
@@ -503,17 +652,33 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
               comment={comment}
               currentUserId={currentUserId}
               postOwnerId={post.userId}
-              onDelete={() => handleDeleteComment(comment.id)}
-              onReaction={(emoji, hasReacted) => handleCommentReaction(comment.id, emoji, hasReacted)}
+              onDelete={(id) => handleDeleteComment(id)}
+              onReaction={(commentId, emoji, hasReacted) => handleCommentReaction(commentId, emoji, hasReacted)}
+              onReply={(id, username) => { setReplyToId(id); setReplyToUsername(username); }}
+              depth={0}
             />
           ))}
+
+          {/* Reply indicator */}
+          {replyToId && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              <Reply size={12} />
+              <span>Replying to <strong style={{ color: 'var(--accent)' }}>@{replyToUsername}</strong></span>
+              <button
+                onClick={() => { setReplyToId(null); setReplyToUsername(null); }}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, display: 'flex' }}
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
 
           {/* Add comment input */}
           <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
             <input
               value={commentText}
               onChange={(e) => setCommentText(e.target.value)}
-              placeholder="Write a comment..."
+              placeholder={replyToId ? `Reply to @${replyToUsername}...` : 'Write a comment...'}
               style={{ ...styles.formInput, fontSize: '0.82rem' }}
               maxLength={4000}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(); } }}
@@ -538,74 +703,124 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
   );
 }
 
+// ─── Nested comment helpers ───
+
+function insertReply(comments: UserPostComment[], parentId: string, reply: UserPostComment): UserPostComment[] {
+  return comments.map((c) => {
+    if (c.id === parentId) {
+      return { ...c, replies: [...(c.replies || []), { ...reply, replies: [] }] };
+    }
+    if (c.replies?.length) {
+      return { ...c, replies: insertReply(c.replies, parentId, reply) };
+    }
+    return c;
+  });
+}
+
+function removeComment(comments: UserPostComment[], commentId: string): UserPostComment[] {
+  return comments
+    .filter((c) => c.id !== commentId)
+    .map((c) => c.replies?.length ? { ...c, replies: removeComment(c.replies, commentId) } : c);
+}
+
 // ─── Comment Row ───
 
-export function CommentRow({ comment, currentUserId, postOwnerId, onDelete, onReaction }: {
+const MAX_DEPTH = 3;
+
+export function CommentRow({ comment, currentUserId, postOwnerId, onDelete, onReaction, onReply, depth }: {
   comment: UserPostComment;
   currentUserId: string;
   postOwnerId: string;
-  onDelete: () => void;
-  onReaction: (emoji: string, hasReacted: boolean) => void;
+  onDelete: (commentId: string) => void;
+  onReaction: (commentId: string, emoji: string, hasReacted: boolean) => void;
+  onReply: (commentId: string, username: string) => void;
+  depth: number;
 }) {
   const navigate = useNavigate();
   const canDelete = comment.userId === currentUserId || postOwnerId === currentUserId;
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   return (
-    <div style={{ display: 'flex', gap: 8, padding: '6px 0', fontSize: '0.82rem' }}>
-      <Avatar src={comment.author?.avatarUrl || null} name={comment.author?.displayName || '?'} size={24} baseColor={comment.author?.baseColor} accentColor={comment.author?.accentColor} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span
-            style={{ fontWeight: 600, fontSize: '0.8rem', cursor: comment.author?.username ? 'pointer' : undefined, color: comment.author?.username ? 'var(--text-primary)' : undefined }}
-            onClick={comment.author?.username ? () => navigate(`/p/${comment.author!.username}`) : undefined}
-          >{comment.author?.displayName}</span>
-          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-            {new Date(comment.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-          </span>
-          {canDelete && (
-            <button onClick={onDelete} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, marginLeft: 'auto', display: 'flex' }} title="Delete comment">
-              <X size={12} />
-            </button>
-          )}
-        </div>
-        <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.4, marginTop: 2 }}>{renderTextWithMentions(comment.body, navigate)}</div>
-
-        {/* Comment reactions */}
-        {comment.reactions && comment.reactions.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
-            {comment.reactions.map((reaction) => {
-              const hasReacted = reaction.users.some((u) => u.id === currentUserId);
-              return (
-                <button
-                  key={reaction.emoji}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 3,
-                    padding: '1px 6px', borderRadius: 10, border: `1px solid ${hasReacted ? 'var(--accent)' : 'var(--border)'}`,
-                    background: hasReacted ? 'rgba(88, 101, 242, 0.15)' : 'var(--bg-tertiary)',
-                    cursor: 'pointer', fontSize: '0.75rem',
-                  }}
-                  onClick={() => onReaction(reaction.emoji, hasReacted)}
-                  title={reaction.users.map((u) => u.username).join(', ')}
-                >
-                  <span>{reaction.emoji}</span>
-                  <span style={{ color: hasReacted ? 'var(--accent)' : 'var(--text-secondary)' }}>{reaction.count}</span>
-                </button>
-              );
-            })}
+    <div style={{ marginLeft: depth > 0 ? Math.min(depth, MAX_DEPTH) * 20 : 0, borderLeft: depth > 0 ? '2px solid var(--border)' : undefined, paddingLeft: depth > 0 ? 8 : 0 }}>
+      <div style={{ display: 'flex', gap: 8, padding: '6px 0', fontSize: '0.82rem' }}>
+        <Avatar src={comment.author?.avatarUrl || null} name={comment.author?.displayName || '?'} size={depth > 0 ? 20 : 24} baseColor={comment.author?.baseColor} accentColor={comment.author?.accentColor} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span
+              style={{ fontWeight: 600, fontSize: '0.8rem', cursor: comment.author?.username ? 'pointer' : undefined, color: comment.author?.username ? 'var(--text-primary)' : undefined }}
+              onClick={comment.author?.username ? () => navigate(`/p/${comment.author!.username}`) : undefined}
+            >{comment.author?.displayName}</span>
+            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+              {new Date(comment.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+            </span>
+            {canDelete && (
+              <button onClick={() => onDelete(comment.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, marginLeft: 'auto', display: 'flex' }} title="Delete comment">
+                <X size={12} />
+              </button>
+            )}
           </div>
-        )}
+          <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.4, marginTop: 2 }}>{renderTextWithMentions(comment.body, navigate)}</div>
 
-        {/* Add reaction to comment */}
-        <div style={{ position: 'relative', display: 'inline-block', marginTop: 2 }}>
-          <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, display: 'flex' }}>
-            <SmilePlus size={12} />
-          </button>
-          {showEmojiPicker && (
-            <EmojiPicker onSelect={(emoji) => { onReaction(emoji, false); setShowEmojiPicker(false); }} onClose={() => setShowEmojiPicker(false)} />
+          {/* Comment actions: react + reply */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, display: 'flex' }}>
+                <SmilePlus size={12} />
+              </button>
+              {showEmojiPicker && (
+                <EmojiPicker onSelect={(emoji) => { onReaction(comment.id, emoji, false); setShowEmojiPicker(false); }} onClose={() => setShowEmojiPicker(false)} />
+              )}
+            </div>
+            <button
+              onClick={() => onReply(comment.id, comment.author?.username || '')}
+              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 3, fontSize: '0.72rem' }}
+            >
+              <Reply size={12} /> Reply
+            </button>
+          </div>
+
+          {/* Comment reactions */}
+          {comment.reactions && comment.reactions.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
+              {comment.reactions.map((reaction) => {
+                const hasReacted = reaction.users.some((u) => u.id === currentUserId);
+                return (
+                  <button
+                    key={reaction.emoji}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 3,
+                      padding: '1px 6px', borderRadius: 10, border: `1px solid ${hasReacted ? 'var(--accent)' : 'var(--border)'}`,
+                      background: hasReacted ? 'rgba(88, 101, 242, 0.15)' : 'var(--bg-tertiary)',
+                      cursor: 'pointer', fontSize: '0.75rem',
+                    }}
+                    onClick={() => onReaction(comment.id, reaction.emoji, hasReacted)}
+                    title={reaction.users.map((u) => u.username).join(', ')}
+                  >
+                    <span>{reaction.emoji}</span>
+                    <span style={{ color: hasReacted ? 'var(--accent)' : 'var(--text-secondary)' }}>{reaction.count}</span>
+                  </button>
+                );
+              })}
+            </div>
           )}
         </div>
       </div>
+
+      {/* Nested replies */}
+      {comment.replies && comment.replies.length > 0 && (
+        comment.replies.map((reply) => (
+          <CommentRow
+            key={reply.id}
+            comment={reply}
+            currentUserId={currentUserId}
+            postOwnerId={postOwnerId}
+            onDelete={onDelete}
+            onReaction={onReaction}
+            onReply={onReply}
+            depth={depth + 1}
+          />
+        ))
+      )}
     </div>
   );
 }
@@ -624,8 +839,8 @@ const styles: Record<string, React.CSSProperties> = {
     height: 28,
     borderRadius: 'var(--radius)',
     border: 'none',
-    background: 'rgba(0,0,0,0.3)',
-    color: 'white',
+    background: 'transparent',
+    color: 'var(--text-muted)',
     cursor: 'pointer',
     padding: 0,
   },
@@ -662,5 +877,19 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '0.8rem',
     fontWeight: 600,
     cursor: 'pointer',
+  },
+  shareMenuItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+    padding: '8px 12px',
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--text-primary)',
+    fontSize: '0.82rem',
+    cursor: 'pointer',
+    borderRadius: 'var(--radius)',
+    textAlign: 'left' as const,
   },
 };

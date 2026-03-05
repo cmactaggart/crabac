@@ -132,8 +132,10 @@ export interface UserPostComment {
   id: string;
   postId: string;
   userId: string;
+  parentCommentId?: string | null;
   body: string;
   reactions: { emoji: string; count: number; users: { id: string; username: string }[] }[];
+  replies?: UserPostComment[];
   author?: {
     id: string;
     username: string;

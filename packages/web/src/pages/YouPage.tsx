@@ -1148,7 +1148,7 @@ function FeedTab({ posts, loading, hasMore, defaultVisibility = 'private', onCre
             onDelete={() => { if (confirm('Delete this post?')) onDeletePost(post.id); }}
             onReaction={(emoji, hasReacted) => togglePostReaction(post.id, emoji, hasReacted)}
             onFetchComments={(opts) => fetchComments(post.id, opts)}
-            onAddComment={(text) => addComment(post.id, text)}
+            onAddComment={(text, parentCommentId) => addComment(post.id, text, undefined, parentCommentId)}
             onDeleteComment={(commentId) => deleteComment(post.id, commentId)}
             onCommentReaction={(commentId, emoji, hasReacted) => toggleCommentReaction(commentId, emoji, hasReacted)}
             onRepost={undefined}
