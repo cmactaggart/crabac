@@ -47,7 +47,7 @@ interface PersonalCollectionsState {
 
   copyGalleryToChannel: (itemId: string, channelId: string) => Promise<any>;
   copyRouteToChannel: (itemId: string, channelId: string) => Promise<any>;
-  copyEventToSpace: (eventId: string, spaceId: string) => Promise<any>;
+  copyEventToSpace: (eventId: string, spaceId: string, channelId?: string) => Promise<any>;
 
   // Post reactions
   togglePostReaction: (postId: string, emoji: string, hasReacted: boolean, userId?: string) => Promise<void>;
@@ -307,10 +307,10 @@ export const usePersonalCollectionsStore = create<PersonalCollectionsState>((set
     });
   },
 
-  copyEventToSpace: async (eventId, spaceId) => {
+  copyEventToSpace: async (eventId, spaceId, channelId) => {
     return api(`/users/me/collections/events/${eventId}/copy`, {
       method: 'POST',
-      body: JSON.stringify({ spaceId }),
+      body: JSON.stringify({ spaceId, ...(channelId ? { channelId } : {}) }),
     });
   },
 

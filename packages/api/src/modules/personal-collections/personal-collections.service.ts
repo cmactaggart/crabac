@@ -601,6 +601,7 @@ export async function copyEventToSpace(
   personalEventId: string,
   spaceId: string,
   userId: string,
+  channelId?: string,
 ) {
   const item = await db('personal_events').where('id', personalEventId).first();
   if (!item) throw new NotFoundError('Personal event');
@@ -608,6 +609,22 @@ export async function copyEventToSpace(
 
   const space = await db('spaces').where('id', spaceId).first();
   if (!space) throw new NotFoundError('Space');
+
+  // Load personal event with category + route data for the embed
+  const fullItem = await db('personal_events as pe')
+    .leftJoin('personal_event_categories as pec', 'pe.category_id', 'pec.id')
+    .leftJoin('personal_route_items as pri', 'pe.route_id', 'pri.id')
+    .where('pe.id', personalEventId)
+    .select(
+      'pe.*',
+      'pec.name as category_name',
+      'pec.color as category_color',
+      'pri.name as route_name',
+      'pri.distance_km as route_distance_km',
+      'pri.elevation_gain_m as route_elevation_gain_m',
+      'pri.geojson as route_geojson',
+    )
+    .first();
 
   const newId = snowflake.generate();
   await db('calendar_events').insert({
@@ -622,6 +639,49 @@ export async function copyEventToSpace(
     activity_type: item.activity_type,
     copied_from_personal_id: personalEventId,
   });
+
+  // Post a message to the channel with the calendar event embed
+  if (channelId) {
+    const channel = await db('channels').where('id', channelId).first();
+    if (!channel) throw new NotFoundError('Channel');
+    if (channel.type !== 'text') throw new BadRequestError('Channel is not a text channel');
+
+    let eventDate = fullItem.event_date;
+    if (eventDate instanceof Date) {
+      eventDate = eventDate.toISOString().split('T')[0];
+    }
+
+    let routeGeojson = fullItem.route_geojson;
+    if (typeof routeGeojson === 'string') {
+      try { routeGeojson = JSON.parse(routeGeojson); } catch { routeGeojson = null; }
+    }
+
+    const embed: Record<string, any> = {
+      id: String(newId),
+      spaceId,
+      name: fullItem.name,
+      eventDate,
+      eventTime: fullItem.event_time || null,
+      description: fullItem.description || null,
+      categoryName: fullItem.category_name || null,
+      categoryColor: fullItem.category_color || null,
+      location: fullItem.location || null,
+      activityType: fullItem.activity_type || null,
+    };
+
+    if (fullItem.route_name) {
+      embed.routeName = fullItem.route_name;
+      embed.routeDistanceKm = fullItem.route_distance_km != null ? parseFloat(fullItem.route_distance_km) : null;
+      embed.routeElevationGainM = fullItem.route_elevation_gain_m;
+      embed.routeGeojson = routeGeojson;
+    }
+
+    const embedJson = JSON.stringify(embed);
+    const content = `[calendar-event:${embedJson}]`;
+
+    const { createMessage } = await import('../messages/messages.service.js');
+    await createMessage(channelId, userId, { content });
+  }
 
   return { id: String(newId), spaceId };
 }

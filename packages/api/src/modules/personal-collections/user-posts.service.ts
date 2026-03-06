@@ -580,7 +580,7 @@ export async function createComment(postId: string, userId: string, body: string
   if (spaceId) {
     const settings = await db('space_settings').where('space_id', spaceId).first();
     if (!settings?.social_enabled) throw new ForbiddenError('Social not enabled for this space');
-    const perms = await computePermissions(userId, spaceId);
+    const perms = await computePermissions(spaceId, userId);
     if (!hasPermission(perms, Permissions.MANAGE_SOCIAL)) {
       throw new ForbiddenError('Missing MANAGE_SOCIAL permission');
     }
@@ -641,7 +641,14 @@ export async function listComments(
     .leftJoin('spaces as cs', 'c.space_id', 'cs.id')
     .where('c.post_id', postId)
     .select(
-      'c.*',
+      'c.id',
+      'c.post_id',
+      'c.user_id',
+      'c.space_id',
+      'c.parent_comment_id',
+      'c.body',
+      'c.created_at',
+      'c.updated_at',
       'users.username as author_username',
       'users.display_name as author_display_name',
       'users.avatar_url as author_avatar_url',
@@ -650,8 +657,6 @@ export async function listComments(
       'cs.name as space_name',
       'cs.slug as space_slug',
       'cs.icon_url as space_icon_url',
-      'cs.base_color as space_base_color',
-      'cs.accent_color as space_accent_color',
     )
     .orderBy('c.id', 'asc')
     .limit(options.limit);
@@ -708,7 +713,14 @@ async function getComment(commentId: string) {
     .leftJoin('spaces as cs', 'c.space_id', 'cs.id')
     .where('c.id', commentId)
     .select(
-      'c.*',
+      'c.id',
+      'c.post_id',
+      'c.user_id',
+      'c.space_id',
+      'c.parent_comment_id',
+      'c.body',
+      'c.created_at',
+      'c.updated_at',
       'users.username as author_username',
       'users.display_name as author_display_name',
       'users.avatar_url as author_avatar_url',
@@ -717,8 +729,6 @@ async function getComment(commentId: string) {
       'cs.name as space_name',
       'cs.slug as space_slug',
       'cs.icon_url as space_icon_url',
-      'cs.base_color as space_base_color',
-      'cs.accent_color as space_accent_color',
     )
     .first();
 
@@ -847,6 +857,41 @@ export async function sharePostToChannel(
   content?: string,
 ) {
   const post = await getPost(postId);
+  const { createMessage } = await import('../messages/messages.service.js');
+
+  // If this is a calendar event post, share as a rich calendar event embed
+  if (post.metadata?.type === 'calendar_event' && post.metadata.eventId && post.metadata.spaceId) {
+    const { getEvent } = await import('../calendar/calendar.service.js');
+    try {
+      const event = await getEvent(post.metadata.eventId, userId);
+      const embed: Record<string, any> = {
+        id: event.id,
+        spaceId: event.spaceId,
+        name: event.name,
+        eventDate: event.eventDate,
+        eventTime: event.eventTime || null,
+        description: event.description || null,
+        categoryName: event.category?.name || null,
+        categoryColor: event.category?.color || null,
+        location: event.location || null,
+        activityType: event.activityType || null,
+        imageUrl: event.imageUrl || null,
+      };
+      if (event.route) {
+        embed.routeName = event.route.name;
+        embed.routeDistanceKm = event.route.distanceKm;
+        embed.routeElevationGainM = event.route.elevationGainM;
+        embed.routeGeojson = event.route.geojson;
+      }
+      const embedJson = JSON.stringify(embed);
+      const message = await createMessage(channelId, userId, {
+        content: `[calendar-event:${embedJson}]`,
+      });
+      return message;
+    } catch {
+      // Fall through to generic share if event can't be fetched
+    }
+  }
 
   // Build shared post metadata
   const sharedPost = {
@@ -861,7 +906,6 @@ export async function sharePostToChannel(
     createdAt: post.createdAt,
   };
 
-  const { createMessage } = await import('../messages/messages.service.js');
   const message = await createMessage(channelId, userId, {
     content: content || `Shared a post by @${post.author?.username || 'unknown'}`,
     metadata: { sharedPost },
@@ -1033,8 +1077,8 @@ function formatComment(row: any, reactions: any[]) {
         username: row.space_slug,
         displayName: row.space_name,
         avatarUrl: row.space_icon_url || null,
-        baseColor: row.space_base_color || null,
-        accentColor: row.space_accent_color || null,
+        baseColor: null,
+        accentColor: null,
       }
     : {
         id: String(row.user_id),

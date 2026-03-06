@@ -13,6 +13,7 @@ const DEFAULTS: UserPreferences = {
   defaultVisibility: 'private',
   profileVisibility: 'spaces',
   onboardingCompleted: false,
+  newsletterEnabled: false,
 };
 
 export const usePreferencesStore = create<PreferencesState>((set, get) => ({

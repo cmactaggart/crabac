@@ -168,6 +168,19 @@ calendarRoutes.post(
   },
 );
 
+calendarRoutes.get(
+  '/:spaceId/calendar/events/:id',
+  requireMember,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const event = await calendarService.getEvent(req.params.id, req.user!.userId);
+      res.json(event);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 calendarRoutes.patch(
   '/:spaceId/calendar/events/:id',
   requirePermission(Permissions.MANAGE_CALENDAR),

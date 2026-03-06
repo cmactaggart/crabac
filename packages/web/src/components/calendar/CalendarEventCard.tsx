@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { Calendar, Clock, Tag, MapPin, Users } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Calendar, Clock, Tag, MapPin, Check, HelpCircle, X } from 'lucide-react';
 import { api } from '../../lib/api.js';
 import { EventDetailModal } from './EventDetailModal.js';
 import { CreateEventModal } from './CreateEventModal.js';
@@ -22,6 +22,7 @@ export interface CalendarEventEmbed {
   routeDistanceKm?: number | null;
   routeElevationGainM?: number | null;
   routeGeojson?: any;
+  imageUrl?: string | null;
 }
 
 function generateMiniMapPoints(geojson: any, width: number, height: number): string {
@@ -63,16 +64,38 @@ function generateMiniMapPoints(geojson: any, width: number, height: number): str
     .join(' ');
 }
 
-const CALENDAR_EVENT_REGEX = /\[calendar-event:([\s\S]*?)\]/;
+const CALENDAR_EVENT_PREFIX = '[calendar-event:';
 
 /** Extract a calendar event embed from message content, if present. */
 export function extractCalendarEvent(content: string): { embed: CalendarEventEmbed; remainingContent: string } | null {
-  const match = content.match(CALENDAR_EVENT_REGEX);
-  if (!match) return null;
+  const start = content.indexOf(CALENDAR_EVENT_PREFIX);
+  if (start === -1) return null;
+
+  // Find the matching closing bracket by counting brace depth
+  const jsonStart = start + CALENDAR_EVENT_PREFIX.length;
+  let depth = 0;
+  let end = -1;
+  for (let i = jsonStart; i < content.length; i++) {
+    const ch = content[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) {
+        // Expect a closing ] after the JSON object
+        if (content[i + 1] === ']') {
+          end = i + 2; // past the ]
+        }
+        break;
+      }
+    }
+  }
+  if (end === -1) return null;
+
   try {
-    const embed = JSON.parse(match[1]) as CalendarEventEmbed;
+    const jsonStr = content.slice(jsonStart, end - 1); // exclude the trailing ]
+    const embed = JSON.parse(jsonStr) as CalendarEventEmbed;
     if (!embed.id || !embed.name || !embed.eventDate) return null;
-    const remainingContent = content.replace(CALENDAR_EVENT_REGEX, '').trim();
+    const remainingContent = (content.slice(0, start) + content.slice(end)).trim();
     return { embed, remainingContent };
   } catch {
     return null;
@@ -89,7 +112,23 @@ export function CalendarEventCard({ embed, spaceId }: Props) {
   const [fullEvent, setFullEvent] = useState<CalendarEvent | null>(null);
   const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [rsvpCounts, setRsvpCounts] = useState<{ going: number; maybe: number; notGoing: number } | null>(null);
+  const [myRsvp, setMyRsvp] = useState<string | null>(null);
+  const [rsvpLoading, setRsvpLoading] = useState(false);
   const canManage = useHasSpacePermission(spaceId, Permissions.MANAGE_CALENDAR);
+
+  // Fetch live RSVP data on mount
+  useEffect(() => {
+    api<any>(`/spaces/${spaceId}/calendar/events/${embed.id}`)
+      .then((event) => {
+        if (event.rsvpCounts) setRsvpCounts(event.rsvpCounts);
+        if (event.myRsvp !== undefined) setMyRsvp(event.myRsvp);
+        if (event.imageUrl && !embed.imageUrl) {
+          (embed as any).imageUrl = event.imageUrl;
+        }
+      })
+      .catch(() => {});
+  }, [embed.id, spaceId]);
 
   const d = new Date(embed.eventDate + 'T00:00:00');
   const dateLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' });
@@ -110,79 +149,143 @@ export function CalendarEventCard({ embed, spaceId }: Props) {
     }
   };
 
+  const handleRsvp = async (status: string) => {
+    setRsvpLoading(true);
+    try {
+      if (status === 'none') {
+        const result = await api<any>(`/spaces/${spaceId}/calendar/events/${embed.id}/rsvp`, {
+          method: 'DELETE',
+        });
+        setRsvpCounts(result.rsvpCounts);
+        setMyRsvp(null);
+      } else {
+        const result = await api<any>(`/spaces/${spaceId}/calendar/events/${embed.id}/rsvp`, {
+          method: 'POST',
+          body: JSON.stringify({ status }),
+        });
+        setRsvpCounts(result.rsvpCounts);
+        setMyRsvp(status);
+      }
+    } catch {}
+    setRsvpLoading(false);
+  };
+
   return (
     <>
-      <div style={{ ...styles.card, borderLeftColor: accentColor }} onClick={handleClick}>
-        <div style={styles.cardHeader}>
-          <Calendar size={16} style={{ color: accentColor, flexShrink: 0 }} />
-          <span style={styles.cardTitle}>{embed.name}</span>
-        </div>
-
-        <div style={styles.cardDetails}>
-          <div style={styles.detailItem}>
-            <Clock size={13} style={{ color: 'var(--text-muted)' }} />
-            <span>{dateLabel}{embed.eventTime ? ` at ${embed.eventTime}` : ''}</span>
-          </div>
-          {embed.categoryName && (
-            <div style={styles.detailItem}>
-              <Tag size={13} style={{ color: 'var(--text-muted)' }} />
-              <span style={{ ...styles.categoryBadge, background: accentColor }}>
-                {embed.categoryName}
-              </span>
-            </div>
-          )}
-          {embed.location && (
-            <div style={styles.detailItem}>
-              <MapPin size={13} style={{ color: 'var(--text-muted)' }} />
-              <span>{embed.location}</span>
-            </div>
-          )}
-          {embed.activityType && (
-            <div style={styles.detailItem}>
-              <span style={{ ...styles.categoryBadge, background: 'var(--accent)' }}>
-                {embed.activityType === 'ride' ? 'Ride' : embed.activityType === 'run' ? 'Run' : 'Walk'}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Route mini map */}
-        {routePolyline && embed.routeName && (
-          <div style={{ margin: '4px 0', padding: 8, background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)' }}>
-            <div style={{ height: 80, overflow: 'hidden', marginBottom: 4 }}>
-              <svg viewBox="0 0 380 80" style={{ width: '100%', height: '100%' }}>
-                <polyline
-                  points={routePolyline}
-                  fill="none"
-                  stroke="var(--accent)"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', gap: 8 }}>
-              <span style={{ fontWeight: 600 }}>{embed.routeName}</span>
-              {embed.routeDistanceKm != null && <span>{embed.routeDistanceKm.toFixed(1)} km</span>}
-              {embed.routeElevationGainM != null && <span>+{embed.routeElevationGainM} m</span>}
-            </div>
+      <div style={{ ...styles.card, borderLeftColor: accentColor }}>
+        {/* Header image */}
+        {embed.imageUrl && (
+          <div style={styles.headerImage} onClick={handleClick}>
+            <img
+              src={embed.imageUrl}
+              alt={embed.name}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
           </div>
         )}
 
-        {embed.description && (
-          <p style={styles.description}>
-            {embed.description.length > 200
-              ? embed.description.slice(0, 200) + '...'
-              : embed.description}
-          </p>
-        )}
+        <div style={{ cursor: 'pointer' }} onClick={handleClick}>
+          <div style={styles.cardHeader}>
+            <Calendar size={16} style={{ color: accentColor, flexShrink: 0 }} />
+            <span style={styles.cardTitle}>{embed.name}</span>
+          </div>
 
-        <div style={styles.cardFooter}>
-          {loadError
-            ? <span style={{ color: 'var(--danger)', fontSize: '0.75rem' }}>Event may have been deleted</span>
-            : <span style={{ color: 'var(--accent)', fontSize: '0.75rem', fontWeight: 600 }}>View Event &amp; RSVP</span>
-          }
+          <div style={styles.cardDetails}>
+            <div style={styles.detailItem}>
+              <Clock size={13} style={{ color: 'var(--text-muted)' }} />
+              <span>{dateLabel}{embed.eventTime ? ` at ${embed.eventTime}` : ''}</span>
+            </div>
+            {embed.categoryName && (
+              <div style={styles.detailItem}>
+                <Tag size={13} style={{ color: 'var(--text-muted)' }} />
+                <span style={{ ...styles.categoryBadge, background: accentColor }}>
+                  {embed.categoryName}
+                </span>
+              </div>
+            )}
+            {embed.location && (
+              <div style={styles.detailItem}>
+                <MapPin size={13} style={{ color: 'var(--text-muted)' }} />
+                <span>{embed.location}</span>
+              </div>
+            )}
+            {embed.activityType && (
+              <div style={styles.detailItem}>
+                <span style={{ ...styles.categoryBadge, background: 'var(--accent)' }}>
+                  {embed.activityType === 'ride' ? 'Ride' : embed.activityType === 'run' ? 'Run' : 'Walk'}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Route mini map */}
+          {routePolyline && embed.routeName && (
+            <div style={{ margin: '4px 0', padding: 8, background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)' }}>
+              <div style={{ height: 80, overflow: 'hidden', marginBottom: 4 }}>
+                <svg viewBox="0 0 380 80" style={{ width: '100%', height: '100%' }}>
+                  <polyline
+                    points={routePolyline}
+                    fill="none"
+                    stroke="var(--accent)"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', gap: 8 }}>
+                <span style={{ fontWeight: 600 }}>{embed.routeName}</span>
+                {embed.routeDistanceKm != null && <span>{embed.routeDistanceKm.toFixed(1)} km</span>}
+                {embed.routeElevationGainM != null && <span>+{embed.routeElevationGainM} m</span>}
+              </div>
+            </div>
+          )}
+
+          {embed.description && (
+            <p style={styles.description}>
+              {embed.description.length > 200
+                ? embed.description.slice(0, 200) + '...'
+                : embed.description}
+            </p>
+          )}
         </div>
+
+        {/* Inline RSVP buttons */}
+        <div style={styles.rsvpRow}>
+          <RsvpButton
+            icon={<Check size={13} />}
+            label="Going"
+            count={rsvpCounts?.going || 0}
+            active={myRsvp === 'going'}
+            disabled={rsvpLoading}
+            onClick={() => handleRsvp(myRsvp === 'going' ? 'none' : 'going')}
+            color="var(--success, #43b581)"
+          />
+          <RsvpButton
+            icon={<HelpCircle size={13} />}
+            label="Maybe"
+            count={rsvpCounts?.maybe || 0}
+            active={myRsvp === 'maybe'}
+            disabled={rsvpLoading}
+            onClick={() => handleRsvp(myRsvp === 'maybe' ? 'none' : 'maybe')}
+            color="#faa61a"
+          />
+          <RsvpButton
+            icon={<X size={13} />}
+            label="Can't Go"
+            count={rsvpCounts?.notGoing || 0}
+            active={myRsvp === 'not_going'}
+            disabled={rsvpLoading}
+            onClick={() => handleRsvp(myRsvp === 'not_going' ? 'none' : 'not_going')}
+            color="var(--danger, #ed4245)"
+          />
+        </div>
+
+        {loadError && (
+          <div style={{ padding: '4px 0', color: 'var(--danger)', fontSize: '0.75rem' }}>
+            Event may have been deleted
+          </div>
+        )}
       </div>
 
       {showDetail && fullEvent && (
@@ -209,21 +312,63 @@ export function CalendarEventCard({ embed, spaceId }: Props) {
   );
 }
 
+function RsvpButton({ icon, label, count, active, disabled, onClick, color }: {
+  icon: React.ReactNode;
+  label: string;
+  count: number;
+  active: boolean;
+  disabled: boolean;
+  onClick: () => void;
+  color: string;
+}) {
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      disabled={disabled}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+        padding: '4px 10px',
+        borderRadius: 'var(--radius)',
+        border: `1px solid ${active ? color : 'var(--border)'}`,
+        background: active ? `${color}22` : 'transparent',
+        color: active ? color : 'var(--text-secondary)',
+        cursor: disabled ? 'default' : 'pointer',
+        fontSize: '0.75rem',
+        fontWeight: 600,
+        opacity: disabled ? 0.6 : 1,
+      }}
+    >
+      {icon}
+      {label}
+      {count > 0 && <span style={{ marginLeft: 2 }}>({count})</span>}
+    </button>
+  );
+}
+
 const styles: Record<string, React.CSSProperties> = {
   card: {
     background: 'var(--bg-secondary)',
     border: '1px solid var(--border)',
     borderLeft: '4px solid var(--accent)',
     borderRadius: 'var(--radius)',
-    padding: '12px 14px',
+    padding: '0 14px 12px',
     maxWidth: 'min(420px, 100%)',
+    overflow: 'hidden',
+  },
+  headerImage: {
+    margin: '0 -14px',
+    marginBottom: 8,
+    height: 140,
+    overflow: 'hidden',
     cursor: 'pointer',
-    transition: 'background 0.15s',
   },
   cardHeader: {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
+    marginTop: 12,
     marginBottom: 6,
   },
   cardTitle: {
@@ -263,9 +408,11 @@ const styles: Record<string, React.CSSProperties> = {
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
   },
-  cardFooter: {
-    marginTop: 6,
-    paddingTop: 6,
+  rsvpRow: {
+    display: 'flex',
+    gap: 6,
+    marginTop: 8,
+    paddingTop: 8,
     borderTop: '1px solid var(--border)',
   },
 };

@@ -89,7 +89,11 @@ export function EventPostCard({ eventId, spaceId }: { eventId: string; spaceId: 
     );
   }
 
-  if (!event) return null;
+  if (!event) return (
+    <div style={{ padding: '0.75rem', background: 'rgba(237,66,69,0.15)', borderRadius: 'var(--radius)', fontSize: '0.8rem', color: 'var(--danger, #ed4245)', marginTop: 8 }}>
+      Failed to load event card
+    </div>
+  );
 
   const dateStr = new Date(event.eventDate + 'T00:00:00').toLocaleDateString([], {
     weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',

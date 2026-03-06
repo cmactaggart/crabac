@@ -22,19 +22,18 @@ export function ShareToSpacePicker({ contentType, itemId, onClose, onShared }: P
 
   const { copyGalleryToChannel, copyRouteToChannel, copyEventToSpace, sharePostToChannel } = usePersonalCollectionsStore();
 
-  // For events, share directly to space (no channel needed)
-  const needsChannel = contentType !== 'event';
   const channelType = contentType === 'gallery' ? 'media_gallery' : contentType === 'route' ? 'route_library' : 'text';
 
   useEffect(() => {
-    if (selectedSpace && needsChannel) {
+    if (selectedSpace) {
       api<Channel[]>(`/spaces/${selectedSpace.id}/channels`)
         .then((chs) => setChannels(chs.filter((c) => c.type === channelType)))
         .catch(() => setChannels([]));
     }
-  }, [selectedSpace, needsChannel, channelType]);
+  }, [selectedSpace, channelType]);
 
   const handleShareToChannel = async (channelId: string) => {
+    if (!selectedSpace) return;
     setSharing(true);
     setError('');
     try {
@@ -44,20 +43,9 @@ export function ShareToSpacePicker({ contentType, itemId, onClose, onShared }: P
         await copyRouteToChannel(itemId, channelId);
       } else if (contentType === 'post') {
         await sharePostToChannel(itemId, channelId);
+      } else if (contentType === 'event') {
+        await copyEventToSpace(itemId, selectedSpace.id, channelId);
       }
-      setSuccess(true);
-      setTimeout(() => onShared(), 1000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to share');
-    }
-    setSharing(false);
-  };
-
-  const handleShareToSpace = async (spaceId: string) => {
-    setSharing(true);
-    setError('');
-    try {
-      await copyEventToSpace(itemId, spaceId);
       setSuccess(true);
       setTimeout(() => onShared(), 1000);
     } catch (err: any) {
@@ -94,18 +82,12 @@ export function ShareToSpacePicker({ contentType, itemId, onClose, onShared }: P
               {spaces.map((space) => (
                 <button
                   key={space.id}
-                  onClick={() => {
-                    if (needsChannel) {
-                      setSelectedSpace(space);
-                    } else {
-                      handleShareToSpace(space.id);
-                    }
-                  }}
+                  onClick={() => setSelectedSpace(space)}
                   style={styles.listItem}
                   disabled={sharing}
                 >
                   <span style={{ fontWeight: 600 }}>{space.name}</span>
-                  {needsChannel && <ChevronRight size={16} />}
+                  <ChevronRight size={16} />
                 </button>
               ))}
             </div>
@@ -120,7 +102,7 @@ export function ShareToSpacePicker({ contentType, itemId, onClose, onShared }: P
               </button>
               {channels.length === 0 && (
                 <div style={{ color: 'var(--text-muted)', padding: '1rem', textAlign: 'center', fontSize: '0.85rem' }}>
-                  No {contentType === 'gallery' ? 'gallery' : contentType === 'route' ? 'route library' : 'text'} channels in this space
+                  No {contentType === 'gallery' ? 'gallery' : contentType === 'route' ? 'route library' : 'text'} channels found
                 </div>
               )}
               {channels.map((ch) => (

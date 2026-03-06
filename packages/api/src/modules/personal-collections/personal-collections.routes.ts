@@ -369,13 +369,13 @@ personalCollectionsRoutes.post(
   '/me/collections/events/:eventId/copy',
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { spaceId } = validation.copyToSpaceSchema.parse(req.body);
+      const { spaceId, channelId } = validation.copyToSpaceSchema.parse(req.body);
       const userId = req.user!.userId;
 
       const isMember = await spacesService.isMember(spaceId, userId);
       if (!isMember) return next(new ForbiddenError('Not a member of this space'));
 
-      const result = await service.copyEventToSpace(req.params.eventId, spaceId, userId);
+      const result = await service.copyEventToSpace(req.params.eventId, spaceId, userId, channelId);
       res.status(201).json(result);
     } catch (err) { next(err); }
   },

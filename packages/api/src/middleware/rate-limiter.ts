@@ -3,7 +3,7 @@ import type { Request } from 'express';
 
 export const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 1000,
+  max: 2000,
   standardHeaders: true,
   legacyHeaders: false,
   // Use CF-Connecting-IP header (set by Cloudflare) so users behind the tunnel get distinct buckets

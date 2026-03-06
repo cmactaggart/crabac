@@ -715,6 +715,7 @@ export const copyToChannelSchema = z.object({
 
 export const copyToSpaceSchema = z.object({
   spaceId: z.string().min(1),
+  channelId: z.string().min(1).optional(),
 });
 
 // ─── User Posts ───

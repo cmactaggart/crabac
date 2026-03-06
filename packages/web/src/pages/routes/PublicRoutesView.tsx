@@ -12,6 +12,8 @@ interface RouteItem {
   id: string;
   name: string;
   description: string | null;
+  channelId: string;
+  channelName?: string;
   categoryId: string | null;
   url: string;
   originalName: string;
