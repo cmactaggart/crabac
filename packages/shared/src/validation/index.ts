@@ -63,7 +63,7 @@ export const updateChannelSchema = z.object({
 
 // Messages
 export const createMessageSchema = z.object({
-  content: z.string().min(1).max(4000),
+  content: z.string().min(1).max(50000),
   replyToId: z.string().optional(),
 });
 
@@ -171,7 +171,7 @@ export const addGroupDMMembersSchema = z.object({
 
 // Direct Messages
 export const createDMSchema = z.object({
-  content: z.string().min(1).max(4000),
+  content: z.string().min(1).max(50000),
 });
 
 export const dmQuerySchema = z.object({

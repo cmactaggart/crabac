@@ -1,9 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { X, Pencil, Trash2, Send, MapPin, Check, HelpCircle, XCircle, Repeat, Share2 } from 'lucide-react';
+import { X, Pencil, Trash2, MapPin, Check, HelpCircle, XCircle, Repeat, Share2 } from 'lucide-react';
 import type { CalendarEvent, EventRsvp } from '@crabac/shared';
 import { useCalendarStore } from '../../stores/calendar.js';
-import { useChannelsStore } from '../../stores/channels.js';
-import { useMessagesStore } from '../../stores/messages.js';
 import { useAuthStore } from '../../stores/auth.js';
 import { ShareToSpacePicker } from '../common/ShareToSpacePicker.js';
 import { api } from '../../lib/api.js';
@@ -67,24 +65,17 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
   const rsvp = useCalendarStore((s) => s.rsvp);
   const removeRsvp = useCalendarStore((s) => s.removeRsvp);
   const fetchRsvps = useCalendarStore((s) => s.fetchRsvps);
-  const channels = useChannelsStore((s) => s.channels);
-  const sendMessage = useMessagesStore((s) => s.sendMessage);
   const user = useAuthStore((s) => s.user);
 
   const cancelOccurrence = useCalendarStore((s) => s.cancelOccurrence);
   const deleteSeries = useCalendarStore((s) => s.deleteSeries);
 
-  const [showPost, setShowPost] = useState(false);
-  const [postChannelId, setPostChannelId] = useState('');
-  const [posting, setPosting] = useState(false);
   const [showSharePicker, setShowSharePicker] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteMode, setDeleteMode] = useState<'single' | 'series' | null>(null);
   const [rsvps, setRsvps] = useState<EventRsvp[]>([]);
   const [showRsvpList, setShowRsvpList] = useState(false);
   const [rsvpLoading, setRsvpLoading] = useState(false);
-
-  const textChannels = channels.filter((c) => c.type === 'text' && !c.isAdmin && !c.isPortal);
 
   const d = new Date(event.eventDate + 'T00:00:00');
   const dateLabel = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -137,16 +128,6 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
       embedData.routeGeojson = event.route.geojson;
     }
     return `[calendar-event:${JSON.stringify(embedData)}]`;
-  };
-
-  const handlePost = async () => {
-    if (!postChannelId) return;
-    setPosting(true);
-    try {
-      await sendMessage(postChannelId, buildEmbedContent());
-      setShowPost(false);
-    } catch { /* ignore */ }
-    setPosting(false);
   };
 
   const handleShareToChannel = async (channelId: string, _spaceId: string) => {
@@ -325,50 +306,15 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
             )}
           </div>
 
-          {/* Post to Channel / Share to Space */}
-          {!showPost ? (
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <button
-                onClick={() => setShowPost(true)}
-                style={styles.postBtn}
-              >
-                <Send size={14} /> Post to Channel
-              </button>
-              <button
-                onClick={() => setShowSharePicker(true)}
-                style={styles.postBtn}
-              >
-                <Share2 size={14} /> Share to Space
-              </button>
-            </div>
-          ) : (
-            <div style={styles.postForm}>
-              <label style={styles.detailLabel}>Channel</label>
-              <select
-                value={postChannelId}
-                onChange={(e) => setPostChannelId(e.target.value)}
-                style={styles.input}
-              >
-                <option value="">Select a channel...</option>
-                {textChannels.map((c) => (
-                  <option key={c.id} value={c.id}>#{c.name}</option>
-                ))}
-              </select>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                A rich event card will be posted to the channel.
-              </span>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button onClick={() => setShowPost(false)} style={styles.cancelBtn}>Cancel</button>
-                <button
-                  onClick={handlePost}
-                  disabled={posting || !postChannelId}
-                  style={styles.saveBtn}
-                >
-                  {posting ? 'Posting...' : 'Post'}
-                </button>
-              </div>
-            </div>
-          )}
+          {/* Share */}
+          <div style={{ marginTop: 8 }}>
+            <button
+              onClick={() => setShowSharePicker(true)}
+              style={styles.postBtn}
+            >
+              <Share2 size={14} /> Share
+            </button>
+          </div>
         </div>
 
         {showSharePicker && (
@@ -516,26 +462,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '0.85rem',
     cursor: 'pointer',
     alignSelf: 'flex-start',
-  },
-  postForm: {
-    marginTop: 8,
-    padding: '12px',
-    background: 'var(--bg-secondary)',
-    borderRadius: 'var(--radius)',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-  },
-  input: {
-    padding: '8px 12px',
-    background: 'var(--bg-input)',
-    border: '1px solid var(--border)',
-    borderRadius: 'var(--radius)',
-    color: 'var(--text-primary)',
-    fontSize: '0.9rem',
-    outline: 'none',
-    width: '100%',
-    boxSizing: 'border-box',
   },
   footer: {
     display: 'flex',
