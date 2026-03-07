@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trash2, Edit3, Eye, MapPin, SmilePlus, MessageCircle, Repeat2, Forward, X, Flag, Pin, Copy, Check, MessageSquare, Share2, Reply, UserPlus, UserMinus } from 'lucide-react';
+import { Trash2, Edit3, Eye, MapPin, SmilePlus, MessageCircle, Repeat2, Forward, X, Flag, Pin, Copy, Check, Share2, Reply, UserPlus, UserMinus } from 'lucide-react';
 import { Avatar } from '../common/Avatar.js';
 import { EmojiPicker } from '../messages/EmojiPicker.js';
 import { ShareToSpacePicker } from '../common/ShareToSpacePicker.js';
@@ -559,18 +559,8 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
                   borderRadius: 'var(--radius)', minWidth: 170, padding: 4,
                   boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
                 }}>
-                  <button
-                    onClick={() => {
-                      const url = `${window.location.origin}/p/${post.author?.username}/post/${post.id}`;
-                      navigate(`/dm?shareText=${encodeURIComponent(`Check out this post: ${url}`)}`);
-                      setShareMenuOpen(false);
-                    }}
-                    style={styles.shareMenuItem}
-                  >
-                    <MessageSquare size={14} /> Send in DM
-                  </button>
                   <button onClick={() => { setSharePickerOpen(true); setShareMenuOpen(false); }} style={styles.shareMenuItem}>
-                    <Forward size={14} /> Share in channel
+                    <Forward size={14} /> Share
                   </button>
                   <button
                     onClick={async () => {

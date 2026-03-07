@@ -914,6 +914,58 @@ export async function sharePostToChannel(
   return message;
 }
 
+// ─── Share Post to DM ───
+
+export async function sharePostToDM(
+  postId: string,
+  userId: string,
+  conversationId: string,
+) {
+  const post = await getPost(postId);
+  const { sendMessage } = await import('../dm/dm.service.js');
+
+  // If this is a calendar event post, share as a rich calendar event embed
+  if (post.metadata?.type === 'calendar_event' && post.metadata.eventId && post.metadata.spaceId) {
+    const { getEvent } = await import('../calendar/calendar.service.js');
+    try {
+      const event = await getEvent(post.metadata.eventId, userId);
+      const embed: Record<string, any> = {
+        id: event.id,
+        spaceId: event.spaceId,
+        name: event.name,
+        eventDate: event.eventDate,
+        eventTime: event.eventTime || null,
+        description: event.description || null,
+        categoryName: event.category?.name || null,
+        categoryColor: event.category?.color || null,
+        location: event.location || null,
+        activityType: event.activityType || null,
+        imageUrl: event.imageUrl || null,
+      };
+      if (event.route) {
+        embed.routeName = event.route.name;
+        embed.routeDistanceKm = event.route.distanceKm;
+        embed.routeElevationGainM = event.route.elevationGainM;
+        embed.routeGeojson = event.route.geojson;
+      }
+      const embedJson = JSON.stringify(embed);
+      return sendMessage(conversationId, userId, `[calendar-event:${embedJson}]`);
+    } catch {
+      // Fall through to generic share
+    }
+  }
+
+  // Generic post share — include post body and author
+  const body = post.body || '';
+  const author = post.author?.username || 'unknown';
+  const postUrl = `/p/${author}/post/${post.id}`;
+  const content = body
+    ? `Shared a post by @${author}:\n\n${body.slice(0, 500)}${body.length > 500 ? '...' : ''}\n\n${postUrl}`
+    : `Shared a post by @${author}\n\n${postUrl}`;
+
+  return sendMessage(conversationId, userId, content);
+}
+
 // ─── Hydrate Reposts ───
 
 async function hydrateReposts(rows: any[]) {

@@ -686,6 +686,126 @@ export async function copyEventToSpace(
   return { id: String(newId), spaceId };
 }
 
+// ─── Share Gallery to DM ───
+
+export async function shareGalleryToDM(
+  personalItemId: string,
+  userId: string,
+  conversationId: string,
+) {
+  const item = await db('personal_gallery_items').where('id', personalItemId).first();
+  if (!item) throw new NotFoundError('Personal gallery item');
+  if (String(item.user_id) !== userId) throw new ForbiddenError('You can only share your own items');
+
+  const attachments = await db('personal_gallery_attachments')
+    .where('gallery_item_id', personalItemId)
+    .orderBy('position', 'asc');
+
+  const { sendMessage, createDMAttachment } = await import('../dm/dm.service.js');
+
+  const content = item.caption || 'Shared a gallery item';
+  const message = await sendMessage(conversationId, userId, content, { skipEvent: true });
+
+  // Copy attachments to DM
+  for (const att of attachments) {
+    await createDMAttachment(message.id, {
+      filename: att.filename,
+      originalName: att.original_name,
+      mimeType: att.mime_type,
+      size: att.size,
+      url: att.url,
+    });
+  }
+
+  // Re-emit with attachments
+  const { emitDMCreated } = await import('../dm/dm.service.js');
+  await emitDMCreated(conversationId, message.id);
+
+  return message;
+}
+
+// ─── Share Route to DM ───
+
+export async function shareRouteToDM(
+  personalItemId: string,
+  userId: string,
+  conversationId: string,
+) {
+  const item = await db('personal_route_items').where('id', personalItemId).first();
+  if (!item) throw new NotFoundError('Personal route item');
+  if (String(item.user_id) !== userId) throw new ForbiddenError('You can only share your own routes');
+
+  const { sendMessage, createDMAttachment } = await import('../dm/dm.service.js');
+
+  const parts = [item.name || 'Shared a route'];
+  if (item.distance_km) parts.push(`Distance: ${parseFloat(item.distance_km).toFixed(1)} km`);
+  if (item.elevation_gain_m) parts.push(`Elevation: +${item.elevation_gain_m} m`);
+  if (item.activity_type) parts.push(`Type: ${item.activity_type}`);
+
+  const message = await sendMessage(conversationId, userId, parts.join('\n'), { skipEvent: true });
+
+  // Attach the GPX file if available
+  if (item.filename && item.url) {
+    await createDMAttachment(message.id, {
+      filename: item.filename,
+      originalName: item.original_name || item.filename,
+      mimeType: 'application/gpx+xml',
+      size: item.file_size || 0,
+      url: item.url,
+    }, item.geojson ? { gpx: { geojson: typeof item.geojson === 'string' ? JSON.parse(item.geojson) : item.geojson, distanceKm: item.distance_km ? parseFloat(item.distance_km) : null, elevationGainM: item.elevation_gain_m, elevationLossM: item.elevation_loss_m, durationSec: item.duration_sec } } : null);
+  }
+
+  const { emitDMCreated } = await import('../dm/dm.service.js');
+  await emitDMCreated(conversationId, message.id);
+
+  return message;
+}
+
+// ─── Share Event to DM ───
+
+export async function shareEventToDM(
+  personalEventId: string,
+  userId: string,
+  conversationId: string,
+) {
+  const fullItem = await db('personal_events as pe')
+    .leftJoin('personal_event_categories as pec', 'pe.category_id', 'pec.id')
+    .leftJoin('personal_route_items as pri', 'pe.route_id', 'pri.id')
+    .where('pe.id', personalEventId)
+    .select(
+      'pe.*',
+      'pec.name as category_name',
+      'pec.color as category_color',
+      'pri.name as route_name',
+      'pri.distance_km as route_distance_km',
+      'pri.elevation_gain_m as route_elevation_gain_m',
+      'pri.geojson as route_geojson',
+    )
+    .first();
+
+  if (!fullItem) throw new NotFoundError('Personal event');
+  if (String(fullItem.user_id) !== userId) throw new ForbiddenError('You can only share your own events');
+
+  const { sendMessage } = await import('../dm/dm.service.js');
+
+  // Build a descriptive message since personal events don't have a spaceId for the embed
+  let eventDate = fullItem.event_date;
+  if (eventDate instanceof Date) {
+    eventDate = eventDate.toISOString().split('T')[0];
+  }
+
+  const parts = [`**${fullItem.name}**`];
+  const d = new Date(eventDate + 'T00:00:00');
+  parts.push(d.toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' }));
+  if (fullItem.event_time) parts.push(`at ${fullItem.event_time}`);
+  if (fullItem.location) parts.push(`Location: ${fullItem.location}`);
+  if (fullItem.category_name) parts.push(`Category: ${fullItem.category_name}`);
+  if (fullItem.activity_type) parts.push(`Activity: ${fullItem.activity_type}`);
+  if (fullItem.description) parts.push(`\n${fullItem.description.slice(0, 500)}`);
+
+  return sendMessage(conversationId, userId, parts.join('\n'));
+}
+
 // ─── Summary ───
 
 export async function getCollectionsSummary(

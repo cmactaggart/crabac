@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
-import { X, Pencil, Trash2, Send, MapPin, Check, HelpCircle, XCircle, Repeat } from 'lucide-react';
+import { X, Pencil, Trash2, Send, MapPin, Check, HelpCircle, XCircle, Repeat, Share2 } from 'lucide-react';
 import type { CalendarEvent, EventRsvp } from '@crabac/shared';
 import { useCalendarStore } from '../../stores/calendar.js';
 import { useChannelsStore } from '../../stores/channels.js';
 import { useMessagesStore } from '../../stores/messages.js';
 import { useAuthStore } from '../../stores/auth.js';
+import { ShareToSpacePicker } from '../common/ShareToSpacePicker.js';
+import { api } from '../../lib/api.js';
 
 interface Props {
   event: CalendarEvent;
@@ -75,6 +77,7 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
   const [showPost, setShowPost] = useState(false);
   const [postChannelId, setPostChannelId] = useState('');
   const [posting, setPosting] = useState(false);
+  const [showSharePicker, setShowSharePicker] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteMode, setDeleteMode] = useState<'single' | 'series' | null>(null);
   const [rsvps, setRsvps] = useState<EventRsvp[]>([]);
@@ -113,33 +116,51 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
     } catch { /* ignore */ }
   };
 
+  const buildEmbedContent = () => {
+    const embedData: any = {
+      id: event.id,
+      spaceId,
+      name: event.name,
+      eventDate: event.eventDate,
+      eventTime: event.eventTime,
+      description: event.description,
+      categoryName: event.category?.name || null,
+      categoryColor: event.category?.color || null,
+      location: event.location || null,
+      activityType: event.activityType || null,
+      imageUrl: event.imageUrl || null,
+    };
+    if (event.route) {
+      embedData.routeName = event.route.name;
+      embedData.routeDistanceKm = event.route.distanceKm;
+      embedData.routeElevationGainM = event.route.elevationGainM;
+      embedData.routeGeojson = event.route.geojson;
+    }
+    return `[calendar-event:${JSON.stringify(embedData)}]`;
+  };
+
   const handlePost = async () => {
     if (!postChannelId) return;
     setPosting(true);
     try {
-      const embedData: any = {
-        id: event.id,
-        spaceId,
-        name: event.name,
-        eventDate: event.eventDate,
-        eventTime: event.eventTime,
-        description: event.description,
-        categoryName: event.category?.name || null,
-        categoryColor: event.category?.color || null,
-        location: event.location || null,
-        activityType: event.activityType || null,
-      };
-      // Include route data in the embed
-      if (event.route) {
-        embedData.routeName = event.route.name;
-        embedData.routeDistanceKm = event.route.distanceKm;
-        embedData.routeElevationGainM = event.route.elevationGainM;
-        embedData.routeGeojson = event.route.geojson;
-      }
-      await sendMessage(postChannelId, `[calendar-event:${JSON.stringify(embedData)}]`);
+      await sendMessage(postChannelId, buildEmbedContent());
       setShowPost(false);
     } catch { /* ignore */ }
     setPosting(false);
+  };
+
+  const handleShareToChannel = async (channelId: string, _spaceId: string) => {
+    await api(`/channels/${channelId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content: buildEmbedContent() }),
+    });
+  };
+
+  const handleShareToDM = async (conversationId: string) => {
+    await api(`/conversations/${conversationId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content: buildEmbedContent() }),
+    });
   };
 
   const handleRsvp = async (status: 'going' | 'maybe' | 'not_going') => {
@@ -304,14 +325,22 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
             )}
           </div>
 
-          {/* Post to Channel */}
+          {/* Post to Channel / Share to Space */}
           {!showPost ? (
-            <button
-              onClick={() => setShowPost(true)}
-              style={styles.postBtn}
-            >
-              <Send size={14} /> Post to Channel
-            </button>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <button
+                onClick={() => setShowPost(true)}
+                style={styles.postBtn}
+              >
+                <Send size={14} /> Post to Channel
+              </button>
+              <button
+                onClick={() => setShowSharePicker(true)}
+                style={styles.postBtn}
+              >
+                <Share2 size={14} /> Share to Space
+              </button>
+            </div>
           ) : (
             <div style={styles.postForm}>
               <label style={styles.detailLabel}>Channel</label>
@@ -341,6 +370,17 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
             </div>
           )}
         </div>
+
+        {showSharePicker && (
+          <ShareToSpacePicker
+            contentType="event"
+            itemId={event.id}
+            onClose={() => setShowSharePicker(false)}
+            onShared={() => setShowSharePicker(false)}
+            onShareToChannel={handleShareToChannel}
+            onShareToDM={handleShareToDM}
+          />
+        )}
 
         {canManage && (
           <div style={styles.footer}>

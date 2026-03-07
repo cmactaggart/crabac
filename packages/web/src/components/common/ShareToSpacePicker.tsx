@@ -1,19 +1,32 @@
 import { useState, useEffect } from 'react';
-import { X, ChevronRight } from 'lucide-react';
+import { X, ChevronRight, MessageSquare, Hash } from 'lucide-react';
 import { useSpacesStore } from '../../stores/spaces.js';
 import { usePersonalCollectionsStore } from '../../stores/personalCollections.js';
+import { useDMStore } from '../../stores/dm.js';
+import { useAuthStore } from '../../stores/auth.js';
 import { api } from '../../lib/api.js';
-import type { Channel, Space } from '@crabac/shared';
+import type { Channel, Space, Conversation } from '@crabac/shared';
 
 interface Props {
   contentType: 'gallery' | 'route' | 'event' | 'post';
   itemId: string;
   onClose: () => void;
   onShared: () => void;
+  /** Custom share handler — if provided, called instead of default logic */
+  onShareToChannel?: (channelId: string, spaceId: string) => Promise<void>;
+  /** Custom DM share handler — if provided, called instead of default logic */
+  onShareToDM?: (conversationId: string) => Promise<void>;
 }
 
-export function ShareToSpacePicker({ contentType, itemId, onClose, onShared }: Props) {
+type Tab = 'spaces' | 'dms';
+
+export function ShareToSpacePicker({ contentType, itemId, onClose, onShared, onShareToChannel: customShare, onShareToDM: customDMShare }: Props) {
   const spaces = useSpacesStore((s) => s.spaces);
+  const conversations = useDMStore((s) => s.conversations);
+  const fetchConversations = useDMStore((s) => s.fetchConversations);
+  const sendMessage = useDMStore((s) => s.sendMessage);
+  const user = useAuthStore((s) => s.user);
+  const [tab, setTab] = useState<Tab>('spaces');
   const [selectedSpace, setSelectedSpace] = useState<Space | null>(null);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [sharing, setSharing] = useState(false);
@@ -23,6 +36,12 @@ export function ShareToSpacePicker({ contentType, itemId, onClose, onShared }: P
   const { copyGalleryToChannel, copyRouteToChannel, copyEventToSpace, sharePostToChannel } = usePersonalCollectionsStore();
 
   const channelType = contentType === 'gallery' ? 'media_gallery' : contentType === 'route' ? 'route_library' : 'text';
+
+  useEffect(() => {
+    if (tab === 'dms' && conversations.length === 0) {
+      fetchConversations();
+    }
+  }, [tab]);
 
   useEffect(() => {
     if (selectedSpace) {
@@ -37,7 +56,9 @@ export function ShareToSpacePicker({ contentType, itemId, onClose, onShared }: P
     setSharing(true);
     setError('');
     try {
-      if (contentType === 'gallery') {
+      if (customShare) {
+        await customShare(channelId, selectedSpace.id);
+      } else if (contentType === 'gallery') {
         await copyGalleryToChannel(itemId, channelId);
       } else if (contentType === 'route') {
         await copyRouteToChannel(itemId, channelId);
@@ -54,22 +75,106 @@ export function ShareToSpacePicker({ contentType, itemId, onClose, onShared }: P
     setSharing(false);
   };
 
+  const handleShareToDM = async (conversationId: string) => {
+    setSharing(true);
+    setError('');
+    try {
+      if (customDMShare) {
+        await customDMShare(conversationId);
+      } else if (contentType === 'post') {
+        // Share post to DM — use the API to get the embed content
+        await api(`/users/me/posts/${itemId}/share-to-dm`, {
+          method: 'POST',
+          body: JSON.stringify({ conversationId }),
+        });
+      } else if (contentType === 'event') {
+        // Event sharing to DM — use the API
+        await api(`/users/me/collections/events/${itemId}/share-to-dm`, {
+          method: 'POST',
+          body: JSON.stringify({ conversationId }),
+        });
+      } else if (contentType === 'gallery') {
+        await api(`/users/me/collections/galleries/${itemId}/share-to-dm`, {
+          method: 'POST',
+          body: JSON.stringify({ conversationId }),
+        });
+      } else if (contentType === 'route') {
+        await api(`/users/me/collections/routes/${itemId}/share-to-dm`, {
+          method: 'POST',
+          body: JSON.stringify({ conversationId }),
+        });
+      }
+      setSuccess(true);
+      setTimeout(() => onShared(), 1000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to share');
+    }
+    setSharing(false);
+  };
+
+  const getConversationName = (conv: Conversation) => {
+    if (conv.name) return conv.name;
+    const others = conv.participants.filter((p) => p.id !== user?.id);
+    if (others.length === 0) return 'Saved Messages';
+    return others.map((p) => p.displayName || p.username).join(', ');
+  };
+
   return (
     <div style={styles.overlay} onClick={onClose}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div style={styles.header}>
           <h3 style={{ margin: 0, fontSize: '1rem' }}>
-            {success ? 'Shared!' : selectedSpace ? `Share to ${selectedSpace.name}` : 'Share to Space'}
+            {success ? 'Shared!' : selectedSpace ? `Share to ${selectedSpace.name}` : 'Share'}
           </h3>
           <button onClick={onClose} style={styles.closeBtn}><X size={18} /></button>
         </div>
+
+        {/* Tab bar */}
+        {!success && !selectedSpace && (
+          <div style={styles.tabBar}>
+            <button
+              onClick={() => setTab('spaces')}
+              style={{ ...styles.tab, ...(tab === 'spaces' ? styles.tabActive : {}) }}
+            >
+              <Hash size={14} /> Spaces
+            </button>
+            <button
+              onClick={() => setTab('dms')}
+              style={{ ...styles.tab, ...(tab === 'dms' ? styles.tabActive : {}) }}
+            >
+              <MessageSquare size={14} /> DMs
+            </button>
+          </div>
+        )}
 
         <div style={styles.body}>
           {error && <div style={styles.error}>{error}</div>}
 
           {success ? (
             <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--success, #43b581)' }}>
-              Successfully shared to space!
+              Successfully shared!
+            </div>
+          ) : tab === 'dms' ? (
+            // DM conversations list
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {conversations.length === 0 && (
+                <div style={{ color: 'var(--text-muted)', padding: '1rem', textAlign: 'center' }}>
+                  No conversations
+                </div>
+              )}
+              {conversations.map((conv) => (
+                <button
+                  key={conv.id}
+                  onClick={() => handleShareToDM(conv.id)}
+                  style={styles.listItem}
+                  disabled={sharing}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <ConversationAvatar conv={conv} userId={user?.id} />
+                    <span style={{ fontWeight: 600 }}>{getConversationName(conv)}</span>
+                  </div>
+                </button>
+              ))}
             </div>
           ) : !selectedSpace ? (
             // Space list
@@ -123,6 +228,33 @@ export function ShareToSpacePicker({ contentType, itemId, onClose, onShared }: P
   );
 }
 
+function ConversationAvatar({ conv, userId }: { conv: Conversation; userId?: string }) {
+  const others = conv.participants.filter((p) => p.id !== userId);
+  const first = others[0];
+  if (!first) return null;
+
+  return (
+    <div style={{
+      width: 28, height: 28, borderRadius: '50%',
+      background: first.baseColor || 'var(--accent)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: '0.7rem', fontWeight: 700, color: '#fff', flexShrink: 0,
+      overflow: 'hidden',
+    }}>
+      {first.avatarUrl ? (
+        <img src={first.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      ) : (
+        (first.displayName || first.username).charAt(0).toUpperCase()
+      )}
+      {others.length > 1 && (
+        <span style={{ position: 'absolute', bottom: -2, right: -2, fontSize: '0.55rem', background: 'var(--bg-secondary)', borderRadius: 6, padding: '0 3px' }}>
+          +{others.length - 1}
+        </span>
+      )}
+    </div>
+  );
+}
+
 const styles: Record<string, React.CSSProperties> = {
   overlay: {
     position: 'fixed',
@@ -131,7 +263,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 110,
+    zIndex: 210,
   },
   modal: {
     background: 'var(--bg-secondary)',
@@ -148,6 +280,29 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     padding: '1rem 1.25rem',
     borderBottom: '1px solid var(--border)',
+  },
+  tabBar: {
+    display: 'flex',
+    borderBottom: '1px solid var(--border)',
+  },
+  tab: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    padding: '0.6rem',
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--text-muted)',
+    fontSize: '0.8rem',
+    fontWeight: 600,
+    cursor: 'pointer',
+    borderBottom: '2px solid transparent',
+  },
+  tabActive: {
+    color: 'var(--text-primary)',
+    borderBottomColor: 'var(--accent)',
   },
   closeBtn: {
     background: 'none',

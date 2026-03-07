@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, UserPlus, UserMinus, Share2, Copy, MessageSquare, Forward, Check } from 'lucide-react';
+import { ArrowLeft, UserPlus, UserMinus, Share2, Copy, Forward, Check } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { useFollowsStore } from '../stores/follows.js';
@@ -73,12 +73,6 @@ function PostDetailContent() {
     await navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-    setShareMenuOpen(false);
-  };
-
-  const handleSendDM = () => {
-    const url = `${window.location.origin}/p/${username}/post/${postId}`;
-    navigate(`/dm?shareText=${encodeURIComponent(`Check out this post: ${url}`)}`);
     setShareMenuOpen(false);
   };
 
@@ -202,11 +196,8 @@ function PostDetailContent() {
                 borderRadius: 'var(--radius)', minWidth: 180, padding: 4,
                 boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
               }}>
-                <button onClick={handleSendDM} style={menuBtnStyle}>
-                  <MessageSquare size={14} /> Send in DM
-                </button>
                 <button onClick={() => { setSharePickerOpen(true); setShareMenuOpen(false); }} style={menuBtnStyle}>
-                  <Forward size={14} /> Share in channel
+                  <Forward size={14} /> Share
                 </button>
                 <button onClick={handleCopyLink} style={menuBtnStyle}>
                   {copied ? <Check size={14} /> : <Copy size={14} />}

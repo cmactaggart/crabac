@@ -505,6 +505,86 @@ personalCollectionsRoutes.delete(
   },
 );
 
+// ─── Share Post to DM ───
+
+personalCollectionsRoutes.post(
+  '/me/posts/:postId/share-to-dm',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { conversationId } = req.body;
+      if (!conversationId) return next(new BadRequestError('conversationId is required'));
+      const userId = req.user!.userId;
+
+      const dmService = await import('../dm/dm.service.js');
+      const isMember = await dmService.isConversationMember(conversationId, userId);
+      if (!isMember) return next(new ForbiddenError('Not a member of this conversation'));
+
+      const message = await postsService.sharePostToDM(req.params.postId, userId, conversationId);
+      res.status(201).json(message);
+    } catch (err) { next(err); }
+  },
+);
+
+// ─── Share Gallery to DM ───
+
+personalCollectionsRoutes.post(
+  '/me/collections/galleries/:itemId/share-to-dm',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { conversationId } = req.body;
+      if (!conversationId) return next(new BadRequestError('conversationId is required'));
+      const userId = req.user!.userId;
+
+      const dmService = await import('../dm/dm.service.js');
+      const isMember = await dmService.isConversationMember(conversationId, userId);
+      if (!isMember) return next(new ForbiddenError('Not a member of this conversation'));
+
+      const message = await service.shareGalleryToDM(req.params.itemId, userId, conversationId);
+      res.status(201).json(message);
+    } catch (err) { next(err); }
+  },
+);
+
+// ─── Share Route to DM ───
+
+personalCollectionsRoutes.post(
+  '/me/collections/routes/:itemId/share-to-dm',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { conversationId } = req.body;
+      if (!conversationId) return next(new BadRequestError('conversationId is required'));
+      const userId = req.user!.userId;
+
+      const dmService = await import('../dm/dm.service.js');
+      const isMember = await dmService.isConversationMember(conversationId, userId);
+      if (!isMember) return next(new ForbiddenError('Not a member of this conversation'));
+
+      const message = await service.shareRouteToDM(req.params.itemId, userId, conversationId);
+      res.status(201).json(message);
+    } catch (err) { next(err); }
+  },
+);
+
+// ─── Share Event to DM ───
+
+personalCollectionsRoutes.post(
+  '/me/collections/events/:eventId/share-to-dm',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { conversationId } = req.body;
+      if (!conversationId) return next(new BadRequestError('conversationId is required'));
+      const userId = req.user!.userId;
+
+      const dmService = await import('../dm/dm.service.js');
+      const isMember = await dmService.isConversationMember(conversationId, userId);
+      if (!isMember) return next(new ForbiddenError('Not a member of this conversation'));
+
+      const message = await service.shareEventToDM(req.params.eventId, userId, conversationId);
+      res.status(201).json(message);
+    } catch (err) { next(err); }
+  },
+);
+
 // ─── Share Post to Channel ───
 
 personalCollectionsRoutes.post(

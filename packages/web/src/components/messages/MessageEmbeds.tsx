@@ -14,7 +14,9 @@ export function MessageEmbeds({ content, spaceId }: MessageEmbedsProps) {
     return (
       <>
         {calEvent.remainingContent && <Markdown content={calEvent.remainingContent} />}
-        {spaceId && <CalendarEventCard embed={calEvent.embed} spaceId={spaceId} />}
+        {(spaceId || calEvent.embed.spaceId) && (
+          <CalendarEventCard embed={calEvent.embed} spaceId={spaceId || calEvent.embed.spaceId} />
+        )}
       </>
     );
   }
