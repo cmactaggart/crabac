@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LogOut, Copy, Link2, Pencil, Trash2, PanelLeftClose, PanelLeft, UserPlus, Users, LogOut as LeaveIcon, Check, X, Clock, UserMinus, ArrowLeft, Flag, Ban, SmilePlus, Paperclip, Search } from 'lucide-react';
+import { LogOut, Copy, Link2, Pencil, Trash2, PanelLeftClose, PanelLeft, UserPlus, Users, LogOut as LeaveIcon, Check, X, Clock, UserMinus, ArrowLeft, Flag, Ban, SmilePlus, Paperclip, Search, Forward } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { useDMStore } from '../stores/dm.js';
@@ -20,6 +20,7 @@ import { MessageAttachments } from '../components/messages/MessageAttachments.js
 import { ReactionBar } from '../components/messages/ReactionBar.js';
 import { api } from '../lib/api.js';
 import { SearchPanel } from '../components/search/SearchPanel.js';
+import { ShareToSpacePicker } from '../components/common/ShareToSpacePicker.js';
 import type { DirectMessage, Conversation, FriendshipStatus } from '@crabac/shared';
 
 export function DMView() {
@@ -1007,6 +1008,7 @@ function DMMessageItem({
 }) {
   const [showActions, setShowActions] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showSharePicker, setShowSharePicker] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
@@ -1093,6 +1095,7 @@ function DMMessageItem({
     { label: 'Add Reaction', icon: <SmilePlus size={16} />, onClick: () => setShowEmojiPicker(true) },
     { label: 'Copy Text', icon: <Copy size={16} />, onClick: () => navigator.clipboard.writeText(message.content) },
     { label: 'Copy Link', icon: <Link2 size={16} />, onClick: () => navigator.clipboard.writeText(`${window.location.origin}/dm/${conversationId}/message/${message.id}`) },
+    { label: 'Share', icon: <Forward size={16} />, onClick: () => setShowSharePicker(true) },
     ...(isOwn ? [{ label: 'Edit', icon: <Pencil size={16} />, onClick: handleEdit }] : []),
     ...(!isOwn ? [{ label: 'Report', icon: <Flag size={16} />, onClick: () => onReport(message) }] : []),
     ...(!isOwn ? [{ label: blocked ? 'Unblock' : 'Block', icon: <Ban size={16} />, danger: !blocked, onClick: handleBlock }] : []),
@@ -1100,6 +1103,7 @@ function DMMessageItem({
   ];
 
   return (
+    <>
     <div
       style={{ ...styles.message, marginTop: compact ? 1 : spacedSameAuthor ? 6 : 10, paddingTop: compact ? 1 : 0 }}
       onMouseEnter={() => setShowActions(true)}
@@ -1110,6 +1114,7 @@ function DMMessageItem({
       {showActions && !editing && (
         <div style={styles.actionBar}>
           <button style={styles.actionBtn} title="Add reaction" onClick={() => setShowEmojiPicker(!showEmojiPicker)}><SmilePlus size={16} /></button>
+          <button style={styles.actionBtn} title="Share" onClick={() => setShowSharePicker(true)}><Forward size={16} /></button>
           {isOwn && <button style={styles.actionBtn} title="Edit" onClick={handleEdit}><Pencil size={16} /></button>}
           {isOwn && <button style={styles.actionBtn} title="Delete" onClick={handleDelete}><Trash2 size={16} /></button>}
         </div>
@@ -1177,6 +1182,29 @@ function DMMessageItem({
         onToggleReaction={handleReaction}
       />
     </div>
+    {showSharePicker && (
+      <ShareToSpacePicker
+        contentType="post"
+        itemId={message.id}
+        onClose={() => setShowSharePicker(false)}
+        onShared={() => setShowSharePicker(false)}
+        onShareToChannel={async (targetChannelId) => {
+          const link = `${window.location.origin}/dm/${conversationId}/message/${message.id}`;
+          await api(`/channels/${targetChannelId}/messages`, {
+            method: 'POST',
+            body: JSON.stringify({ content: link }),
+          });
+        }}
+        onShareToDM={async (targetConversationId) => {
+          const link = `${window.location.origin}/dm/${conversationId}/message/${message.id}`;
+          await api(`/conversations/${targetConversationId}/messages`, {
+            method: 'POST',
+            body: JSON.stringify({ content: link }),
+          });
+        }}
+      />
+    )}
+    </>
   );
 }
 

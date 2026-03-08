@@ -250,6 +250,7 @@ export function CalendarView({ spaceId, showBackButton, onBack }: Props) {
           date={selectedDate}
           events={dayEvents}
           canManage={canManage}
+          spaceId={spaceId}
           onClose={() => setSelectedDate(null)}
           onEventClick={(ev) => {
             setSelectedDate(null);

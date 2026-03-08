@@ -1,6 +1,8 @@
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, Suspense } from 'react';
 import { CalendarDays, MapPin, Clock, Check, HelpCircle, X } from 'lucide-react';
 import { api } from '../../lib/api.js';
+
+const LazyGpxMapModal = React.lazy(() => import('../messages/GpxMapModal.js'));
 
 interface RouteData {
   id: string;
@@ -68,6 +70,7 @@ export function EventPostCard({ eventId, spaceId }: { eventId: string; spaceId: 
   const [event, setEvent] = useState<CalendarEvent | null>(null);
   const [loading, setLoading] = useState(true);
   const [rsvpLoading, setRsvpLoading] = useState(false);
+  const [showRouteDetail, setShowRouteDetail] = useState(false);
 
   useEffect(() => {
     api<CalendarEvent>(`/spaces/${spaceId}/calendar/events/${eventId}`)
@@ -174,7 +177,10 @@ export function EventPostCard({ eventId, spaceId }: { eventId: string; spaceId: 
 
         {/* Route preview */}
         {event.route && (
-          <div style={{ marginTop: 8, padding: '6px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+          <div
+            style={{ marginTop: 8, padding: '6px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', cursor: 'pointer' }}
+            onClick={() => setShowRouteDetail(true)}
+          >
             {routePolyline && (
               <svg viewBox="0 0 380 80" style={{ width: '100%', height: 60, display: 'block', marginBottom: 4 }}>
                 <polyline
@@ -226,6 +232,24 @@ export function EventPostCard({ eventId, spaceId }: { eventId: string; spaceId: 
           />
         </div>
       </div>
+
+      {showRouteDetail && event.route?.geojson && (
+        <Suspense fallback={null}>
+          <LazyGpxMapModal
+            attachment={{ id: '', url: event.route.url || '', filename: '', originalName: event.route.name || 'route.gpx', mimeType: 'application/gpx+xml', size: 0 }}
+            gpx={{
+              geojson: event.route.geojson,
+              distanceKm: event.route.distanceKm || 0,
+              elevationGainM: event.route.elevationGainM || 0,
+              elevationLossM: 0,
+              durationSec: 0,
+              trackName: event.route.name || 'Route',
+              bounds: null,
+            }}
+            onClose={() => setShowRouteDetail(false)}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Reply, SmilePlus, MessageSquare, Pin, Copy, Link2, Pencil, Trash2, Zap, Check, X, Flag } from 'lucide-react';
+import { Reply, SmilePlus, MessageSquare, Pin, Copy, Link2, Pencil, Trash2, Zap, Check, X, Flag, Forward } from 'lucide-react';
 import { useMessagesStore } from '../../stores/messages.js';
 import { usePortalsStore } from '../../stores/portals.js';
 import { useMutesStore } from '../../stores/mutes.js';
@@ -16,6 +16,8 @@ import { InteractiveCard } from './InteractiveCard.js';
 import { MessageEmbeds } from './MessageEmbeds.js';
 import { MessageAttachments } from './MessageAttachments.js';
 import { ReactionBar } from './ReactionBar.js';
+import { ShareToSpacePicker } from '../common/ShareToSpacePicker.js';
+import { api } from '../../lib/api.js';
 
 interface Props {
   messages: Message[];
@@ -201,6 +203,7 @@ function MessageItem({
 }) {
   const [showActions, setShowActions] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showSharePicker, setShowSharePicker] = useState(false);
   const [showMutedContent, setShowMutedContent] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [editing, setEditing] = useState(false);
@@ -267,6 +270,7 @@ function MessageItem({
     { label: message.isPinned ? 'Unpin' : 'Pin', icon: <Pin size={16} />, onClick: handlePin },
     { label: 'Copy Text', icon: <Copy size={16} />, onClick: () => navigator.clipboard.writeText(message.content) },
     { label: 'Copy Link', icon: <Link2 size={16} />, onClick: () => navigator.clipboard.writeText(`${window.location.origin}/space/${spaceId}/channel/${channelId}/message/${message.id}`) },
+    { label: 'Share', icon: <Forward size={16} />, onClick: () => setShowSharePicker(true) },
     ...(isOwn ? [{ label: 'Edit', icon: <Pencil size={16} />, onClick: handleEdit }] : []),
     ...(!isOwn ? [{ label: 'Report', icon: <Flag size={16} />, onClick: () => onReport(message) }] : []),
     ...(isOwn || canManageMessages ? [{ label: 'Delete', icon: <Trash2 size={16} />, danger: true, onClick: handleDelete }] : []),
@@ -300,6 +304,7 @@ function MessageItem({
   };
 
   return (
+    <>
     <div
       style={{ ...styles.message, marginTop: compact ? 1 : spacedSameAuthor ? 6 : 10, paddingTop: compact ? 1 : 0 }}
       onMouseEnter={() => setShowActions(true)}
@@ -316,6 +321,7 @@ function MessageItem({
             <button style={styles.actionBtn} title="View thread" onClick={() => openThread(channelId, message.id)}><MessageSquare size={16} /></button>
           )}
           <button style={styles.actionBtn} title={message.isPinned ? 'Unpin' : 'Pin'} onClick={handlePin}><Pin size={16} /></button>
+          <button style={styles.actionBtn} title="Share" onClick={() => setShowSharePicker(true)}><Forward size={16} /></button>
         </div>
       )}
 
@@ -464,6 +470,29 @@ function MessageItem({
         </>
       )}
     </div>
+    {showSharePicker && (
+      <ShareToSpacePicker
+        contentType="post"
+        itemId={message.id}
+        onClose={() => setShowSharePicker(false)}
+        onShared={() => setShowSharePicker(false)}
+        onShareToChannel={async (targetChannelId) => {
+          const link = `${window.location.origin}/space/${spaceId}/channel/${channelId}/message/${message.id}`;
+          await api(`/channels/${targetChannelId}/messages`, {
+            method: 'POST',
+            body: JSON.stringify({ content: link }),
+          });
+        }}
+        onShareToDM={async (conversationId) => {
+          const link = `${window.location.origin}/space/${spaceId}/channel/${channelId}/message/${message.id}`;
+          await api(`/conversations/${conversationId}/messages`, {
+            method: 'POST',
+            body: JSON.stringify({ content: link }),
+          });
+        }}
+      />
+    )}
+    </>
   );
 }
 

@@ -1,10 +1,12 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { X, Pencil, Trash2, MapPin, Check, HelpCircle, XCircle, Repeat, Share2 } from 'lucide-react';
 import type { CalendarEvent, EventRsvp } from '@crabac/shared';
 import { useCalendarStore } from '../../stores/calendar.js';
 import { useAuthStore } from '../../stores/auth.js';
 import { ShareToSpacePicker } from '../common/ShareToSpacePicker.js';
 import { api } from '../../lib/api.js';
+
+const LazyGpxMapModal = React.lazy(() => import('../messages/GpxMapModal.js'));
 
 interface Props {
   event: CalendarEvent;
@@ -71,6 +73,7 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
   const deleteSeries = useCalendarStore((s) => s.deleteSeries);
 
   const [showSharePicker, setShowSharePicker] = useState(false);
+  const [showRouteDetail, setShowRouteDetail] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteMode, setDeleteMode] = useState<'single' | 'series' | null>(null);
   const [rsvps, setRsvps] = useState<EventRsvp[]>([]);
@@ -234,27 +237,32 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
           {/* Route preview */}
           {event.route && (
             <div style={{ marginTop: 8, padding: 12, background: 'var(--bg-secondary)', borderRadius: 'var(--radius)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                <MapPin size={14} style={{ color: 'var(--accent)' }} />
-                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{event.route.name}</span>
-              </div>
-              {routePolyline && (
-                <div style={{ height: 120, background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', overflow: 'hidden', marginBottom: 6 }}>
-                  <svg viewBox="0 0 400 120" style={{ width: '100%', height: '100%' }}>
-                    <polyline
-                      points={routePolyline}
-                      fill="none"
-                      stroke="var(--accent)"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+              <div
+                style={{ cursor: 'pointer' }}
+                onClick={() => setShowRouteDetail(true)}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <MapPin size={14} style={{ color: 'var(--accent)' }} />
+                  <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{event.route.name}</span>
                 </div>
-              )}
-              <div style={{ display: 'flex', gap: 12, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                <span>{event.route.distanceKm.toFixed(1)} km</span>
-                {event.route.elevationGainM != null && <span>+{event.route.elevationGainM} m</span>}
+                {routePolyline && (
+                  <div style={{ height: 120, background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', overflow: 'hidden', marginBottom: 6 }}>
+                    <svg viewBox="0 0 400 120" style={{ width: '100%', height: '100%' }}>
+                      <polyline
+                        points={routePolyline}
+                        fill="none"
+                        stroke="var(--accent)"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 12, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  <span>{event.route.distanceKm.toFixed(1)} km</span>
+                  {event.route.elevationGainM != null && <span>+{event.route.elevationGainM} m</span>}
+                </div>
               </div>
               {event.route.url && (
                 <a href={event.route.url} download style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: '0.78rem', color: 'var(--accent)', textDecoration: 'none' }}>
@@ -326,6 +334,24 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
             onShareToChannel={handleShareToChannel}
             onShareToDM={handleShareToDM}
           />
+        )}
+
+        {showRouteDetail && event.route?.geojson && (
+          <Suspense fallback={null}>
+            <LazyGpxMapModal
+              attachment={{ id: '', url: event.route.url || '', filename: '', originalName: event.route.name || 'route.gpx', mimeType: 'application/gpx+xml', size: 0 }}
+              gpx={{
+                geojson: event.route.geojson,
+                distanceKm: event.route.distanceKm || 0,
+                elevationGainM: event.route.elevationGainM || 0,
+                elevationLossM: 0,
+                durationSec: 0,
+                trackName: event.route.name || 'Route',
+                bounds: null,
+              }}
+              onClose={() => setShowRouteDetail(false)}
+            />
+          </Suspense>
         )}
 
         {canManage && (

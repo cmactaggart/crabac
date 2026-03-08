@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { Calendar, Clock, Tag, MapPin, Check, HelpCircle, X } from 'lucide-react';
 import { api } from '../../lib/api.js';
 import { EventDetailModal } from './EventDetailModal.js';
@@ -6,6 +6,8 @@ import { CreateEventModal } from './CreateEventModal.js';
 import { useHasSpacePermission } from '../settings/SpaceSettingsModal.js';
 import { Permissions } from '@crabac/shared';
 import type { CalendarEvent } from '@crabac/shared';
+
+const LazyGpxMapModal = React.lazy(() => import('../messages/GpxMapModal.js'));
 
 export interface CalendarEventEmbed {
   id: string;
@@ -112,6 +114,7 @@ export function CalendarEventCard({ embed, spaceId }: Props) {
   const [fullEvent, setFullEvent] = useState<CalendarEvent | null>(null);
   const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [showRouteDetail, setShowRouteDetail] = useState(false);
   const [rsvpCounts, setRsvpCounts] = useState<{ going: number; maybe: number; notGoing: number } | null>(null);
   const [myRsvp, setMyRsvp] = useState<string | null>(null);
   const [rsvpLoading, setRsvpLoading] = useState(false);
@@ -220,7 +223,10 @@ export function CalendarEventCard({ embed, spaceId }: Props) {
 
           {/* Route mini map */}
           {routePolyline && embed.routeName && (
-            <div style={{ margin: '4px 0', padding: 8, background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)' }}>
+            <div
+              style={{ margin: '4px 0', padding: 8, background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', cursor: 'pointer' }}
+              onClick={(e) => { e.stopPropagation(); setShowRouteDetail(true); }}
+            >
               <div style={{ height: 80, overflow: 'hidden', marginBottom: 4 }}>
                 <svg viewBox="0 0 380 80" style={{ width: '100%', height: '100%' }}>
                   <polyline
@@ -307,6 +313,24 @@ export function CalendarEventCard({ embed, spaceId }: Props) {
           editEvent={editEvent}
           onClose={() => setEditEvent(null)}
         />
+      )}
+
+      {showRouteDetail && embed.routeGeojson && (
+        <Suspense fallback={null}>
+          <LazyGpxMapModal
+            attachment={{ id: '', url: '', filename: '', originalName: embed.routeName || 'route.gpx', mimeType: 'application/gpx+xml', size: 0 }}
+            gpx={{
+              geojson: embed.routeGeojson,
+              distanceKm: embed.routeDistanceKm || 0,
+              elevationGainM: embed.routeElevationGainM || 0,
+              elevationLossM: 0,
+              durationSec: 0,
+              trackName: embed.routeName || 'Route',
+              bounds: null,
+            }}
+            onClose={() => setShowRouteDetail(false)}
+          />
+        </Suspense>
       )}
     </>
   );
