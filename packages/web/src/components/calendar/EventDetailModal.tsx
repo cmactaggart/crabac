@@ -16,6 +16,23 @@ interface Props {
   onEdit: () => void;
 }
 
+function computeBoundsFromGeojson(geojson: any): { minLat: number; maxLat: number; minLng: number; maxLng: number } | null {
+  if (!geojson?.features) return null;
+  let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
+  for (const feature of geojson.features) {
+    const geom = feature.geometry;
+    const lines = geom.type === 'LineString' ? [geom.coordinates] : geom.type === 'MultiLineString' ? geom.coordinates : [];
+    for (const line of lines) {
+      for (const c of line) {
+        if (c[0] < minLng) minLng = c[0]; if (c[0] > maxLng) maxLng = c[0];
+        if (c[1] < minLat) minLat = c[1]; if (c[1] > maxLat) maxLat = c[1];
+      }
+    }
+  }
+  if (!isFinite(minLng)) return null;
+  return { minLat, maxLat, minLng, maxLng };
+}
+
 function generateMiniMapPoints(geojson: any, width: number, height: number): string {
   const coords: [number, number][] = [];
   if (!geojson?.features) return '';
@@ -347,7 +364,7 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
                 elevationLossM: 0,
                 durationSec: 0,
                 trackName: event.route.name || 'Route',
-                bounds: null,
+                bounds: computeBoundsFromGeojson(event.route.geojson),
               }}
               onClose={() => setShowRouteDetail(false)}
             />
