@@ -5,6 +5,8 @@ import type {
   PersonalRouteItem,
   PersonalEvent,
   PersonalEventCategory,
+  PersonalActivityItem,
+  PersonalActivityStats,
   UserCollectionsSummary,
   UserPost,
   UserPostComment,
@@ -15,6 +17,8 @@ interface PersonalCollectionsState {
   routeItems: PersonalRouteItem[];
   events: PersonalEvent[];
   eventCategories: PersonalEventCategory[];
+  activityItems: PersonalActivityItem[];
+  activityStats: PersonalActivityStats | null;
   posts: UserPost[];
   postsLoading: boolean;
   postsHasMore: boolean;
@@ -27,9 +31,12 @@ interface PersonalCollectionsState {
   fetchEvents: (opts?: { from?: string; to?: string }) => Promise<void>;
   fetchEventCategories: () => Promise<void>;
   fetchPosts: (opts?: { before?: string }) => Promise<void>;
+  fetchActivities: (opts?: { before?: string; activityType?: string }) => Promise<void>;
+  fetchActivityStats: (opts?: { period?: string; year?: number }) => Promise<void>;
 
   uploadGalleryItem: (files: File[], caption?: string, visibility?: string) => Promise<void>;
   uploadRoute: (file: File, name: string, data?: { description?: string; visibility?: string; activityType?: string }) => Promise<void>;
+  uploadActivity: (file: File, name: string, data: { activityType: string; description?: string; visibility?: string; startedAt?: string }) => Promise<void>;
   createEvent: (data: Record<string, any>) => Promise<void>;
   createEventCategory: (data: { name: string; color?: string }) => Promise<PersonalEventCategory>;
   deleteEventCategory: (categoryId: string) => Promise<void>;
@@ -37,13 +44,17 @@ interface PersonalCollectionsState {
 
   updateGalleryItem: (itemId: string, data: Record<string, any>) => Promise<void>;
   updateRoute: (itemId: string, data: Record<string, any>) => Promise<void>;
+  updateActivity: (itemId: string, data: Record<string, any>) => Promise<void>;
   updateEvent: (eventId: string, data: Record<string, any>) => Promise<void>;
   updatePost: (postId: string, data: Record<string, any>) => Promise<void>;
 
   deleteGalleryItem: (itemId: string) => Promise<void>;
   deleteRoute: (itemId: string) => Promise<void>;
+  deleteActivity: (itemId: string) => Promise<void>;
   deleteEvent: (eventId: string) => Promise<void>;
   deletePost: (postId: string) => Promise<void>;
+
+  saveActivityAsRoute: (itemId: string) => Promise<any>;
 
   copyGalleryToChannel: (itemId: string, channelId: string) => Promise<any>;
   copyRouteToChannel: (itemId: string, channelId: string) => Promise<any>;
@@ -76,6 +87,8 @@ export const usePersonalCollectionsStore = create<PersonalCollectionsState>((set
   routeItems: [],
   events: [],
   eventCategories: [],
+  activityItems: [],
+  activityStats: null,
   posts: [],
   postsLoading: false,
   postsHasMore: true,
@@ -161,6 +174,34 @@ export const usePersonalCollectionsStore = create<PersonalCollectionsState>((set
     }
   },
 
+  fetchActivities: async (opts) => {
+    set({ loading: true });
+    try {
+      const params = new URLSearchParams();
+      if (opts?.before) params.set('before', opts.before);
+      if (opts?.activityType) params.set('activityType', opts.activityType);
+      params.set('limit', '30');
+      const items = await api<PersonalActivityItem[]>(`/users/me/collections/activities?${params}`);
+      if (opts?.before) {
+        set((s) => ({ activityItems: [...s.activityItems, ...items], loading: false }));
+      } else {
+        set({ activityItems: items, loading: false });
+      }
+    } catch {
+      set({ loading: false });
+    }
+  },
+
+  fetchActivityStats: async (opts) => {
+    try {
+      const params = new URLSearchParams();
+      if (opts?.period) params.set('period', opts.period);
+      if (opts?.year) params.set('year', String(opts.year));
+      const stats = await api<PersonalActivityStats>(`/users/me/collections/activities/stats?${params}`);
+      set({ activityStats: stats });
+    } catch {}
+  },
+
   createEventCategory: async (data) => {
     const category = await api<PersonalEventCategory>('/users/me/collections/events/categories', {
       method: 'POST',
@@ -203,6 +244,23 @@ export const usePersonalCollectionsStore = create<PersonalCollectionsState>((set
     get().fetchSummary();
   },
 
+  uploadActivity: async (file, name, data) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('name', name);
+    formData.append('activityType', data.activityType);
+    if (data.description) formData.append('description', data.description);
+    if (data.visibility) formData.append('visibility', data.visibility);
+    if (data.startedAt) formData.append('startedAt', data.startedAt);
+    const item = await api<PersonalActivityItem>('/users/me/collections/activities/upload', {
+      method: 'POST',
+      body: formData,
+    });
+    set((s) => ({ activityItems: [item, ...s.activityItems] }));
+    get().fetchSummary();
+    get().fetchActivityStats();
+  },
+
   createEvent: async (data) => {
     const event = await api<PersonalEvent>('/users/me/collections/events', {
       method: 'POST',
@@ -241,6 +299,16 @@ export const usePersonalCollectionsStore = create<PersonalCollectionsState>((set
     }));
   },
 
+  updateActivity: async (itemId, data) => {
+    const item = await api<PersonalActivityItem>(`/users/me/collections/activities/${itemId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    set((s) => ({
+      activityItems: s.activityItems.map((i) => (i.id === itemId ? item : i)),
+    }));
+  },
+
   updateEvent: async (eventId, data) => {
     const event = await api<PersonalEvent>(`/users/me/collections/events/${eventId}`, {
       method: 'PATCH',
@@ -275,6 +343,21 @@ export const usePersonalCollectionsStore = create<PersonalCollectionsState>((set
       routeItems: s.routeItems.filter((i) => i.id !== itemId),
     }));
     get().fetchSummary();
+  },
+
+  deleteActivity: async (itemId) => {
+    await api(`/users/me/collections/activities/${itemId}`, { method: 'DELETE' });
+    set((s) => ({
+      activityItems: s.activityItems.filter((i) => i.id !== itemId),
+    }));
+    get().fetchSummary();
+    get().fetchActivityStats();
+  },
+
+  saveActivityAsRoute: async (itemId) => {
+    return api(`/users/me/collections/activities/${itemId}/save-as-route`, {
+      method: 'POST',
+    });
   },
 
   deleteEvent: async (eventId) => {

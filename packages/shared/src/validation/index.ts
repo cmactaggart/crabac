@@ -212,6 +212,7 @@ export const updateUserPreferencesSchema = z.object({
   distanceUnits: z.enum(['metric', 'imperial']).optional(),
   defaultVisibility: z.enum(['public', 'private', 'friends', 'spaces']).optional(),
   profileVisibility: z.enum(['public', 'private', 'friends', 'spaces']).optional(),
+  activitiesVisibility: z.enum(['public', 'private', 'friends', 'spaces']).nullable().optional(),
   onboardingCompleted: z.boolean().optional(),
   newsletterEnabled: z.boolean().optional(),
 });
@@ -716,6 +717,36 @@ export const copyToChannelSchema = z.object({
 export const copyToSpaceSchema = z.object({
   spaceId: z.string().min(1),
   channelId: z.string().min(1).optional(),
+});
+
+// ─── Personal Activities ───
+
+export const activityTypeEnum = z.enum(['run', 'bike', 'walk', 'hike']);
+
+export const createPersonalActivitySchema = z.object({
+  name: z.string().min(1).max(255),
+  description: z.string().max(5000).nullable().optional(),
+  activityType: activityTypeEnum,
+  visibility: personalVisibilityEnum.default('private'),
+  startedAt: z.string().nullable().optional(),
+});
+
+export const updatePersonalActivitySchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  description: z.string().max(5000).nullable().optional(),
+  visibility: personalVisibilityEnum.optional(),
+});
+
+export const personalActivitiesQuerySchema = z.object({
+  before: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+  visibility: personalVisibilityEnum.optional(),
+  activityType: activityTypeEnum.optional(),
+});
+
+export const activityStatsQuerySchema = z.object({
+  period: z.enum(['ytd', 'year', 'previous_year', 'month', 'week', 'all']).default('ytd'),
+  year: z.coerce.number().int().min(2000).max(2100).optional(),
 });
 
 // ─── User Posts ───

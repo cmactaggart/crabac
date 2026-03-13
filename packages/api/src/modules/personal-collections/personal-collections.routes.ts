@@ -7,6 +7,7 @@ import { computeChannelPermissions } from '../rbac/rbac.service.js';
 import { getChannelSpaceId } from '../channels/channels.service.js';
 import * as spacesService from '../spaces/spaces.service.js';
 import * as service from './personal-collections.service.js';
+import * as activitiesService from './personal-activities.service.js';
 import * as postsService from './user-posts.service.js';
 import { BadRequestError, ForbiddenError } from '../../lib/errors.js';
 import { config } from '../../config.js';
@@ -268,6 +269,113 @@ personalCollectionsRoutes.post(
       await emitRouteItemCreated(channelId, result.id);
 
       res.status(201).json(result);
+    } catch (err) { next(err); }
+  },
+);
+
+// ─── Own Activities ───
+
+personalCollectionsRoutes.get(
+  '/me/collections/activities',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const query = validation.personalActivitiesQuerySchema.parse(req.query);
+      const items = await activitiesService.listPersonalActivityItems(
+        req.user!.userId,
+        req.user!.userId,
+        { before: query.before, limit: query.limit, visibility: query.visibility, activityType: query.activityType },
+      );
+      res.json(items);
+    } catch (err) { next(err); }
+  },
+);
+
+personalCollectionsRoutes.get(
+  '/me/collections/activities/stats',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const query = validation.activityStatsQuerySchema.parse(req.query);
+      const stats = await activitiesService.getActivityStats(
+        req.user!.userId,
+        req.user!.userId,
+        { period: query.period, year: query.year },
+      );
+      res.json(stats);
+    } catch (err) { next(err); }
+  },
+);
+
+personalCollectionsRoutes.post(
+  '/me/collections/activities/upload',
+  handleUpload('file', 1),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const uploadedFiles = (req.files as Express.Multer.File[]) || [];
+      if (uploadedFiles.length === 0) return next(new BadRequestError('A GPX file is required'));
+
+      const file = uploadedFiles[0];
+      const ext = path.extname(file.originalname).toLowerCase();
+      if (ext !== '.gpx') return next(new BadRequestError('Only GPX files are supported'));
+
+      const gpxMeta = await parseGpxFile(file.path);
+      if (!gpxMeta) return next(new BadRequestError('Failed to parse GPX file'));
+
+      const body = validation.createPersonalActivitySchema.parse(req.body);
+      const result = await activitiesService.createPersonalActivityItem(
+        req.user!.userId,
+        body,
+        gpxMeta,
+        {
+          filename: file.filename,
+          originalName: file.originalname,
+          size: file.size,
+          url: `/uploads/${file.filename}`,
+        },
+      );
+
+      const item = await activitiesService.getPersonalActivityItem(result.id);
+      res.status(201).json(item);
+    } catch (err) { next(err); }
+  },
+);
+
+personalCollectionsRoutes.get(
+  '/me/collections/activities/:itemId',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const item = await activitiesService.getPersonalActivityItem(req.params.itemId);
+      res.json(item);
+    } catch (err) { next(err); }
+  },
+);
+
+personalCollectionsRoutes.patch(
+  '/me/collections/activities/:itemId',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const data = validation.updatePersonalActivitySchema.parse(req.body);
+      const item = await activitiesService.updatePersonalActivityItem(req.params.itemId, req.user!.userId, data);
+      res.json(item);
+    } catch (err) { next(err); }
+  },
+);
+
+personalCollectionsRoutes.delete(
+  '/me/collections/activities/:itemId',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await activitiesService.deletePersonalActivityItem(req.params.itemId, req.user!.userId);
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  },
+);
+
+personalCollectionsRoutes.post(
+  '/me/collections/activities/:itemId/save-as-route',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const route = await activitiesService.saveActivityAsRoute(req.params.itemId, req.user!.userId);
+      res.status(201).json(route);
     } catch (err) { next(err); }
   },
 );
@@ -747,6 +855,36 @@ personalCollectionsRoutes.get(
         { before: query.before, limit: query.limit, visibility: query.visibility },
       );
       res.json(items);
+    } catch (err) { next(err); }
+  },
+);
+
+personalCollectionsRoutes.get(
+  '/:userId/collections/activities',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const query = validation.personalActivitiesQuerySchema.parse(req.query);
+      const items = await activitiesService.listPersonalActivityItems(
+        req.params.userId,
+        req.user!.userId,
+        { before: query.before, limit: query.limit, visibility: query.visibility, activityType: query.activityType },
+      );
+      res.json(items);
+    } catch (err) { next(err); }
+  },
+);
+
+personalCollectionsRoutes.get(
+  '/:userId/collections/activities/stats',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const query = validation.activityStatsQuerySchema.parse(req.query);
+      const stats = await activitiesService.getActivityStats(
+        req.params.userId,
+        req.user!.userId,
+        { period: query.period, year: query.year },
+      );
+      res.json(stats);
     } catch (err) { next(err); }
   },
 );

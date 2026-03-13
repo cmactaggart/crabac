@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Image, Map, CalendarDays, Upload, Plus, Trash2, Share2, Edit3, MapPinned, X, FileText, Users, ImagePlus, MapPin, SmilePlus, Newspaper, LogOut } from 'lucide-react';
+import { Image, Map, CalendarDays, Upload, Plus, Trash2, Share2, Edit3, MapPinned, X, FileText, Users, ImagePlus, MapPin, SmilePlus, Newspaper, LogOut, Activity, Bike, Footprints, Mountain, Timer, TrendingUp, Save } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { usePersonalCollectionsStore } from '../stores/personalCollections.js';
@@ -22,9 +22,10 @@ import { ProfileSidebar } from '../components/layout/ProfileSidebar.js';
 import { PersonalNewsletterView } from '../components/newsletter/PersonalNewsletterView.js';
 import { IdentitySwitcher } from '../components/common/IdentitySwitcher.js';
 import { api } from '../lib/api.js';
-import type { PersonalGalleryItem, PersonalRouteItem, PersonalEvent, PersonalEventCategory, PersonalVisibility, UserPost } from '@crabac/shared';
+import type { PersonalGalleryItem, PersonalRouteItem, PersonalEvent, PersonalEventCategory, PersonalActivityItem, PersonalActivityStats, PersonalVisibility, UserPost, ActivityType } from '@crabac/shared';
 
-type SubTab = 'feed' | 'photos' | 'routes' | 'events' | 'newsletter';
+type SubTab = 'feed' | 'photos' | 'activities' | 'events' | 'newsletter';
+type ActivitiesSubTab = 'stats' | 'activities' | 'routes';
 
 const VISIBILITY_LABELS: Record<PersonalVisibility, string> = {
   public: 'Public',
@@ -55,11 +56,12 @@ export function YouPage() {
   const [newsletterEnabled, setNewsletterEnabled] = useState(false);
 
   const {
-    galleryItems, routeItems, events, eventCategories, posts, postsLoading, postsHasMore, summary, loading,
-    fetchSummary, fetchGallery, fetchRoutes, fetchEvents, fetchEventCategories, fetchPosts,
-    uploadGalleryItem, uploadRoute, createEvent, createEventCategory, deleteEventCategory, createPost,
-    deleteGalleryItem, deleteRoute, deleteEvent, deletePost,
-    updateGalleryItem, updateRoute, updateEvent, updatePost,
+    galleryItems, routeItems, events, eventCategories, activityItems, activityStats, posts, postsLoading, postsHasMore, summary, loading,
+    fetchSummary, fetchGallery, fetchRoutes, fetchEvents, fetchEventCategories, fetchPosts, fetchActivities, fetchActivityStats,
+    uploadGalleryItem, uploadRoute, uploadActivity, createEvent, createEventCategory, deleteEventCategory, createPost,
+    deleteGalleryItem, deleteRoute, deleteActivity, deleteEvent, deletePost,
+    updateGalleryItem, updateRoute, updateActivity, updateEvent, updatePost,
+    saveActivityAsRoute,
     togglePostReaction, fetchComments, addComment, deleteComment, toggleCommentReaction,
     createRepost,
   } = usePersonalCollectionsStore();
@@ -104,7 +106,7 @@ export function YouPage() {
     if (activeSpaceId) return; // Skip personal fetches when viewing space
     if (activeTab === 'feed') fetchPosts();
     if (activeTab === 'photos') fetchGallery();
-    if (activeTab === 'routes') fetchRoutes();
+    if (activeTab === 'activities') { fetchActivities(); fetchActivityStats(); fetchRoutes(); }
     if (activeTab === 'events') { fetchEvents(); fetchEventCategories(); }
   }, [activeTab, activeSpaceId]);
 
@@ -195,7 +197,7 @@ export function YouPage() {
                 <div style={styles.summaryRow}>
                   <SummaryBadge icon={<FileText size={14} />} label="Feed" count={summary.postCount} active={activeTab === 'feed'} onClick={() => setActiveTab('feed')} />
                   <SummaryBadge icon={<Image size={14} />} label="Photos" count={summary.galleryCount} active={activeTab === 'photos'} onClick={() => setActiveTab('photos')} />
-                  <SummaryBadge icon={<Map size={14} />} label="Routes" count={summary.routeCount} active={activeTab === 'routes'} onClick={() => setActiveTab('routes')} />
+                  <SummaryBadge icon={<Activity size={14} />} label="Active" count={summary.activityCount} active={activeTab === 'activities'} onClick={() => setActiveTab('activities')} />
                   <SummaryBadge icon={<CalendarDays size={14} />} label="Events" count={summary.eventCount} active={activeTab === 'events'} onClick={() => setActiveTab('events')} />
                   {newsletterEnabled && <SummaryBadge icon={<Newspaper size={14} />} label="Newsletter" count={0} active={activeTab === 'newsletter'} onClick={() => setActiveTab('newsletter')} />}
                 </div>
@@ -228,14 +230,20 @@ export function YouPage() {
                     onShare={(id) => setShareItem({ type: 'gallery', id })}
                   />
                 )}
-                {activeTab === 'routes' && (
-                  <RoutesTab
-                    items={routeItems}
+                {activeTab === 'activities' && (
+                  <ActivitiesTabContainer
+                    activityItems={activityItems}
+                    activityStats={activityStats}
+                    routeItems={routeItems}
                     loading={loading}
-                    onUpload={uploadRoute}
-                    onDelete={deleteRoute}
-                    onUpdate={updateRoute}
-                    onShare={(id) => setShareItem({ type: 'route', id })}
+                    onUploadRoute={uploadRoute}
+                    onDeleteRoute={deleteRoute}
+                    onUpdateRoute={updateRoute}
+                    onShareRoute={(id) => setShareItem({ type: 'route', id })}
+                    onUpdateActivity={updateActivity}
+                    onDeleteActivity={deleteActivity}
+                    onSaveAsRoute={saveActivityAsRoute}
+                    onFetchActivityStats={fetchActivityStats}
                   />
                 )}
                 {activeTab === 'events' && (
@@ -381,7 +389,7 @@ export function YouPage() {
                 <div style={styles.summaryRow}>
                   <SummaryBadge icon={<FileText size={14} />} label="Feed" count={summary.postCount} active={activeTab === 'feed'} onClick={() => setActiveTab('feed')} />
                   <SummaryBadge icon={<Image size={14} />} label="Photos" count={summary.galleryCount} active={activeTab === 'photos'} onClick={() => setActiveTab('photos')} />
-                  <SummaryBadge icon={<Map size={14} />} label="Routes" count={summary.routeCount} active={activeTab === 'routes'} onClick={() => setActiveTab('routes')} />
+                  <SummaryBadge icon={<Activity size={14} />} label="Active" count={summary.activityCount} active={activeTab === 'activities'} onClick={() => setActiveTab('activities')} />
                   <SummaryBadge icon={<CalendarDays size={14} />} label="Events" count={summary.eventCount} active={activeTab === 'events'} onClick={() => setActiveTab('events')} />
                   {newsletterEnabled && <SummaryBadge icon={<Newspaper size={14} />} label="Newsletter" count={0} active={activeTab === 'newsletter'} onClick={() => setActiveTab('newsletter')} />}
                 </div>
@@ -416,15 +424,21 @@ export function YouPage() {
                     onShare={(id) => setShareItem({ type: 'gallery', id })}
                   />
                 )}
-                {activeTab === 'routes' && (
-                  <RoutesTab
-                    items={routeItems}
+                {activeTab === 'activities' && (
+                  <ActivitiesTabContainer
+                    activityItems={activityItems}
+                    activityStats={activityStats}
+                    routeItems={routeItems}
                     loading={loading}
                     defaultVisibility={defaultVisibility}
-                    onUpload={uploadRoute}
-                    onDelete={deleteRoute}
-                    onUpdate={updateRoute}
-                    onShare={(id) => setShareItem({ type: 'route', id })}
+                    onUploadRoute={uploadRoute}
+                    onDeleteRoute={deleteRoute}
+                    onUpdateRoute={updateRoute}
+                    onShareRoute={(id) => setShareItem({ type: 'route', id })}
+                    onUpdateActivity={updateActivity}
+                    onDeleteActivity={deleteActivity}
+                    onSaveAsRoute={saveActivityAsRoute}
+                    onFetchActivityStats={fetchActivityStats}
                   />
                 )}
                 {activeTab === 'events' && (
@@ -562,6 +576,291 @@ function PhotosTab({ items, loading, defaultVisibility = 'private', onUpload, on
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ─── Activities Tab Container (Stats / Activities / Routes sub-tabs) ───
+
+const ACTIVITY_TYPE_LABELS: Record<string, string> = { run: 'Running', bike: 'Cycling', walk: 'Walking', hike: 'Hiking' };
+const ACTIVITY_TYPE_ICONS: Record<string, React.ReactNode> = {
+  run: <Footprints size={16} />,
+  bike: <Bike size={16} />,
+  walk: <Footprints size={16} />,
+  hike: <Mountain size={16} />,
+};
+const STATS_PERIOD_LABELS: Record<string, string> = {
+  ytd: 'Year to Date',
+  year: 'This Year',
+  previous_year: 'Previous Year',
+  month: 'This Month',
+  week: 'This Week',
+  all: 'All Time',
+};
+
+function ActivitiesTabContainer({
+  activityItems, activityStats, routeItems, loading,
+  defaultVisibility = 'private',
+  onUploadRoute, onDeleteRoute, onUpdateRoute, onShareRoute,
+  onUpdateActivity, onDeleteActivity, onSaveAsRoute, onFetchActivityStats,
+}: {
+  activityItems: PersonalActivityItem[];
+  activityStats: PersonalActivityStats | null;
+  routeItems: PersonalRouteItem[];
+  loading: boolean;
+  defaultVisibility?: PersonalVisibility;
+  onUploadRoute: (file: File, name: string, data?: any) => Promise<void>;
+  onDeleteRoute: (id: string) => Promise<void>;
+  onUpdateRoute: (id: string, data: Record<string, any>) => Promise<void>;
+  onShareRoute: (id: string) => void;
+  onUpdateActivity: (id: string, data: Record<string, any>) => Promise<void>;
+  onDeleteActivity: (id: string) => Promise<void>;
+  onSaveAsRoute: (id: string) => Promise<any>;
+  onFetchActivityStats: (opts?: { period?: string; year?: number }) => Promise<void>;
+}) {
+  const [subTab, setSubTab] = useState<ActivitiesSubTab>('stats');
+  const [statsPeriod, setStatsPeriod] = useState('ytd');
+
+  return (
+    <div>
+      {/* Sub-tab navigation */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 12, background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', padding: 4 }}>
+        {(['stats', 'activities', 'routes'] as ActivitiesSubTab[]).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setSubTab(tab)}
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              borderRadius: 'calc(var(--radius) - 2px)',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '0.82rem',
+              fontWeight: 600,
+              background: subTab === tab ? 'var(--accent)' : 'transparent',
+              color: subTab === tab ? 'white' : 'var(--text-secondary)',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            {tab === 'stats' ? 'Stats' : tab === 'activities' ? 'Activities' : 'Routes'}
+          </button>
+        ))}
+      </div>
+
+      {subTab === 'stats' && (
+        <ActivityStatsView
+          stats={activityStats}
+          period={statsPeriod}
+          onPeriodChange={(p) => {
+            setStatsPeriod(p);
+            onFetchActivityStats({ period: p });
+          }}
+        />
+      )}
+      {subTab === 'activities' && (
+        <ActivityFeedView
+          items={activityItems}
+          loading={loading}
+          onUpdate={onUpdateActivity}
+          onDelete={onDeleteActivity}
+          onSaveAsRoute={onSaveAsRoute}
+        />
+      )}
+      {subTab === 'routes' && (
+        <RoutesTab
+          items={routeItems}
+          loading={loading}
+          defaultVisibility={defaultVisibility}
+          onUpload={onUploadRoute}
+          onDelete={onDeleteRoute}
+          onUpdate={onUpdateRoute}
+          onShare={onShareRoute}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Activity Stats View ───
+
+function ActivityStatsView({ stats, period, onPeriodChange }: {
+  stats: PersonalActivityStats | null;
+  period: string;
+  onPeriodChange: (period: string) => void;
+}) {
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <h3 style={styles.tabTitle}>Activity Stats</h3>
+        <select
+          value={period}
+          onChange={(e) => onPeriodChange(e.target.value)}
+          style={{ ...styles.formInput, width: 'auto', padding: '0.3rem 0.6rem', fontSize: '0.78rem' }}
+        >
+          {Object.entries(STATS_PERIOD_LABELS).map(([key, label]) => (
+            <option key={key} value={key}>{label}</option>
+          ))}
+        </select>
+      </div>
+
+      {!stats || stats.stats.length === 0 ? (
+        <div style={styles.emptyState}>No activity data for this period</div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
+          {stats.stats.map((s) => (
+            <div key={s.activityType} style={{ padding: '1rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                {ACTIVITY_TYPE_ICONS[s.activityType]}
+                <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>
+                  {ACTIVITY_TYPE_LABELS[s.activityType] || s.activityType}
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>Distance</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{s.totalDistanceKm.toFixed(1)} km</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>Time</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{formatDuration(s.totalDurationSec)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>Elevation</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{Math.round(s.totalElevationGainM)}m</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>Activities</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{s.activityCount}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatDuration(totalSec: number): string {
+  if (!totalSec) return '0m';
+  const hours = Math.floor(totalSec / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+}
+
+// ─── Activity Feed View ───
+
+function ActivityFeedView({ items, loading, onUpdate, onDelete, onSaveAsRoute }: {
+  items: PersonalActivityItem[];
+  loading: boolean;
+  onUpdate: (id: string, data: Record<string, any>) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  onSaveAsRoute: (id: string) => Promise<any>;
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editVisibility, setEditVisibility] = useState<PersonalVisibility>('private');
+  const [savingRoute, setSavingRoute] = useState<string | null>(null);
+
+  const startEdit = (item: PersonalActivityItem) => {
+    setEditingId(item.id);
+    setEditName(item.name);
+    setEditDescription(item.description || '');
+    setEditVisibility(item.visibility);
+  };
+
+  const saveEdit = async () => {
+    if (!editingId || !editName.trim()) return;
+    await onUpdate(editingId, {
+      name: editName.trim(),
+      description: editDescription.trim() || null,
+      visibility: editVisibility,
+    });
+    setEditingId(null);
+  };
+
+  const handleSaveAsRoute = async (id: string) => {
+    setSavingRoute(id);
+    try {
+      await onSaveAsRoute(id);
+      alert('Activity saved as route!');
+    } catch {
+      alert('Failed to save as route');
+    }
+    setSavingRoute(null);
+  };
+
+  if (items.length === 0 && !loading) {
+    return <div style={styles.emptyState}>No activities yet. Record an activity in the mobile app to get started!</div>;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {items.map((item) => (
+        <div key={item.id} style={{ ...styles.routeCard, flexDirection: 'column', alignItems: 'stretch' }}>
+          {editingId === item.id ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <input value={editName} onChange={(e) => setEditName(e.target.value)} style={styles.formInput} placeholder="Activity name" />
+              <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} style={{ ...styles.formInput, minHeight: 40, resize: 'vertical', fontFamily: 'inherit' }} placeholder="Description (optional)" />
+              <select value={editVisibility} onChange={(e) => setEditVisibility(e.target.value as PersonalVisibility)} style={styles.formInput}>
+                <option value="private">Private</option>
+                <option value="friends">Friends</option>
+                <option value="spaces">Shared Spaces</option>
+                <option value="public">Public</option>
+              </select>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={saveEdit} style={styles.uploadBtn}>Save</button>
+                <button onClick={() => setEditingId(null)} style={styles.cancelBtn}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: 'var(--accent)', flexShrink: 0 }}>
+                  {ACTIVITY_TYPE_ICONS[item.activityType] || <Activity size={16} />}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 600 }}>{item.name}</span>
+                    <VisibilityBadge visibility={item.visibility} />
+                    <span style={styles.activityBadge}>{ACTIVITY_TYPE_LABELS[item.activityType] || item.activityType}</span>
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    {item.distanceKm != null && <span>{item.distanceKm.toFixed(1)} km</span>}
+                    {item.durationSec != null && <span>{formatDuration(item.durationSec)}</span>}
+                    {item.elevationGainM != null && <span>{Math.round(item.elevationGainM)}m gain</span>}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                  <button onClick={() => startEdit(item)} style={styles.iconBtn} title="Edit">
+                    <Edit3 size={13} />
+                  </button>
+                  <button onClick={() => handleSaveAsRoute(item.id)} disabled={savingRoute === item.id} style={styles.iconBtn} title="Save as Route">
+                    <Save size={13} />
+                  </button>
+                  <button onClick={() => { if (confirm('Delete this activity?')) onDelete(item.id); }} style={{ ...styles.iconBtn, color: 'var(--danger)' }} title="Delete">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+              {item.description && (
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 6, paddingLeft: 24 }}>
+                  {item.description}
+                </div>
+              )}
+              {item.startedAt && (
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2, paddingLeft: 24 }}>
+                  {new Date(item.startedAt).toLocaleDateString([], { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                  {' '}
+                  {new Date(item.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

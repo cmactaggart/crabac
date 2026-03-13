@@ -220,7 +220,7 @@ Upload user avatar. Requires auth. Multipart form data with `avatar` field.
 
 Get user preferences. Requires auth.
 
-**Response:** `{ distanceUnits, defaultVisibility, profileVisibility, onboardingCompleted, newsletterEnabled }`
+**Response:** `{ distanceUnits, defaultVisibility, profileVisibility, onboardingCompleted, newsletterEnabled, activitiesVisibility }`
 
 ### PUT /users/preferences
 
@@ -234,6 +234,7 @@ Update user preferences. Requires auth.
 | `profileVisibility` | string | no | `public`, `private`, `friends`, or `spaces` |
 | `onboardingCompleted` | boolean | no | |
 | `newsletterEnabled` | boolean | no | Opt in to personal newsletter emails |
+| `activitiesVisibility` | string | no | `public` or `private` — controls whether other users can see your activities |
 
 ### GET /users/mutes
 
@@ -1538,7 +1539,7 @@ Unfollow a user. Returns `400` if the target is a friend (must unfriend instead)
 
 ## Personal Collections
 
-Users have personal collections for photos, routes, and events that live on their profile (independent of any space). Items have a `visibility` field: `public`, `friends`, or `private`. All endpoints require auth.
+Users have personal collections for photos, routes, activities, and events that live on their profile (independent of any space). Items have a `visibility` field: `public`, `friends`, or `private`. All endpoints require auth.
 
 ### Profile Visibility Gate
 
@@ -1633,6 +1634,102 @@ Copy a personal route to a space route library channel.
 
 **Body:** `{ channelId: string }`
 
+### Personal Activities
+
+Activity items track physical activities (runs, bikes, walks, hikes) with GPX data. Uploading an activity auto-creates a linked user post for the feed. Visibility of activities to other users is also gated by the `activitiesVisibility` preference (`public` or `private`).
+
+#### GET /users/me/collections/activities
+
+List own activity items.
+
+**Query:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `before` | string | - | Cursor for pagination |
+| `limit` | number | 30 | 1–100 |
+| `visibility` | string | - | Filter by visibility |
+| `activityType` | string | - | Filter by type: `run`, `bike`, `walk`, `hike` |
+
+**Response:** Array of `PersonalActivityItem` objects.
+
+#### GET /users/:userId/collections/activities
+
+List another user's activity items. Filtered by visibility and the owner's `activitiesVisibility` preference.
+
+**Query:** Same as own activities.
+
+#### GET /users/me/collections/activities/stats
+
+Get aggregated activity stats grouped by activity type.
+
+**Query:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `period` | string | `ytd` | One of: `ytd`, `year`, `previous_year`, `month`, `week`, `all` |
+| `year` | number | current year | Year to filter on (2000–2100) |
+
+**Response:**
+```json
+{
+  "period": "ytd",
+  "stats": [
+    {
+      "activityType": "run",
+      "totalDistanceKm": 123.4,
+      "totalDurationSec": 45000,
+      "totalElevationGainM": 1500,
+      "activityCount": 12
+    }
+  ]
+}
+```
+
+#### GET /users/:userId/collections/activities/stats
+
+Get another user's activity stats. Respects `activitiesVisibility` preference.
+
+**Query:** Same as own activity stats.
+
+#### POST /users/me/collections/activities/upload
+
+Upload a GPX activity. Multipart form data with `file` field (single `.gpx` file). Auto-creates a linked user post.
+
+**Form fields:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | yes | 1–255 chars |
+| `description` | string | no | Max 5000 chars |
+| `activityType` | string | yes | `run`, `bike`, `walk`, or `hike` |
+| `visibility` | string | no | Defaults to `private` |
+| `startedAt` | string | no | ISO 8601 datetime |
+
+**Response:** `PersonalActivityItem` with linked `userPostId`.
+
+#### GET /users/me/collections/activities/:itemId
+
+Get a single activity item.
+
+#### PATCH /users/me/collections/activities/:itemId
+
+Update an activity item. Visibility changes propagate to the linked user post.
+
+**Body:**
+| Field | Type | Required |
+|-------|------|----------|
+| `name` | string | no |
+| `description` | string | no |
+| `visibility` | string | no |
+
+#### DELETE /users/me/collections/activities/:itemId
+
+Delete an activity item. Also deletes the linked user post.
+
+#### POST /users/me/collections/activities/:itemId/save-as-route
+
+Convert an activity into a personal route item. Copies GPX data, name, description, and visibility. Activity type is mapped (`run`→`run`, `bike`→`ride`, `walk`/`hike`→`walk`).
+
+**Response:** The newly created `PersonalRouteItem`.
+
 ### Personal Events
 
 #### GET /users/me/collections/events
@@ -1693,11 +1790,15 @@ Delete a category.
 
 #### GET /users/me/collections/summary
 
-Get counts and recent items across all own collections.
+Get counts across all own collections.
+
+**Response:** `{ galleryCount, routeCount, eventCount, postCount, activityCount }`
 
 #### GET /users/:userId/collections/summary
 
 Get summary for another user's collections. Filtered by visibility.
+
+**Response:** Same shape as own summary.
 
 ---
 

@@ -113,6 +113,7 @@ export interface UserPreferences {
   distanceUnits: DistanceUnits;
   defaultVisibility: import('./personal-collection.js').PersonalVisibility;
   profileVisibility: import('./personal-collection.js').PersonalVisibility;
+  activitiesVisibility: import('./personal-collection.js').PersonalVisibility | null;
   onboardingCompleted: boolean;
   newsletterEnabled: boolean;
 }

@@ -12,6 +12,7 @@ const DEFAULTS: UserPreferences = {
   distanceUnits: 'imperial',
   defaultVisibility: 'private',
   profileVisibility: 'spaces',
+  activitiesVisibility: null,
   onboardingCompleted: false,
   newsletterEnabled: false,
 };

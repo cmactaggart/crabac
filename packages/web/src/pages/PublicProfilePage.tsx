@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Image, Map, CalendarDays, FileText, UserPlus, UserMinus, Check, Clock, MessageSquare, Lock, ArrowLeft, UserCheck, Newspaper } from 'lucide-react';
+import { Image, Map, CalendarDays, FileText, UserPlus, UserMinus, Check, Clock, MessageSquare, Lock, ArrowLeft, UserCheck, Newspaper, Activity, Bike, Footprints, Mountain } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { useFriendsStore } from '../stores/friends.js';
@@ -17,7 +17,7 @@ import { ProfileSidebar } from '../components/layout/ProfileSidebar.js';
 import { useFollowsStore } from '../stores/follows.js';
 import { useIdentityStore } from '../stores/identity.js';
 import { api } from '../lib/api.js';
-import type { PersonalGalleryItem, PersonalRouteItem, PersonalEvent, UserPost, UserPostComment, UserCollectionsSummary, FriendshipStatus, PersonalVisibility, FollowCounts } from '@crabac/shared';
+import type { PersonalGalleryItem, PersonalRouteItem, PersonalEvent, PersonalActivityItem, PersonalActivityStats, UserPost, UserPostComment, UserCollectionsSummary, FriendshipStatus, PersonalVisibility, FollowCounts } from '@crabac/shared';
 
 interface ProfileUser {
   id: string;
@@ -48,7 +48,8 @@ interface SpaceProfile {
   memberCount: number;
 }
 
-type SubTab = 'feed' | 'photos' | 'routes' | 'events';
+type SubTab = 'feed' | 'photos' | 'activities' | 'events';
+type ActivitiesSubTab = 'stats' | 'activities' | 'routes';
 
 const VISIBILITY_LABELS: Record<PersonalVisibility, string> = {
   public: 'Public',
@@ -86,6 +87,8 @@ export function PublicProfilePage() {
   const [posts, setPosts] = useState<UserPost[]>([]);
   const [galleryItems, setGalleryItems] = useState<PersonalGalleryItem[]>([]);
   const [routeItems, setRouteItems] = useState<PersonalRouteItem[]>([]);
+  const [activityItems, setActivityItems] = useState<PersonalActivityItem[]>([]);
+  const [activityStats, setActivityStats] = useState<PersonalActivityStats | null>(null);
   const [events, setEvents] = useState<PersonalEvent[]>([]);
   const [tabLoading, setTabLoading] = useState(false);
 
@@ -178,11 +181,16 @@ export function PublicProfilePage() {
         .then((data) => { if (!('profilePrivate' in (data as any))) setGalleryItems(data); })
         .catch(() => {})
         .finally(() => setTabLoading(false));
-    } else if (activeTab === 'routes') {
-      api<PersonalRouteItem[]>(`/users/${userId}/collections/routes`)
-        .then((data) => { if (!('profilePrivate' in (data as any))) setRouteItems(data); })
-        .catch(() => {})
-        .finally(() => setTabLoading(false));
+    } else if (activeTab === 'activities') {
+      Promise.all([
+        api<PersonalActivityItem[]>(`/users/${userId}/collections/activities`),
+        api<PersonalActivityStats>(`/users/${userId}/collections/activities/stats`),
+        api<PersonalRouteItem[]>(`/users/${userId}/collections/routes`),
+      ]).then(([activities, stats, routes]) => {
+        if (!('profilePrivate' in (activities as any))) setActivityItems(activities);
+        if (!('profilePrivate' in (stats as any))) setActivityStats(stats);
+        if (!('profilePrivate' in (routes as any))) setRouteItems(routes);
+      }).catch(() => {}).finally(() => setTabLoading(false));
     } else if (activeTab === 'events') {
       api<PersonalEvent[]>(`/users/${userId}/collections/events`)
         .then((data) => { if (!('profilePrivate' in (data as any))) setEvents(data); })
@@ -520,7 +528,7 @@ export function PublicProfilePage() {
         <div style={styles.summaryRow}>
           <SummaryBadge icon={<FileText size={14} />} label="Feed" count={summary.postCount} active={activeTab === 'feed'} onClick={() => setActiveTab('feed')} />
           <SummaryBadge icon={<Image size={14} />} label="Photos" count={summary.galleryCount} active={activeTab === 'photos'} onClick={() => setActiveTab('photos')} />
-          <SummaryBadge icon={<Map size={14} />} label="Routes" count={summary.routeCount} active={activeTab === 'routes'} onClick={() => setActiveTab('routes')} />
+          <SummaryBadge icon={<Activity size={14} />} label="Active" count={summary.activityCount} active={activeTab === 'activities'} onClick={() => setActiveTab('activities')} />
           <SummaryBadge icon={<CalendarDays size={14} />} label="Events" count={summary.eventCount} active={activeTab === 'events'} onClick={() => setActiveTab('events')} />
           {profile.newsletterEnabled && <SummaryBadge icon={<Newspaper size={14} />} label="Newsletter" count={0} active={false} onClick={() => navigate(`/newsletter/u/${profile.username}`)} />}
         </div>
@@ -548,8 +556,18 @@ export function PublicProfilePage() {
         {!tabLoading && activeTab === 'photos' && (
           <ReadOnlyPhotosTab items={galleryItems} />
         )}
-        {!tabLoading && activeTab === 'routes' && (
-          <ReadOnlyRoutesTab items={routeItems} />
+        {!tabLoading && activeTab === 'activities' && (
+          <ReadOnlyActivitiesTabContainer
+            activityItems={activityItems}
+            activityStats={activityStats}
+            routeItems={routeItems}
+            userId={profile.id}
+            onFetchStats={(opts) => {
+              api<PersonalActivityStats>(`/users/${profile.id}/collections/activities/stats?period=${opts.period || 'ytd'}`)
+                .then((data) => { if (!('profilePrivate' in (data as any))) setActivityStats(data); })
+                .catch(() => {});
+            }}
+          />
         )}
         {!tabLoading && activeTab === 'events' && (
           <ReadOnlyEventsTab items={events} />
@@ -802,6 +820,172 @@ function ReadOnlyPhotosTab({ items }: { items: PersonalGalleryItem[] }) {
         </div>
       )}
     </>
+  );
+}
+
+// ─── Read-Only Activities Tab Container ───
+
+const ACTIVITY_TYPE_LABELS: Record<string, string> = { run: 'Running', bike: 'Cycling', walk: 'Walking', hike: 'Hiking' };
+const ACTIVITY_TYPE_ICONS: Record<string, React.ReactNode> = {
+  run: <Footprints size={16} />,
+  bike: <Bike size={16} />,
+  walk: <Footprints size={16} />,
+  hike: <Mountain size={16} />,
+};
+const STATS_PERIOD_LABELS: Record<string, string> = {
+  ytd: 'Year to Date',
+  year: 'This Year',
+  previous_year: 'Previous Year',
+  month: 'This Month',
+  week: 'This Week',
+  all: 'All Time',
+};
+
+function formatDuration(totalSec: number): string {
+  if (!totalSec) return '0m';
+  const hours = Math.floor(totalSec / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+}
+
+function ReadOnlyActivitiesTabContainer({
+  activityItems, activityStats, routeItems, userId, onFetchStats,
+}: {
+  activityItems: PersonalActivityItem[];
+  activityStats: PersonalActivityStats | null;
+  routeItems: PersonalRouteItem[];
+  userId: string;
+  onFetchStats: (opts: { period: string }) => void;
+}) {
+  const [subTab, setSubTab] = useState<ActivitiesSubTab>('stats');
+  const [statsPeriod, setStatsPeriod] = useState('ytd');
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 12, background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', padding: 4 }}>
+        {(['stats', 'activities', 'routes'] as ActivitiesSubTab[]).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setSubTab(tab)}
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              borderRadius: 'calc(var(--radius) - 2px)',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '0.82rem',
+              fontWeight: 600,
+              background: subTab === tab ? 'var(--accent)' : 'transparent',
+              color: subTab === tab ? 'white' : 'var(--text-secondary)',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            {tab === 'stats' ? 'Stats' : tab === 'activities' ? 'Activities' : 'Routes'}
+          </button>
+        ))}
+      </div>
+
+      {subTab === 'stats' && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700 }}>Activity Stats</h4>
+            <select
+              value={statsPeriod}
+              onChange={(e) => {
+                setStatsPeriod(e.target.value);
+                onFetchStats({ period: e.target.value });
+              }}
+              style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem', borderRadius: 'var(--radius)', border: 'none', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
+            >
+              {Object.entries(STATS_PERIOD_LABELS).map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
+          </div>
+          {!activityStats || activityStats.stats.length === 0 ? (
+            <div style={styles.emptyState}>No activity data for this period</div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
+              {activityStats.stats.map((s) => (
+                <div key={s.activityType} style={{ padding: '1rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    {ACTIVITY_TYPE_ICONS[s.activityType]}
+                    <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>
+                      {ACTIVITY_TYPE_LABELS[s.activityType] || s.activityType}
+                    </span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div>
+                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>Distance</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{s.totalDistanceKm.toFixed(1)} km</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>Time</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{formatDuration(s.totalDurationSec)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>Elevation</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{Math.round(s.totalElevationGainM)}m</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>Activities</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{s.activityCount}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {subTab === 'activities' && (
+        <div>
+          {activityItems.length === 0 ? (
+            <div style={styles.emptyState}>No activities yet</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {activityItems.map((item) => (
+                <div key={item.id} style={styles.routeCard}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: 'var(--accent)', flexShrink: 0 }}>
+                      {ACTIVITY_TYPE_ICONS[item.activityType] || <Activity size={18} />}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{item.name}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 2 }}>
+                        {item.distanceKm != null && <span>{item.distanceKm.toFixed(1)} km</span>}
+                        {item.durationSec != null && <span>{formatDuration(item.durationSec)}</span>}
+                        {item.elevationGainM != null && <span>{Math.round(item.elevationGainM)}m gain</span>}
+                        <span style={{ textTransform: 'capitalize' }}>{ACTIVITY_TYPE_LABELS[item.activityType]}</span>
+                      </div>
+                    </div>
+                    <span style={{
+                      fontSize: '0.65rem',
+                      padding: '2px 6px',
+                      borderRadius: 8,
+                      background: VISIBILITY_COLORS[item.visibility] + '22',
+                      color: VISIBILITY_COLORS[item.visibility],
+                      fontWeight: 600,
+                    }}>
+                      {VISIBILITY_LABELS[item.visibility]}
+                    </span>
+                  </div>
+                  {item.description && (
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: 6 }}>{item.description}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {subTab === 'routes' && (
+        <ReadOnlyRoutesTab items={routeItems} />
+      )}
+    </div>
   );
 }
 

@@ -815,7 +815,7 @@ export async function getCollectionsSummary(
   const visibleLevels = await resolveVisibleLevels(userId, viewerId);
   const levelArr = [...visibleLevels];
 
-  const [gallery, routes, events, posts] = await Promise.all([
+  const [gallery, routes, events, posts, activities] = await Promise.all([
     db('personal_gallery_items')
       .where('user_id', userId)
       .whereIn('visibility', levelArr)
@@ -836,6 +836,11 @@ export async function getCollectionsSummary(
       .whereIn('visibility', levelArr)
       .count('* as count')
       .first(),
+    db('personal_activity_items')
+      .where('user_id', userId)
+      .whereIn('visibility', levelArr)
+      .count('* as count')
+      .first(),
   ]);
 
   return {
@@ -843,6 +848,7 @@ export async function getCollectionsSummary(
     routeCount: Number(routes?.count || 0),
     eventCount: Number(events?.count || 0),
     postCount: Number(posts?.count || 0),
+    activityCount: Number(activities?.count || 0),
   };
 }
 
@@ -853,7 +859,7 @@ export async function bulkUpdateVisibility(
   visibility: string,
 ) {
   const results = await db.transaction(async (trx) => {
-    const [galleryResult, routesResult, eventsResult, postsResult] = await Promise.all([
+    const [galleryResult, routesResult, eventsResult, postsResult, activitiesResult] = await Promise.all([
       trx('personal_gallery_items')
         .where('user_id', userId)
         .update({ visibility }),
@@ -866,6 +872,9 @@ export async function bulkUpdateVisibility(
       trx('user_posts')
         .where('user_id', userId)
         .update({ visibility }),
+      trx('personal_activity_items')
+        .where('user_id', userId)
+        .update({ visibility }),
     ]);
 
     return {
@@ -873,6 +882,7 @@ export async function bulkUpdateVisibility(
       routes: routesResult,
       events: eventsResult,
       posts: postsResult,
+      activities: activitiesResult,
     };
   });
 

@@ -1,5 +1,7 @@
 export type PersonalVisibility = 'public' | 'private' | 'friends' | 'spaces';
 
+export type ActivityType = 'run' | 'bike' | 'walk' | 'hike';
+
 export interface PersonalGalleryAttachment {
   id: string;
   galleryItemId: string;
@@ -97,11 +99,55 @@ export interface PersonalEvent {
   updatedAt: string;
 }
 
+export interface PersonalActivityItem {
+  id: string;
+  userId: string;
+  name: string;
+  description: string | null;
+  activityType: ActivityType;
+  visibility: PersonalVisibility;
+  distanceKm: number | null;
+  durationSec: number | null;
+  elevationGainM: number | null;
+  elevationLossM: number | null;
+  flatness: number | null;
+  geojson: any;
+  bounds: any;
+  startLat: number | null;
+  startLng: number | null;
+  startedAt: string | null;
+  url: string | null;
+  trackName: string | null;
+  userPostId: string | null;
+  author?: {
+    id: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+    baseColor: string | null;
+    accentColor: string | null;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PersonalActivityStats {
+  period: string;
+  stats: {
+    activityType: ActivityType;
+    totalDistanceKm: number;
+    totalDurationSec: number;
+    totalElevationGainM: number;
+    activityCount: number;
+  }[];
+}
+
 export interface UserCollectionsSummary {
   galleryCount: number;
   routeCount: number;
   eventCount: number;
   postCount: number;
+  activityCount: number;
 }
 
 export interface UserPost {
@@ -171,6 +217,7 @@ export interface UserPostAttachment {
   position: number;
   personalGalleryItemId: string | null;
   personalRouteItemId: string | null;
+  personalActivityItemId: string | null;
 }
 
 export interface UserPostTag {
