@@ -25,8 +25,8 @@ export async function up(knex: Knex): Promise<void> {
     table.string('track_name', 500).nullable();
     table.decimal('flatness', 10, 2).nullable();
     table.bigInteger('user_post_id').nullable();
-    table.timestamp('created_at').defaultTo(knex.fn.now(3));
-    table.timestamp('updated_at').defaultTo(knex.fn.now(3));
+    table.timestamp('created_at', { precision: 3 }).defaultTo(knex.fn.now(3));
+    table.timestamp('updated_at', { precision: 3 }).defaultTo(knex.fn.now(3));
 
     table.foreign('user_id').references('id').inTable('users').onDelete('CASCADE');
     table.foreign('user_post_id').references('id').inTable('user_posts').onDelete('SET NULL');

@@ -17,7 +17,7 @@ const TOTAL_STEPS = 9;
 
 const SUGGESTED_CHANNELS = ['introductions', 'off-topic', 'help', 'links', 'announcements'];
 
-const DEFAULT_WELCOME = 'Welcome to {space}, {{mention}}! We\'re glad to have you here.';
+const DEFAULT_WELCOME = 'Welcome to {{spaceName}}, {{mention}}! We\'re glad to have you here.';
 
 export function NewSpaceOnboardingModal({ onClose }: Props) {
   const navigate = useNavigate();
@@ -429,7 +429,7 @@ export function NewSpaceOnboardingModal({ onClose }: Props) {
     if (step < TOTAL_STEPS) {
       setStep(step + 1);
     } else {
-      setStep(9); // Done screen
+      setStep(10); // Done screen
     }
   };
 
@@ -975,7 +975,7 @@ export function NewSpaceOnboardingModal({ onClose }: Props) {
             style={{ ...s.input, minHeight: 80, resize: 'vertical', fontFamily: 'inherit' }}
           />
           <span style={s.hint}>
-            Use {'{{mention}}'} for the new member's @mention and {'{space}'} for the space name.
+            Use {'{{mention}}'} for the new member's @mention and {'{{spaceName}}'} for the space name.
           </span>
         </div>
       )}
@@ -1010,7 +1010,7 @@ export function NewSpaceOnboardingModal({ onClose }: Props) {
   );
 
   const renderFooter = () => {
-    if (step === 9) return null; // Done screen has its own button
+    if (step === 10) return null; // Done screen has its own button
 
     return (
       <div style={s.footer}>

@@ -65,6 +65,37 @@ boardsRoutes.get(
   },
 );
 
+// iCal feed for public calendar
+boardsRoutes.get(
+  '/calendar/:spaceSlug/feed.ics',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const data = await boardsService.getPublicCalendarSpace(req.params.spaceSlug);
+
+      // ICS feeds should work without auth for calendar app subscriptions
+      const isMember = req.user
+        ? await boardsService.isSpaceMember(String(data.space.id), req.user.userId)
+        : false;
+
+      // Fetch events for a wide window: 6 months back, 12 months forward
+      const now = new Date();
+      const from = new Date(now.getFullYear(), now.getMonth() - 6, 1).toISOString().split('T')[0];
+      const to = new Date(now.getFullYear(), now.getMonth() + 12, 0).toISOString().split('T')[0];
+
+      const events = isMember
+        ? await calendarService.listEvents(String(data.space.id), from, to, req.user?.userId)
+        : await calendarService.listPublicEvents(String(data.space.id), from, to);
+
+      const ics = generateIcs(data.space, events);
+      res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+      res.setHeader('Content-Disposition', `inline; filename="${data.space.slug}-calendar.ics"`);
+      res.send(ics);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // ─── Public Blog ───
 
 boardsRoutes.get(
@@ -354,3 +385,99 @@ boardsRoutes.post(
     }
   },
 );
+
+// ─── ICS Helper ───
+
+function escapeIcs(text: string): string {
+  return text
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\n/g, '\\n');
+}
+
+function foldLine(line: string): string {
+  // RFC 5545: lines must be <= 75 octets; fold with CRLF + space
+  const parts: string[] = [];
+  while (line.length > 75) {
+    parts.push(line.substring(0, 75));
+    line = ' ' + line.substring(75);
+  }
+  parts.push(line);
+  return parts.join('\r\n');
+}
+
+function generateIcs(
+  space: { id: any; name: string; slug: string },
+  events: any[],
+): string {
+  const lines: string[] = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    `PRODID:-//crab.ac//${escapeIcs(space.name)}//EN`,
+    `X-WR-CALNAME:${escapeIcs(space.name)}`,
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+  ];
+
+  for (const event of events) {
+    const uid = `${event.id}@crab.ac`;
+    const dateStr = (event.eventDate || '').replace(/-/g, '');
+
+    let dtStart: string;
+    let dtEnd: string;
+    if (event.eventTime) {
+      // Timed event — use DATETIME (treat as floating local time since we don't store timezone)
+      const timePart = event.eventTime.replace(':', '') + '00';
+      dtStart = `${dateStr}T${timePart}`;
+      // Default to 2-hour duration
+      const [h, m] = event.eventTime.split(':').map(Number);
+      const endMinutes = h * 60 + m + 120;
+      const eh = String(Math.floor(endMinutes / 60) % 24).padStart(2, '0');
+      const em = String(endMinutes % 60).padStart(2, '0');
+      dtEnd = `${dateStr}T${eh}${em}00`;
+    } else {
+      // All-day event
+      dtStart = dateStr;
+      // All-day DTEND is exclusive, so next day
+      const d = new Date(event.eventDate + 'T00:00:00');
+      d.setDate(d.getDate() + 1);
+      dtEnd = d.toISOString().split('T')[0].replace(/-/g, '');
+    }
+
+    lines.push('BEGIN:VEVENT');
+    lines.push(foldLine(`UID:${uid}`));
+
+    if (event.eventTime) {
+      lines.push(foldLine(`DTSTART:${dtStart}`));
+      lines.push(foldLine(`DTEND:${dtEnd}`));
+    } else {
+      lines.push(foldLine(`DTSTART;VALUE=DATE:${dtStart}`));
+      lines.push(foldLine(`DTEND;VALUE=DATE:${dtEnd}`));
+    }
+
+    lines.push(foldLine(`SUMMARY:${escapeIcs(event.name)}`));
+
+    if (event.description) {
+      lines.push(foldLine(`DESCRIPTION:${escapeIcs(event.description)}`));
+    }
+    if (event.location) {
+      lines.push(foldLine(`LOCATION:${escapeIcs(event.location)}`));
+    }
+
+    // Created/modified timestamps
+    if (event.createdAt) {
+      const stamp = new Date(event.createdAt).toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+      lines.push(foldLine(`DTSTAMP:${stamp}`));
+    }
+
+    if (event.category?.name) {
+      lines.push(foldLine(`CATEGORIES:${escapeIcs(event.category.name)}`));
+    }
+
+    lines.push('END:VEVENT');
+  }
+
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n') + '\r\n';
+}

@@ -9,6 +9,7 @@ const BASE_VARS = [
   { name: '{{userId}}', desc: 'ID of the triggering user' },
   { name: '{{username}}', desc: 'Username of the triggering user' },
   { name: '{{displayName}}', desc: 'Display name of the triggering user' },
+  { name: '{{mention}}', desc: '@mention of the triggering user' },
   { name: '{{spaceName}}', desc: 'Name of the space' },
 ];
 

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Image, Map, CalendarDays, Upload, Plus, Trash2, Share2, Edit3, MapPinned, X, FileText, Users, ImagePlus, MapPin, SmilePlus, Newspaper, LogOut, Activity, Bike, Footprints, Mountain, Timer, TrendingUp, Save } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
@@ -23,6 +23,8 @@ import { PersonalNewsletterView } from '../components/newsletter/PersonalNewslet
 import { IdentitySwitcher } from '../components/common/IdentitySwitcher.js';
 import { api } from '../lib/api.js';
 import type { PersonalGalleryItem, PersonalRouteItem, PersonalEvent, PersonalEventCategory, PersonalActivityItem, PersonalActivityStats, PersonalVisibility, UserPost, ActivityType } from '@crabac/shared';
+
+const LazyGpxMapModal = React.lazy(() => import('../components/messages/GpxMapModal.js'));
 
 type SubTab = 'feed' | 'photos' | 'activities' | 'events' | 'newsletter';
 type ActivitiesSubTab = 'stats' | 'activities' | 'routes';
@@ -582,6 +584,41 @@ function PhotosTab({ items, loading, defaultVisibility = 'private', onUpload, on
 
 // ─── Activities Tab Container (Stats / Activities / Routes sub-tabs) ───
 
+const ACTIVITY_TYPE_COLORS: Record<string, string> = { run: '#e74c3c', bike: '#3498db', walk: '#2ecc71', hike: '#e67e22' };
+
+function generateMiniMapPoints(geojson: any, width: number, height: number): string {
+  const coords: [number, number][] = [];
+  if (!geojson?.features) return '';
+  for (const feature of geojson.features) {
+    const geom = feature.geometry;
+    if (geom.type === 'LineString') {
+      for (const c of geom.coordinates) coords.push([c[0], c[1]]);
+    } else if (geom.type === 'MultiLineString') {
+      for (const line of geom.coordinates) for (const c of line) coords.push([c[0], c[1]]);
+    }
+  }
+  if (coords.length < 2) return '';
+  const maxPts = 80;
+  let sampled = coords;
+  if (coords.length > maxPts) {
+    const step = (coords.length - 1) / (maxPts - 1);
+    sampled = [];
+    for (let i = 0; i < maxPts - 1; i++) sampled.push(coords[Math.round(i * step)]);
+    sampled.push(coords[coords.length - 1]);
+  }
+  let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
+  for (const [lng, lat] of sampled) {
+    if (lng < minLng) minLng = lng; if (lng > maxLng) maxLng = lng;
+    if (lat < minLat) minLat = lat; if (lat > maxLat) maxLat = lat;
+  }
+  const pad = 0.08, lngRange = (maxLng - minLng) || 0.001, latRange = (maxLat - minLat) || 0.001;
+  return sampled.map(([lng, lat]) => {
+    const x = ((lng - minLng) / lngRange) * (1 - 2 * pad) + pad;
+    const y = (1 - (lat - minLat) / latRange) * (1 - 2 * pad) + pad;
+    return `${(x * width).toFixed(1)},${(y * height).toFixed(1)}`;
+  }).join(' ');
+}
+
 const ACTIVITY_TYPE_LABELS: Record<string, string> = { run: 'Running', bike: 'Cycling', walk: 'Walking', hike: 'Hiking' };
 const ACTIVITY_TYPE_ICONS: Record<string, React.ReactNode> = {
   run: <Footprints size={16} />,
@@ -763,6 +800,7 @@ function ActivityFeedView({ items, loading, onUpdate, onDelete, onSaveAsRoute }:
   const [editDescription, setEditDescription] = useState('');
   const [editVisibility, setEditVisibility] = useState<PersonalVisibility>('private');
   const [savingRoute, setSavingRoute] = useState<string | null>(null);
+  const [mapItem, setMapItem] = useState<PersonalActivityItem | null>(null);
 
   const startEdit = (item: PersonalActivityItem) => {
     setEditingId(item.id);
@@ -817,8 +855,24 @@ function ActivityFeedView({ items, loading, onUpdate, onDelete, onSaveAsRoute }:
             </div>
           ) : (
             <>
+              {/* Mini route map - click to open detail */}
+              {(() => {
+                const pts = item.geojson ? generateMiniMapPoints(item.geojson, 380, 80) : '';
+                return pts ? (
+                  <svg viewBox="0 0 380 80" style={{ width: '100%', height: 60, display: 'block', marginBottom: 6, cursor: 'pointer' }} onClick={() => setMapItem(item)}>
+                    <polyline
+                      points={pts}
+                      fill="none"
+                      stroke={ACTIVITY_TYPE_COLORS[item.activityType] || 'var(--accent)'}
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                ) : null;
+              })()}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ color: 'var(--accent)', flexShrink: 0 }}>
+                <span style={{ color: ACTIVITY_TYPE_COLORS[item.activityType] || 'var(--accent)', flexShrink: 0 }}>
                   {ACTIVITY_TYPE_ICONS[item.activityType] || <Activity size={16} />}
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -861,6 +915,25 @@ function ActivityFeedView({ items, loading, onUpdate, onDelete, onSaveAsRoute }:
           )}
         </div>
       ))}
+
+      {/* Full map modal */}
+      {mapItem && mapItem.geojson && (
+        <Suspense fallback={null}>
+          <LazyGpxMapModal
+            attachment={{ id: '', url: mapItem.url || '', filename: '', originalName: mapItem.name || 'activity.gpx', mimeType: 'application/gpx+xml', size: 0 }}
+            gpx={{
+              geojson: mapItem.geojson,
+              distanceKm: mapItem.distanceKm || 0,
+              elevationGainM: mapItem.elevationGainM || 0,
+              elevationLossM: mapItem.elevationLossM || 0,
+              durationSec: mapItem.durationSec || 0,
+              trackName: mapItem.name || 'Activity',
+              bounds: mapItem.bounds,
+            }}
+            onClose={() => setMapItem(null)}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

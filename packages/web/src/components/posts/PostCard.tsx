@@ -6,6 +6,7 @@ import { EmojiPicker } from '../messages/EmojiPicker.js';
 import { ShareToSpacePicker } from '../common/ShareToSpacePicker.js';
 import { SpaceLinkEmbed, extractSpaceLinks } from '../spaces/SpaceLinkEmbed.js';
 import { EventPostCard } from './EventPostCard.js';
+import { ActivityPostCard } from './ActivityPostCard.js';
 import { usePersonalCollectionsStore } from '../../stores/personalCollections.js';
 import { useFollowsStore } from '../../stores/follows.js';
 import type { UserPost, UserPostComment, PersonalVisibility } from '@crabac/shared';
@@ -167,6 +168,7 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
   initialShowComments?: boolean;
   onHashtagClick?: (tag: string) => void;
 }) {
+  const isActivityPost = !!post.metadata?.activityId;
   const navigate = useNavigate();
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showComments, setShowComments] = useState(!!initialShowComments);
@@ -301,6 +303,31 @@ export function PostCard({ post, currentUserId, isOwn, isEditing, editBody, edit
     if (target.closest('[style*="cursor: pointer"], [style*="cursor:pointer"]')) return;
     navigate(postDetailUrl);
   };
+
+  // Activity posts render as a dedicated activity card
+  if (isActivityPost) {
+    return (
+      <ActivityPostCard
+        post={post}
+        currentUserId={currentUserId}
+        isOwn={isOwn}
+        onReaction={onReaction}
+        onFetchComments={onFetchComments}
+        onAddComment={onAddComment}
+        onDeleteComment={onDeleteComment}
+        onCommentReaction={onCommentReaction}
+        onRepost={onRepost}
+        onShare={onShare}
+        onReport={onReport}
+        onPin={onPin}
+        onUnpin={onUnpin}
+        onDelete={onDelete}
+        showAuthorLink={showAuthorLink}
+        initialShowComments={initialShowComments}
+        onHashtagClick={onHashtagClick}
+      />
+    );
+  }
 
   return (
     <div data-post-id={post.id} style={{ ...styles.postCard, cursor: postDetailUrl ? 'pointer' : undefined }} onClick={handleCardClick}>

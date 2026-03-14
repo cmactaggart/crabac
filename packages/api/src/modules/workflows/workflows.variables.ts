@@ -47,7 +47,11 @@ export async function resolveVariables(
     vars.userId = ctx.userId;
     vars.username = user?.username || '';
     vars.displayName = user?.display_name || user?.username || '';
+    vars.mention = user?.username ? `@${user.username}` : '';
   }
+
+  // Aliases for convenience
+  vars.space = vars.spaceName;
 
   switch (triggerType) {
     case 'member_joined':
@@ -165,8 +169,14 @@ function flattenObject(
 }
 
 export function interpolate(template: string, vars: ResolvedVariables): string {
-  return template.replace(/\{\{(\w+(?:\.\w+)*)\}\}/g, (_match, key) => {
-    const val = vars[key];
-    return val != null ? String(val) : `{{${key}}}`;
-  });
+  // Handle {{variable}} (double braces) and {variable} (single braces)
+  return template
+    .replace(/\{\{(\w+(?:\.\w+)*)\}\}/g, (_match, key) => {
+      const val = vars[key];
+      return val != null ? String(val) : `{{${key}}}`;
+    })
+    .replace(/\{(\w+(?:\.\w+)*)\}/g, (_match, key) => {
+      const val = vars[key];
+      return val != null ? String(val) : `{${key}}`;
+    });
 }
