@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.9.1
+## API Version 0.10.0
 
 Base URL: `https://app.crab.ac/api`
 
@@ -1487,6 +1487,26 @@ Get an aggregated feed of posts from followed users, friends, self, and member s
 
 **Response:** Array of UserPost objects with author info, attachments, tags, reactions, comment counts, repost data, and optional `spaceAuthor` for space-authored posts.
 
+### GET /follows/feed/search
+
+Search social posts by text or hashtag. Respects per-user visibility rules.
+
+**Query:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `q` | string | - | Search query |
+| `hashtag` | string | - | Filter by hashtag (without `#`) |
+| `before` | string | - | Cursor for keyset pagination |
+| `limit` | number | 20 | Max 50 |
+
+**Response:** Array of UserPost objects.
+
+### GET /posts/:postId
+
+Get a single post by ID. Requires auth. Space posts are always visible to members; user posts are filtered by visibility based on relationship to the author.
+
+**Response:** UserPost object with author info, attachments, tags, reactions, comment count, repost data.
+
 ### GET /follows/spaces/:spaceId/posts
 
 List social posts authored by a specific space. Public. Requires the space to have `socialEnabled = true`.
@@ -1842,11 +1862,43 @@ Update a post (body, visibility).
 
 Delete a post.
 
+#### PUT /users/me/posts/:postId/pin
+
+Pin a post to the top of your profile. Only one post can be pinned at a time.
+
+#### DELETE /users/me/posts/:postId/pin
+
+Unpin a post.
+
 #### POST /users/me/posts/:postId/share-to-channel
 
 Share a post to a space channel as a message.
 
 **Body:** `{ channelId: string, content?: string }`
+
+#### POST /users/me/posts/:postId/share-to-dm
+
+Share a post to a DM conversation.
+
+**Body:** `{ conversationId: string }`
+
+#### POST /users/me/collections/galleries/:itemId/share-to-dm
+
+Share a personal gallery item to a DM conversation.
+
+**Body:** `{ conversationId: string }`
+
+#### POST /users/me/collections/routes/:itemId/share-to-dm
+
+Share a personal route to a DM conversation.
+
+**Body:** `{ conversationId: string }`
+
+#### POST /users/me/collections/events/:eventId/share-to-dm
+
+Share a personal event to a DM conversation.
+
+**Body:** `{ conversationId: string }`
 
 ### Reposts
 
@@ -2128,6 +2180,14 @@ Get public calendar events. Authenticated space members see all events; others s
 **Query:** `from=YYYY-MM-DD&to=YYYY-MM-DD`
 
 **Response:** `CalendarEvent[]`
+
+#### GET /boards/calendar/:spaceSlug/feed.ics
+
+ICS calendar feed for subscribing in calendar apps (Apple Calendar, Google Calendar, Outlook, etc.). No auth required. Requires `allowPublicCalendar` in space settings.
+
+Returns events from 6 months back to 12 months forward. Authenticated space members see all events; anonymous users see only public events. RFC 5545 compliant.
+
+**Response:** `text/calendar` (`.ics` file)
 
 ### Public Blog
 
@@ -2578,12 +2638,14 @@ Interact with an active card (button click or field submission). Requires **spac
 
 ### Template Variables
 
-Action templates use `{{varName}}` syntax. Available variables depend on trigger:
+Action templates use `{{varName}}` syntax (double curly braces). Single curly braces `{varName}` are also supported for convenience. Available variables depend on trigger:
 
 | Variable | Triggers | Description |
 |----------|----------|-------------|
 | `spaceName` | all | Space name |
+| `space` | all | Alias for `spaceName` |
 | `userId`, `username`, `displayName` | all | Triggering user |
+| `mention` | all | @mention of the triggering user (e.g. `@jane`) |
 | `channelId`, `channelName` | message, image, gpx, command, card | Channel context |
 | `messageId`, `messageContent` | message, image, gpx | Message context |
 | `imageCount` | image | Number of images |

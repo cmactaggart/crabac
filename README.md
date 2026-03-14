@@ -17,13 +17,22 @@ The platform is especially well-suited for outdoor activity communities (cycling
 
 ---
 
-## What's New in 0.7.0
+## What's New in 0.10.0
 
-- **Newsletter system** — space and personal newsletters with a block editor (text, images, galleries, quotes, embeds, dividers), email delivery via SES, open/click tracking, anonymous + authenticated subscriptions, and daily/weekly digest scheduling
-- **Workflow engine** — trigger-condition-action automations: welcome flows, auto-imports, slash commands, interactive cards, incoming/outgoing webhooks
-- **Social profiles** — personal galleries, route collections, event calendars, and a post feed on every user profile with visibility controls (public/friends/private)
-- **User posts** — text posts with photo/route attachments, friend tagging, reactions, comments, and reposts
-- **Follows & feed** — one-way follows for public profiles with an aggregated social feed
+- **Activity tracking** — record runs, rides, walks, and hikes from the mobile app with GPX data; activities appear as rich cards in the social feed with route maps, distance, duration, and elevation stats; inline editing; save-as-route; stats aggregation by type and time period
+- **ICS calendar feeds** — public community calendars now have a subscribable `.ics` endpoint for Apple Calendar, Google Calendar, Outlook, etc.
+- **Post pinning** — pin a post to the top of your profile
+- **Share to DM** — share posts, gallery items, routes, and events directly to DM conversations
+- **Feed search** — full-text search and hashtag filtering across social posts
+- **Workflow variables** — new `{{mention}}` (@username) and `{{space}}` (alias for spaceName) template variables; single-brace `{var}` syntax now supported alongside `{{var}}`
+
+### Previous highlights
+
+- **Newsletter system** — block editor, email delivery via SES, open/click tracking, subscriptions, daily/weekly digest scheduling
+- **Workflow engine** — trigger-condition-action automations: welcome flows, auto-imports, slash commands, interactive cards, webhooks
+- **Social profiles** — personal galleries, route collections, event calendars, post feed with visibility controls
+- **User posts** — text posts with photo/route attachments, friend tagging, reactions, comments, reposts
+- **Follows & feed** — one-way follows with an aggregated social feed
 
 ---
 
@@ -123,7 +132,11 @@ One-way follows let users subscribe to public profiles. Friends (mutual, bidirec
 
 ### Personal Collections
 
-Users can curate their own photos, routes, and events on their profile — independent of any space. Collection items can be copied into space channels (galleries, route libraries, calendars) when needed, bridging personal and community content.
+Users can curate their own photos, routes, activities, and events on their profile — independent of any space. Collection items can be copied into space channels (galleries, route libraries, calendars) when needed, bridging personal and community content.
+
+### Activities
+
+Record physical activities (runs, rides, walks, hikes) from the mobile app with GPX data. Activities render as rich cards in the social feed showing an SVG route map, distance, duration, elevation gain, and activity type. Activities can be edited inline from the feed, saved as routes, and aggregated into stats by type and time period.
 
 ---
 
@@ -385,9 +398,10 @@ URL: `app.crab.ac/routes/your-space-slug`
 
 ### Public Calendar
 
-The community calendar can be exposed as a read-only public web page. Individual events are marked as public or private — only public events appear on the web view.
+The community calendar can be exposed as a read-only public web page. Individual events are marked as public or private — only public events appear on the web view. Public calendars also provide an ICS feed for subscribing in external calendar apps.
 
 URL: `app.crab.ac/calendar/your-space-slug`
+ICS feed: `app.crab.ac/api/boards/calendar/your-space-slug/feed.ics`
 
 ![Screenshot: Public web calendar view](docs/screenshots/public-web-calendar.png)
 
@@ -662,7 +676,7 @@ sudo cloudflared service install
 
 ## API Documentation
 
-See [docs/api.md](docs/api.md) for the complete REST API reference (v0.6.0), including all endpoints, request/response formats, WebSocket events, and permission requirements.
+See [docs/api.md](docs/api.md) for the complete REST API reference (v0.10.0), including all endpoints, request/response formats, WebSocket events, and permission requirements.
 
 ---
 
