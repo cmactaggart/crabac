@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Search, X, Star, Download, MapPin, Mountain, TrendingUp, Link as LinkIcon, Copy } from 'lucide-react';
 import { boardApi } from '../../lib/boardApi.js';
 import { usePublicTheme } from '../../contexts/PublicThemeContext.js';
+import { MiniMap } from '../../components/common/MiniMap.js';
 
 interface RouteItem {
   id: string;
@@ -54,45 +55,6 @@ function activityLabel(type: string | null): string | null {
   if (type === 'run') return 'Run';
   if (type === 'walk') return 'Walk';
   return null;
-}
-
-function generateMiniMapPoints(geojson: any, width: number, height: number): string {
-  const coords: [number, number][] = [];
-  if (!geojson?.features) return '';
-  for (const feature of geojson.features) {
-    const geom = feature.geometry;
-    if (geom.type === 'LineString') {
-      for (const c of geom.coordinates) coords.push([c[0], c[1]]);
-    } else if (geom.type === 'MultiLineString') {
-      for (const line of geom.coordinates) {
-        for (const c of line) coords.push([c[0], c[1]]);
-      }
-    }
-  }
-  if (coords.length < 2) return '';
-  const maxPts = 80;
-  let sampled = coords;
-  if (coords.length > maxPts) {
-    const step = (coords.length - 1) / (maxPts - 1);
-    sampled = [];
-    for (let i = 0; i < maxPts - 1; i++) sampled.push(coords[Math.round(i * step)]);
-    sampled.push(coords[coords.length - 1]);
-  }
-  let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
-  for (const [lng, lat] of sampled) {
-    if (lng < minLng) minLng = lng;
-    if (lng > maxLng) maxLng = lng;
-    if (lat < minLat) minLat = lat;
-    if (lat > maxLat) maxLat = lat;
-  }
-  const pad = 0.08, lngRange = (maxLng - minLng) || 0.001, latRange = (maxLat - minLat) || 0.001;
-  return sampled
-    .map(([lng, lat]) => {
-      const x = ((lng - minLng) / lngRange) * (1 - 2 * pad) + pad;
-      const y = (1 - (lat - minLat) / latRange) * (1 - 2 * pad) + pad;
-      return `${(x * width).toFixed(1)},${(y * height).toFixed(1)}`;
-    })
-    .join(' ');
 }
 
 export function PublicRoutesHome() {
@@ -259,14 +221,10 @@ export function PublicRoutesHome() {
 function RouteCard({ item, spaceSlug, onStar, onClick }: { item: RouteItem; spaceSlug: string; onStar: () => void; onClick: () => void }) {
   const theme = usePublicTheme();
   const c = theme.colors;
-  const polyline = useMemo(() => generateMiniMapPoints(item.geojson, 200, 120), [item.geojson]);
-
   return (
     <div style={{ background: c.contentBg, border: `1px solid ${c.contentBorder}`, borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column' as const, cursor: 'pointer', transition: 'box-shadow 0.15s' }} onClick={onClick} role="button" tabIndex={0}>
-      <div style={{ height: 120, background: '#f3f4f6', overflow: 'hidden' }}>
-        <svg viewBox="0 0 200 120" style={{ width: '100%', height: '100%' }}>
-          <polyline points={polyline} fill="none" stroke={c.accent} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+      <div style={{ aspectRatio: '1', background: '#f3f4f6', overflow: 'hidden' }}>
+        <MiniMap geojson={item.geojson} width="100%" height="100%" lineColor={c.accent} />
       </div>
       <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column' as const, gap: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -322,7 +280,6 @@ export function RouteDetailOverlay({ item, spaceSlug, onClose, onStar }: {
 }) {
   const theme = usePublicTheme();
   const c = theme.colors;
-  const polyline = useMemo(() => generateMiniMapPoints(item.geojson, 500, 250), [item.geojson]);
   const [copied, setCopied] = useState(false);
 
   const handleCopyLink = () => {
@@ -337,9 +294,7 @@ export function RouteDetailOverlay({ item, spaceSlug, onClose, onStar }: {
       <div style={{ background: c.contentBg, borderRadius: 10, width: 600, maxWidth: '95vw', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }} onClick={(e) => e.stopPropagation()}>
         {item.geojson && (
           <div style={{ height: 250, background: '#f3f4f6', overflow: 'hidden' }}>
-            <svg viewBox="0 0 500 250" style={{ width: '100%', height: '100%' }}>
-              <polyline points={polyline} fill="none" stroke={c.accent} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <MiniMap geojson={item.geojson} width="100%" height={250} lineColor={c.accent} />
           </div>
         )}
         <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>

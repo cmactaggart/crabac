@@ -519,7 +519,7 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
     const hasUnread = unread && unread.unreadCount > 0 && !isMuted;
     const isActive = ch.id === activeChannelId;
 
-    const TypeIcon = ch.type === 'forum' ? MessageSquareDashed : ch.type === 'media_gallery' ? Grid3x3 : ch.type === 'route_library' ? MapPinned : Hash;
+    const TypeIcon = ch.type === 'forum' ? MessageSquareDashed : ch.type === 'media_gallery' ? Grid3x3 : ch.type === 'route_library' ? MapPinned : ch.isPrivate ? Lock : Hash;
     const ChannelIcon = ch.isAdmin ? Shield : ch.isPortal ? Zap : TypeIcon;
     const iconColor = ch.isAdmin ? 'var(--warning, #f0b232)' : ch.isPortal ? 'var(--accent)' : 'var(--text-muted)';
 

@@ -1,14 +1,22 @@
 import { useState } from 'react';
-import { LogOut, Pencil } from 'lucide-react';
+import { LogOut, Pencil, ExternalLink } from 'lucide-react';
 import { Avatar } from '../common/Avatar.js';
 import { UserSettingsModal } from '../common/UserSettingsModal.js';
 import { IdentitySwitcher } from '../common/IdentitySwitcher.js';
+
+interface ProfileLink {
+  id: string;
+  label: string;
+  url: string;
+  position: number;
+}
 
 interface Props {
   avatarUrl: string | null;
   displayName: string;
   username: string;
   bio?: string | null;
+  profileLinks?: ProfileLink[];
   baseColor?: string | null;
   accentColor?: string | null;
   followingCount: number;
@@ -23,6 +31,7 @@ export function ProfileSidebar({
   displayName,
   username,
   bio,
+  profileLinks,
   baseColor,
   accentColor,
   followingCount,
@@ -52,6 +61,32 @@ export function ProfileSidebar({
             {bio}
           </div>
         )}
+        {profileLinks && profileLinks.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%', padding: '0 0.25rem' }}>
+            {profileLinks.sort((a, b) => a.position - b.position).map((link) => (
+              <a
+                key={link.id}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: '0.75rem',
+                  color: 'var(--accent)',
+                  textDecoration: 'none',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <ExternalLink size={12} style={{ flexShrink: 0 }} />
+                {link.label}
+              </a>
+            ))}
+          </div>
+        )}
         <button onClick={() => setShowSettings(true)} style={styles.editBtn}>
           <Pencil size={12} /> Edit Profile
         </button>
@@ -70,15 +105,15 @@ export function ProfileSidebar({
           </span>
         </div>
       </div>
-      {onLogout && (
-        <div style={styles.footer}>
-          <IdentitySwitcher />
+      <div style={styles.footer}>
+        <IdentitySwitcher />
+        {onLogout && (
           <button onClick={onLogout} style={styles.logoutBtn}>
             <LogOut size={14} />
             Log Out
           </button>
-        </div>
-      )}
+        )}
+      </div>
       {showSettings && <UserSettingsModal onClose={() => setShowSettings(false)} />}
     </div>
   );

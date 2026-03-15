@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Plus, FileText } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+import { Plus, FileText, Bell, BellOff } from 'lucide-react';
 import type { BlogPost } from '@crabac/shared';
 import { useBlogStore } from '../../stores/blog.js';
 import { useAuthStore } from '../../stores/auth.js';
@@ -7,6 +7,7 @@ import { useHasSpacePermission } from '../settings/SpaceSettingsModal.js';
 import { Permissions } from '@crabac/shared';
 import { BlogPostDetail } from './BlogPostDetail.js';
 import { BlogPostEditor } from './BlogPostEditor.js';
+import { api } from '../../lib/api.js';
 
 interface Props {
   spaceId: string;
@@ -20,11 +21,37 @@ export function BlogView({ spaceId, showBackButton, onBack }: Props) {
   const canManage = useHasSpacePermission(spaceId, Permissions.MANAGE_BLOG);
   const [showEditor, setShowEditor] = useState(false);
   const [editingPost, setEditingPost] = useState<BlogPost | null>(null);
+  const [blogMuted, setBlogMuted] = useState(false);
+  const [muteLoading, setMuteLoading] = useState(false);
 
   useEffect(() => {
     fetchPosts(spaceId);
     return () => useBlogStore.getState().clear();
   }, [spaceId, fetchPosts]);
+
+  useEffect(() => {
+    if (!user) return;
+    api<{ muteBlog: boolean }>(`/spaces/${spaceId}/settings/me`)
+      .then((s) => setBlogMuted(!!s.muteBlog))
+      .catch(() => {});
+  }, [spaceId, user]);
+
+  const toggleMute = useCallback(async () => {
+    const next = !blogMuted;
+    setBlogMuted(next);
+    setMuteLoading(true);
+    try {
+      const result = await api<{ muteBlog: boolean }>(`/spaces/${spaceId}/settings/me`, {
+        method: 'PUT',
+        body: JSON.stringify({ muteBlog: next }),
+      });
+      setBlogMuted(!!result.muteBlog);
+    } catch {
+      setBlogMuted(!next);
+    } finally {
+      setMuteLoading(false);
+    }
+  }, [blogMuted, spaceId]);
 
   if (selectedPost) {
     return (
@@ -45,11 +72,23 @@ export function BlogView({ spaceId, showBackButton, onBack }: Props) {
           <button onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px 8px', borderRadius: 'var(--radius)', fontSize: '0.85rem' }}>Back</button>
         )}
         <h2 style={{ margin: 0, fontSize: '1.1rem' }}>Blog</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
+        {user && (
+          <button
+            onClick={toggleMute}
+            disabled={muteLoading}
+            title={blogMuted ? 'Unmute blog notifications' : 'Mute blog notifications'}
+            style={styles.muteBtn}
+          >
+            {blogMuted ? <BellOff size={16} /> : <Bell size={16} />}
+          </button>
+        )}
         {canManage && (
           <button onClick={() => { setEditingPost(null); setShowEditor(true); }} style={styles.newBtn}>
             <Plus size={16} /> New Post
           </button>
         )}
+        </div>
       </div>
 
       <div style={styles.list}>
@@ -98,7 +137,8 @@ export function BlogView({ spaceId, showBackButton, onBack }: Props) {
 
 const styles: Record<string, React.CSSProperties> = {
   container: { display: 'flex', flexDirection: 'column', height: '100%' },
-  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border)' },
+  header: { display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', borderBottom: '1px solid var(--border)' },
+  muteBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4, borderRadius: 'var(--radius)', transition: 'color 0.15s' },
   newBtn: { display: 'flex', alignItems: 'center', gap: 4, padding: '6px 14px', background: 'var(--accent)', border: 'none', borderRadius: 'var(--radius)', color: '#fff', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 },
   list: { flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 },
   empty: { textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: '0.9rem' },

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Pin, Lock, Send } from 'lucide-react';
+import { ArrowLeft, Pin, Lock, Send, Reply, X } from 'lucide-react';
 import { useForumsStore } from '../../stores/forums.js';
 import { getSocket } from '../../lib/socket.js';
 import { ThreadPost } from './ThreadPost.js';
@@ -18,6 +18,7 @@ export function ThreadDetailView({ spaceId, channelId, thread, onBack, canModera
   const { threadPosts, postsLoading, fetchThreadPosts, createThreadPost, updateThread, addPost, updateThreadInList } = useForumsStore();
   const [replyContent, setReplyContent] = useState('');
   const [sending, setSending] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [reportTarget, setReportTarget] = useState<Message | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -59,8 +60,10 @@ export function ThreadDetailView({ spaceId, channelId, thread, onBack, canModera
     try {
       await createThreadPost(spaceId, channelId, thread.id, {
         content: replyContent.trim(),
+        replyToId: replyingTo?.id,
       });
       setReplyContent('');
+      setReplyingTo(null);
     } catch {
       // error handled by store
     } finally {
@@ -111,7 +114,7 @@ export function ThreadDetailView({ spaceId, channelId, thread, onBack, canModera
           <div style={styles.loadingState}>Loading posts...</div>
         ) : (
           threadPosts.map((post, i) => (
-            <ThreadPost key={post.id} post={post} channelId={channelId} isFirstPost={i === 0} canModerate={canModerate} onReport={setReportTarget} />
+            <ThreadPost key={post.id} post={post} channelId={channelId} isFirstPost={i === 0} canModerate={canModerate} onReport={setReportTarget} onReply={setReplyingTo} />
           ))
         )}
         <div ref={bottomRef} />
@@ -120,6 +123,17 @@ export function ThreadDetailView({ spaceId, channelId, thread, onBack, canModera
       {/* Reply input */}
       {!activeThread.isLocked && (
         <div style={styles.replyBar}>
+          {replyingTo && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', fontSize: '0.8rem', color: 'var(--text-secondary)', width: '100%' }}>
+              <Reply size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                Replying to {replyingTo.author?.displayName}: {replyingTo.content?.slice(0, 80)}
+              </span>
+              <button onClick={() => setReplyingTo(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, display: 'flex' }}>
+                <X size={14} />
+              </button>
+            </div>
+          )}
           <textarea
             value={replyContent}
             onChange={(e) => setReplyContent(e.target.value)}
@@ -246,6 +260,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderTop: '1px solid var(--border)',
     background: 'var(--bg-secondary)',
     flexShrink: 0,
+    flexWrap: 'wrap',
   },
   replyInput: {
     flex: 1,

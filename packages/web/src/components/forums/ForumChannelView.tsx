@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import { MessageSquareDashed, Plus } from 'lucide-react';
+import { MessageSquareDashed, Plus, Settings } from 'lucide-react';
 import { useForumsStore } from '../../stores/forums.js';
 import { getSocket } from '../../lib/socket.js';
 import { ThreadList } from './ThreadList.js';
 import { ThreadDetailView } from './ThreadDetailView.js';
 import { CreateThreadModal } from './CreateThreadModal.js';
+import { ChannelSettingsPanel } from '../channels/ChannelSettingsPanel.js';
+import { useHasSpacePermission } from '../settings/SpaceSettingsModal.js';
+import { Permissions } from '@crabac/shared';
 import type { Channel, ForumThread, ForumThreadSummary } from '@crabac/shared';
 
 interface Props {
@@ -18,11 +21,13 @@ interface Props {
 
 export function ForumChannelView({ channelId, channel, spaceId, showBackButton, onBack, canModerate }: Props) {
   const {
-    threads, loading, activeThread,
+    threads, loading, hasMore, activeThread,
     fetchThreads, createThread, setActiveThread,
     getThread, addThread, updateThreadInList, clearThreads,
   } = useForumsStore();
   const [showCreateThread, setShowCreateThread] = useState(false);
+  const [showChannelSettings, setShowChannelSettings] = useState(false);
+  const canManageChannels = useHasSpacePermission(spaceId, Permissions.MANAGE_CHANNELS);
 
   useEffect(() => {
     clearThreads();
@@ -68,7 +73,6 @@ export function ForumChannelView({ channelId, channel, spaceId, showBackButton, 
 
   const handleCreateThread = async (data: { title: string; content: string }) => {
     await createThread(spaceId, channelId, data);
-    fetchThreads(spaceId, channelId);
   };
 
   // Thread detail view
@@ -86,40 +90,59 @@ export function ForumChannelView({ channelId, channel, spaceId, showBackButton, 
 
   // Thread listing view
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        {showBackButton && onBack && (
-          <button onClick={onBack} style={styles.backBtn}>Back</button>
-        )}
-        <div style={styles.headerInfo}>
-          <MessageSquareDashed size={20} style={{ color: 'var(--text-muted)' }} />
-          <h3 style={styles.channelName}>{channel?.name || 'Forum'}</h3>
-          {channel?.topic && (
-            <span style={styles.topic}>{channel.topic}</span>
+    <div style={{ display: 'flex', flex: 1, minWidth: 0, minHeight: 0 }}>
+      <div style={styles.container}>
+        <div style={styles.header}>
+          {showBackButton && onBack && (
+            <button onClick={onBack} style={styles.backBtn}>Back</button>
           )}
+          <div style={styles.headerInfo}>
+            <MessageSquareDashed size={20} style={{ color: 'var(--text-muted)' }} />
+            <h3 style={styles.channelName}>{channel?.name || 'Forum'}</h3>
+            {channel?.topic && (
+              <span style={styles.topic}>{channel.topic}</span>
+            )}
+          </div>
+          {canManageChannels && (
+            <button
+              onClick={() => setShowChannelSettings(!showChannelSettings)}
+              style={{ ...styles.backBtn, color: showChannelSettings ? 'var(--accent)' : 'var(--text-secondary)' }}
+              title="Channel Settings"
+            >
+              <Settings size={18} />
+            </button>
+          )}
+          <button
+            onClick={() => setShowCreateThread(true)}
+            style={styles.newThreadBtn}
+          >
+            <Plus size={16} />
+            New Thread
+          </button>
         </div>
-        <button
-          onClick={() => setShowCreateThread(true)}
-          style={styles.newThreadBtn}
-        >
-          <Plus size={16} />
-          New Thread
-        </button>
-      </div>
 
-      <div style={styles.content}>
-        <ThreadList
-          threads={threads}
-          loading={loading}
-          onThreadClick={handleThreadClick}
-          onLoadMore={handleLoadMore}
-        />
-      </div>
+        <div style={styles.content}>
+          <ThreadList
+            threads={threads}
+            loading={loading}
+            hasMore={hasMore}
+            onThreadClick={handleThreadClick}
+            onLoadMore={handleLoadMore}
+          />
+        </div>
 
-      {showCreateThread && (
-        <CreateThreadModal
-          onSubmit={handleCreateThread}
-          onClose={() => setShowCreateThread(false)}
+        {showCreateThread && (
+          <CreateThreadModal
+            onSubmit={handleCreateThread}
+            onClose={() => setShowCreateThread(false)}
+          />
+        )}
+      </div>
+      {showChannelSettings && channel && (
+        <ChannelSettingsPanel
+          spaceId={spaceId}
+          channel={channel}
+          onClose={() => setShowChannelSettings(false)}
         />
       )}
     </div>
@@ -130,7 +153,9 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     display: 'flex',
     flexDirection: 'column',
-    height: '100%',
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
   },
   header: {
     display: 'flex',

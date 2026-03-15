@@ -4,12 +4,14 @@ export interface SpaceMemberSettings {
   suppressMentions: boolean;
   suppressEveryone: boolean;
   muteAll: boolean;
+  muteBlog: boolean;
 }
 
 const DEFAULTS: SpaceMemberSettings = {
   suppressMentions: false,
   suppressEveryone: false,
   muteAll: false,
+  muteBlog: false,
 };
 
 export async function getSettings(spaceId: string, userId: string): Promise<SpaceMemberSettings> {
@@ -23,6 +25,7 @@ export async function getSettings(spaceId: string, userId: string): Promise<Spac
     suppressMentions: !!row.suppress_mentions,
     suppressEveryone: !!row.suppress_everyone,
     muteAll: !!row.mute_all,
+    muteBlog: !!row.mute_blog,
   };
 }
 
@@ -35,6 +38,7 @@ export async function updateSettings(
   if (data.suppressMentions !== undefined) updates.suppress_mentions = data.suppressMentions;
   if (data.suppressEveryone !== undefined) updates.suppress_everyone = data.suppressEveryone;
   if (data.muteAll !== undefined) updates.mute_all = data.muteAll;
+  if (data.muteBlog !== undefined) updates.mute_blog = data.muteBlog;
 
   if (Object.keys(updates).length > 0) {
     await db('space_member_settings')

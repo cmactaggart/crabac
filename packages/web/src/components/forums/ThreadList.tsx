@@ -5,21 +5,22 @@ import type { ForumThreadSummary } from '@crabac/shared';
 interface Props {
   threads: ForumThreadSummary[];
   loading: boolean;
+  hasMore: boolean;
   onThreadClick: (thread: ForumThreadSummary) => void;
   onLoadMore: (before: string) => void;
 }
 
-export function ThreadList({ threads, loading, onThreadClick, onLoadMore }: Props) {
+export function ThreadList({ threads, loading, hasMore, onThreadClick, onLoadMore }: Props) {
   const observerRef = useRef<HTMLDivElement>(null);
 
   const handleIntersect = useCallback(
     (entries: IntersectionObserverEntry[]) => {
-      if (entries[0]?.isIntersecting && threads.length > 0 && !loading) {
+      if (entries[0]?.isIntersecting && threads.length > 0 && !loading && hasMore) {
         const last = threads[threads.length - 1];
         onLoadMore(last.id);
       }
     },
-    [threads, loading, onLoadMore],
+    [threads, loading, hasMore, onLoadMore],
   );
 
   useEffect(() => {
@@ -58,7 +59,7 @@ export function ThreadList({ threads, loading, onThreadClick, onLoadMore }: Prop
         />
       ))}
       <div ref={observerRef} style={{ height: 1 }} />
-      {loading && (
+      {loading && hasMore && (
         <div style={{ textAlign: 'center', padding: 12, color: 'var(--text-muted)', fontSize: '0.8rem' }}>
           Loading more...
         </div>

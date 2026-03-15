@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Grid3x3, Layers, Image } from 'lucide-react';
+import { Plus, Grid3x3, Layers, Image, Settings } from 'lucide-react';
 import { getSocket } from '../../lib/socket.js';
 import { api } from '../../lib/api.js';
 import { Permissions, hasPermission, combinePermissions } from '@crabac/shared';
 import type { Channel, GalleryItem, GalleryAttachment, Role } from '@crabac/shared';
+import { ChannelSettingsPanel } from '../channels/ChannelSettingsPanel.js';
+import { useHasSpacePermission } from '../settings/SpaceSettingsModal.js';
 import { useAuthStore } from '../../stores/auth.js';
 import { useSpacesStore } from '../../stores/spaces.js';
 import { GalleryItemDetail } from './GalleryItemDetail.js';
@@ -27,7 +29,9 @@ export function GalleryChannelView({ channelId, channel, spaceId, showBackButton
   const [selectedAttachmentIndex, setSelectedAttachmentIndex] = useState(0);
   const [showUpload, setShowUpload] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('grouped');
+  const [showChannelSettings, setShowChannelSettings] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const canManageChannels = useHasSpacePermission(spaceId, Permissions.MANAGE_CHANNELS);
 
   const user = useAuthStore((s) => s.user);
   const spaces = useSpacesStore((s) => s.spaces);
@@ -138,6 +142,7 @@ export function GalleryChannelView({ channelId, channel, spaceId, showBackButton
   };
 
   return (
+    <div style={{ display: 'flex', flex: 1, minWidth: 0, minHeight: 0 }}>
     <div style={styles.container}>
       <div style={styles.header}>
         {showBackButton && onBack && (
@@ -174,6 +179,15 @@ export function GalleryChannelView({ channelId, channel, spaceId, showBackButton
             <Image size={15} />
           </button>
         </div>
+        {canManageChannels && (
+          <button
+            onClick={() => setShowChannelSettings(!showChannelSettings)}
+            style={{ ...styles.backBtn, color: showChannelSettings ? 'var(--accent)' : 'var(--text-secondary)' }}
+            title="Channel Settings"
+          >
+            <Settings size={18} />
+          </button>
+        )}
         {canUpload && (
           <button onClick={() => setShowUpload(true)} style={styles.uploadBtn}>
             <Plus size={16} />
@@ -290,6 +304,14 @@ export function GalleryChannelView({ channelId, channel, spaceId, showBackButton
       )}
 
     </div>
+    {showChannelSettings && channel && (
+      <ChannelSettingsPanel
+        spaceId={spaceId}
+        channel={channel}
+        onClose={() => setShowChannelSettings(false)}
+      />
+    )}
+    </div>
   );
 }
 
@@ -297,7 +319,9 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     display: 'flex',
     flexDirection: 'column',
-    height: '100%',
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
   },
   header: {
     display: 'flex',

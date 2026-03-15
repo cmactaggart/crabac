@@ -51,6 +51,8 @@ export const createChannelSchema = z.object({
   isPrivate: z.boolean().optional(),
   isPublic: z.boolean().optional(),
   categoryId: z.string().optional(),
+  memberIds: z.array(z.string()).optional(),
+  roleOverrides: z.array(z.string()).optional(),
 });
 
 export const updateChannelSchema = z.object({
@@ -58,6 +60,7 @@ export const updateChannelSchema = z.object({
   topic: z.string().max(1024).nullable().optional(),
   type: z.enum(['text', 'announcement', 'read_only', 'forum', 'media_gallery', 'route_library']).optional(),
   isPublic: z.boolean().optional(),
+  isPrivate: z.boolean().optional(),
   position: z.number().int().min(0).optional(),
 });
 
@@ -645,6 +648,15 @@ export const createPersonalGalleryItemSchema = z.object({
 export const updatePersonalGalleryItemSchema = z.object({
   caption: z.string().max(2000).nullable().optional(),
   visibility: personalVisibilityEnum.optional(),
+});
+
+export const elevationQuerySchema = z.object({
+  coordinates: z.array(z.tuple([z.number(), z.number()])).min(1).max(100),
+});
+
+export const routingQuerySchema = z.object({
+  waypoints: z.array(z.tuple([z.number(), z.number()])).min(2).max(50),
+  profile: z.enum(['bike', 'foot']).optional().default('bike'),
 });
 
 export const createPersonalRouteSchema = z.object({

@@ -7,6 +7,7 @@ interface ForumsState {
   activeThread: ForumThread | null;
   threadPosts: Message[];
   loading: boolean;
+  hasMore: boolean;
   postsLoading: boolean;
 
   fetchThreads: (spaceId: string, channelId: string, options?: { before?: string; sort?: string }) => Promise<void>;
@@ -31,6 +32,7 @@ export const useForumsStore = create<ForumsState>((set, get) => ({
   activeThread: null,
   threadPosts: [],
   loading: false,
+  hasMore: true,
   postsLoading: false,
 
   fetchThreads: async (spaceId, channelId, options) => {
@@ -43,10 +45,11 @@ export const useForumsStore = create<ForumsState>((set, get) => ({
       const threads = await api<ForumThreadSummary[]>(
         `/spaces/${spaceId}/channels/${channelId}/threads${qs ? `?${qs}` : ''}`,
       );
+      const hasMore = threads.length >= 30;
       if (options?.before) {
-        set((s) => ({ threads: [...s.threads, ...threads], loading: false }));
+        set((s) => ({ threads: [...s.threads, ...threads], loading: false, hasMore }));
       } else {
-        set({ threads, loading: false });
+        set({ threads, loading: false, hasMore });
       }
     } catch {
       set({ loading: false });
@@ -142,5 +145,5 @@ export const useForumsStore = create<ForumsState>((set, get) => ({
     }));
   },
 
-  clearThreads: () => set({ threads: [], activeThread: null, threadPosts: [] }),
+  clearThreads: () => set({ threads: [], activeThread: null, threadPosts: [], hasMore: true }),
 }));

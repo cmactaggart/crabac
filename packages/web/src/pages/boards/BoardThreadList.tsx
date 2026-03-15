@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { Pin, Lock, MessageSquare, Plus } from 'lucide-react';
 import { boardApi } from '../../lib/boardApi.js';
 import { useBoardAuthStore } from '../../stores/boardAuth.js';
@@ -8,13 +8,16 @@ import type { ForumThreadSummary } from '@crabac/shared';
 
 export function BoardThreadList() {
   const { spaceSlug, channelName } = useParams();
-  const navigate = useNavigate();
   const user = useBoardAuthStore((s) => s.user);
   const theme = usePublicTheme();
   const c = theme.colors;
   const [threads, setThreads] = useState<ForumThreadSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newContent, setNewContent] = useState('');
+  const [creating, setCreating] = useState(false);
 
   const fetchThreads = useCallback(async (before?: string) => {
     if (!spaceSlug || !channelName) return;
@@ -38,6 +41,25 @@ export function BoardThreadList() {
     fetchThreads();
   }, [fetchThreads]);
 
+  const handleCreate = async () => {
+    if (!newTitle.trim() || !newContent.trim() || !spaceSlug || !channelName) return;
+    setCreating(true);
+    try {
+      const thread = await boardApi<ForumThreadSummary>(`/${spaceSlug}/${channelName}/threads`, {
+        method: 'POST',
+        body: JSON.stringify({ title: newTitle.trim(), content: newContent.trim() }),
+      });
+      setThreads((prev) => [thread, ...prev]);
+      setShowCreate(false);
+      setNewTitle('');
+      setNewContent('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to create thread');
+    } finally {
+      setCreating(false);
+    }
+  };
+
   if (loading) return <div style={{ textAlign: 'center', padding: 40, color: c.mutedText }}>Loading threads...</div>;
   if (error) return <div style={{ textAlign: 'center', padding: 40, color: '#c53030' }}>{error}</div>;
 
@@ -51,7 +73,7 @@ export function BoardThreadList() {
         </h2>
         {user && (
           <button
-            onClick={() => navigate(`/boards/${spaceSlug}/${channelName}/new`)}
+            onClick={() => setShowCreate(true)}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -139,6 +161,103 @@ export function BoardThreadList() {
           >
             Load more
           </button>
+        </div>
+      )}
+
+      {showCreate && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 100,
+        }} onClick={() => setShowCreate(false)}>
+          <div style={{
+            background: c.contentBg,
+            border: `1px solid ${c.contentBorder}`,
+            borderRadius: c.contentRadius > 4 ? 8 : 4,
+            width: 500,
+            maxWidth: '90vw',
+            padding: 0,
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ padding: '16px 20px', borderBottom: `1px solid ${c.contentBorder}`, fontWeight: 700, fontSize: '1rem', color: c.headingColor }}>
+              New Thread
+            </div>
+            <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <input
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder="Thread title"
+                style={{
+                  padding: '8px 12px',
+                  border: `1px solid ${c.contentBorder}`,
+                  borderRadius: c.contentRadius > 4 ? 6 : 4,
+                  background: c.pageBg,
+                  color: c.headingColor,
+                  fontSize: '0.9rem',
+                  outline: 'none',
+                  width: '100%',
+                  boxSizing: 'border-box' as const,
+                }}
+                autoFocus
+                maxLength={200}
+              />
+              <textarea
+                value={newContent}
+                onChange={(e) => setNewContent(e.target.value)}
+                placeholder="Write your post..."
+                rows={6}
+                style={{
+                  padding: '8px 12px',
+                  border: `1px solid ${c.contentBorder}`,
+                  borderRadius: c.contentRadius > 4 ? 6 : 4,
+                  background: c.pageBg,
+                  color: c.headingColor,
+                  fontSize: '0.9rem',
+                  outline: 'none',
+                  resize: 'vertical' as const,
+                  width: '100%',
+                  boxSizing: 'border-box' as const,
+                }}
+                maxLength={4000}
+              />
+            </div>
+            <div style={{ padding: '12px 20px', borderTop: `1px solid ${c.contentBorder}`, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                onClick={() => setShowCreate(false)}
+                style={{
+                  padding: '6px 14px',
+                  background: 'none',
+                  border: `1px solid ${c.contentBorder}`,
+                  color: c.secondaryText,
+                  borderRadius: c.contentRadius > 4 ? 6 : 4,
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreate}
+                disabled={!newTitle.trim() || !newContent.trim() || creating}
+                style={{
+                  padding: '6px 14px',
+                  background: c.accent,
+                  border: 'none',
+                  color: '#fff',
+                  borderRadius: c.contentRadius > 4 ? 6 : 4,
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  opacity: !newTitle.trim() || !newContent.trim() || creating ? 0.5 : 1,
+                }}
+              >
+                {creating ? 'Creating...' : 'Create Thread'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

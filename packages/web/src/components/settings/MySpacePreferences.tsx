@@ -11,6 +11,7 @@ interface SpaceSettings {
   suppressMentions: boolean;
   suppressEveryone: boolean;
   muteAll: boolean;
+  muteBlog: boolean;
 }
 
 export function MySpacePreferences({ spaceId, onClose }: Props) {
@@ -20,7 +21,7 @@ export function MySpacePreferences({ spaceId, onClose }: Props) {
   useEffect(() => {
     api<SpaceSettings>(`/spaces/${spaceId}/settings/me`)
       .then(setSettings)
-      .catch(() => setSettings({ suppressMentions: false, suppressEveryone: false, muteAll: false }));
+      .catch(() => setSettings({ suppressMentions: false, suppressEveryone: false, muteAll: false, muteBlog: false }));
   }, [spaceId]);
 
   const toggle = async (key: keyof SpaceSettings) => {
@@ -67,6 +68,13 @@ export function MySpacePreferences({ spaceId, onClose }: Props) {
               description="Don't notify me for group mentions"
               checked={settings.suppressEveryone}
               onChange={() => toggle('suppressEveryone')}
+              disabled={saving}
+            />
+            <ToggleRow
+              label="Mute blog notifications"
+              description="Don't notify me about new blog posts"
+              checked={settings.muteBlog}
+              onChange={() => toggle('muteBlog')}
               disabled={saving}
             />
             <ToggleRow

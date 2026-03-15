@@ -36,6 +36,10 @@ function formatNotificationForPush(notification: any): { title: string; body: st
       if (d.eventTime) eventBody += ` ${d.eventTime}`;
       return { title: d.spaceName || 'New Event', body: eventBody };
     }
+    case 'new_blog_post':
+      return { title: d.spaceName || 'New Blog Post', body: `New blog post from ${d.spaceName}: ${d.postTitle}` };
+    case 'event_rsvp':
+      return { title: d.spaceName || 'Event RSVP', body: `${d.rsvpDisplayName || d.rsvpUsername} RSVP'd ${d.rsvpStatus} to ${d.eventName}` };
     default:
       return { title: 'crab.ac', body: `${actor} sent you a notification` };
   }
@@ -61,12 +65,16 @@ export function registerNotificationGateway() {
     if (d.messageId) pushData.messageId = d.messageId;
     if (d.conversationId) pushData.conversationId = d.conversationId;
     if (d.eventId) pushData.eventId = d.eventId;
+    if (d.postId) pushData.postId = d.postId;
 
     // Resolve actor avatar URL for rich notifications
     const actorUserId = d.fromUserId || d.taggedByUserId || d.commenterUserId;
     const actorUsername = d.authorUsername || d.repliedByUsername || d.reactedByUsername || d.fromUsername;
     if (notification.type === 'new_event' && d.spaceId) {
       // Use space icon for event notifications
+      const space = await db('spaces').where('id', d.spaceId).select('icon_url').first();
+      if (space?.icon_url) pushData.avatarUrl = `${config.apiUrl}${space.icon_url}`;
+    } else if (notification.type === 'new_blog_post' && d.spaceId) {
       const space = await db('spaces').where('id', d.spaceId).select('icon_url').first();
       if (space?.icon_url) pushData.avatarUrl = `${config.apiUrl}${space.icon_url}`;
     } else if (actorUserId) {

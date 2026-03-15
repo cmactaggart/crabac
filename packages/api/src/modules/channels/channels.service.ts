@@ -7,6 +7,9 @@ import { computePermissions, computeChannelPermissions } from '../rbac/rbac.serv
 export async function createChannel(
   spaceId: string,
   data: { name: string; topic?: string; type?: string; isPrivate?: boolean; isPublic?: boolean; categoryId?: string },
+  userId?: string,
+  memberIds?: string[],
+  roleOverrides?: string[],
 ) {
   const id = snowflake.generate();
   // Get next position
@@ -27,6 +30,29 @@ export async function createChannel(
     position,
     category_id: data.categoryId ?? null,
   });
+
+  // If private, add creator + extra members to channel_members
+  if (data.isPrivate && userId) {
+    const allMembers = new Set([userId, ...(memberIds || [])]);
+    await db('channel_members').insert(
+      Array.from(allMembers).map((uid) => ({ channel_id: id, user_id: uid })),
+    );
+  }
+
+  // Create role overrides for selected roles
+  if (data.isPrivate && roleOverrides && roleOverrides.length > 0) {
+    const defaultAllow = String(
+      Permissions.VIEW_CHANNELS | Permissions.SEND_MESSAGES | Permissions.ATTACH_FILES | Permissions.ADD_REACTIONS
+    );
+    await db('channel_permission_overrides').insert(
+      roleOverrides.map((roleId) => ({
+        channel_id: id,
+        role_id: roleId,
+        allow: defaultAllow,
+        deny: '0',
+      })),
+    );
+  }
 
   return getChannel(id);
 }
@@ -54,6 +80,12 @@ export async function listChannelsForUser(spaceId: string, userId: string, cache
     .where('space_id', spaceId)
     .orderBy('position', 'asc');
 
+  // Preload user's channel memberships to avoid N+1 queries
+  const memberSet = new Set(
+    (await db('channel_members').where('user_id', userId).select('channel_id'))
+      .map((m: any) => String(m.channel_id))
+  );
+
   const visible: any[] = [];
 
   for (const ch of allChannels) {
@@ -67,7 +99,7 @@ export async function listChannelsForUser(spaceId: string, userId: string, cache
     }
 
     // Check channel-level VIEW_CHANNELS permission
-    const chanPerms = await computeChannelPermissions(spaceId, ch.id, userId);
+    const chanPerms = await computeChannelPermissions(spaceId, ch.id, userId, cache, memberSet);
     if (hasPermission(chanPerms, Permissions.VIEW_CHANNELS)) {
       visible.push(formatChannel(ch));
     }
@@ -104,6 +136,11 @@ export async function getVisibleChannelIds(spaceId: string, userId: string): Pro
     .where('space_id', spaceId)
     .select('id', 'is_admin');
 
+  const memberSet = new Set(
+    (await db('channel_members').where('user_id', userId).select('channel_id'))
+      .map((m: any) => String(m.channel_id))
+  );
+
   const ids = new Set<string>();
 
   for (const ch of allChannels) {
@@ -114,7 +151,7 @@ export async function getVisibleChannelIds(spaceId: string, userId: string): Pro
       continue;
     }
 
-    const chanPerms = await computeChannelPermissions(spaceId, ch.id, userId);
+    const chanPerms = await computeChannelPermissions(spaceId, ch.id, userId, undefined, memberSet);
     if (hasPermission(chanPerms, Permissions.VIEW_CHANNELS)) {
       ids.add(String(ch.id));
     }
@@ -132,7 +169,7 @@ export async function getChannel(channelId: string) {
 export async function updateChannel(
   spaceId: string,
   channelId: string,
-  data: { name?: string; topic?: string | null; type?: string; isPublic?: boolean; position?: number },
+  data: { name?: string; topic?: string | null; type?: string; isPublic?: boolean; isPrivate?: boolean; position?: number },
 ) {
   const channel = await db('channels').where({ id: channelId, space_id: spaceId }).first();
   if (!channel) throw new NotFoundError('Channel');
@@ -147,6 +184,7 @@ export async function updateChannel(
   if (data.topic !== undefined) updates.topic = data.topic;
   if (data.type !== undefined) updates.type = data.type;
   if (data.isPublic !== undefined) updates.is_public = data.isPublic;
+  if (data.isPrivate !== undefined) updates.is_private = data.isPrivate;
   if (data.position !== undefined) updates.position = data.position;
 
   if (Object.keys(updates).length > 0) {
@@ -210,6 +248,45 @@ export async function deleteChannelOverride(channelId: string, roleId: string) {
     .where({ channel_id: channelId, role_id: roleId })
     .delete();
   if (!deleted) throw new NotFoundError('Override');
+}
+
+// ─── Channel Members (Private Channels) ───
+
+export async function addChannelMember(channelId: string, userId: string) {
+  await db('channel_members')
+    .insert({ channel_id: channelId, user_id: userId })
+    .onConflict(['channel_id', 'user_id'])
+    .ignore();
+}
+
+export async function removeChannelMember(channelId: string, userId: string) {
+  await db('channel_members')
+    .where({ channel_id: channelId, user_id: userId })
+    .delete();
+}
+
+export async function getChannelMembers(channelId: string) {
+  const members = await db('channel_members')
+    .join('users', 'channel_members.user_id', 'users.id')
+    .where('channel_members.channel_id', channelId)
+    .select('users.id', 'users.username', 'users.display_name', 'users.avatar_url');
+  return members.map((m: any) => ({
+    id: String(m.id),
+    username: m.username,
+    displayName: m.display_name,
+    avatarUrl: m.avatar_url,
+  }));
+}
+
+export async function setChannelMembers(channelId: string, userIds: string[]) {
+  await db.transaction(async (trx) => {
+    await trx('channel_members').where('channel_id', channelId).delete();
+    if (userIds.length > 0) {
+      await trx('channel_members').insert(
+        userIds.map((userId) => ({ channel_id: channelId, user_id: userId })),
+      );
+    }
+  });
 }
 
 // ─── Channel Mutes ───

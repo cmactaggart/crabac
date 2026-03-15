@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Pin, Lock, Send } from 'lucide-react';
+import { Pin, Lock, Send, Reply, X } from 'lucide-react';
 import { boardApi } from '../../lib/boardApi.js';
 import { useBoardAuthStore } from '../../stores/boardAuth.js';
 import { usePublicTheme } from '../../contexts/PublicThemeContext.js';
@@ -17,6 +17,7 @@ export function BoardThreadDetail() {
   const [error, setError] = useState('');
   const [replyContent, setReplyContent] = useState('');
   const [sending, setSending] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
 
   useEffect(() => {
     if (!spaceSlug || !channelName || !threadId) return;
@@ -39,10 +40,11 @@ export function BoardThreadDetail() {
     try {
       const post = await boardApi<Message>(`/${spaceSlug}/${channelName}/${threadId}/posts`, {
         method: 'POST',
-        body: JSON.stringify({ content: replyContent.trim() }),
+        body: JSON.stringify({ content: replyContent.trim(), replyToId: replyingTo?.id }),
       });
       setPosts((prev) => [...prev, post]);
       setReplyContent('');
+      setReplyingTo(null);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -92,8 +94,8 @@ export function BoardThreadDetail() {
       }}>
         {posts.map((post, i) => (
           isSidebar
-            ? <SidebarPost key={post.id} post={post} isFirst={i === 0} colors={c} />
-            : <StackedPost key={post.id} post={post} isFirst={i === 0} colors={c} contentRadius={c.contentRadius} />
+            ? <SidebarPost key={post.id} post={post} isFirst={i === 0} colors={c} onReply={user ? setReplyingTo : undefined} />
+            : <StackedPost key={post.id} post={post} isFirst={i === 0} colors={c} contentRadius={c.contentRadius} onReply={user ? setReplyingTo : undefined} />
         ))}
       </div>
 
@@ -106,6 +108,17 @@ export function BoardThreadDetail() {
           padding: '16px 20px',
         }}>
           <h4 style={{ margin: '0 0 8px', fontSize: '0.9rem', color: c.headingColor }}>Post a Reply</h4>
+          {replyingTo && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: '0.8rem', color: c.secondaryText }}>
+              <Reply size={14} style={{ color: c.accent, flexShrink: 0 }} />
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                Replying to {replyingTo.author?.displayName}: {replyingTo.content?.slice(0, 80)}
+              </span>
+              <button onClick={() => setReplyingTo(null)} style={{ background: 'none', border: 'none', color: c.mutedText, cursor: 'pointer', padding: 2, display: 'flex' }}>
+                <X size={14} />
+              </button>
+            </div>
+          )}
           <textarea
             value={replyContent}
             onChange={(e) => setReplyContent(e.target.value)}
@@ -189,7 +202,7 @@ export function BoardThreadDetail() {
   );
 }
 
-function SidebarPost({ post, isFirst, colors: c }: { post: Message; isFirst: boolean; colors: any }) {
+function SidebarPost({ post, isFirst, colors: c, onReply }: { post: Message; isFirst: boolean; colors: any; onReply?: (post: Message) => void }) {
   return (
     <div style={{
       display: 'flex',
@@ -231,15 +244,25 @@ function SidebarPost({ post, isFirst, colors: c }: { post: Message; isFirst: boo
           {formatPostDate(post.id)}
           {post.editedAt && <span style={{ fontStyle: 'italic', marginLeft: 8 }}>(edited)</span>}
         </div>
+        {post.replyToId && post.replyTo && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: c.mutedText, padding: '4px 8px', background: c.pageBg, borderRadius: 4, borderLeft: `2px solid ${c.accent}`, marginBottom: 6 }}>
+            <Reply size={12} /> Replying to {post.replyTo.author?.displayName}: {(post.replyTo.content || '').slice(0, 80)}
+          </div>
+        )}
         <div style={{ fontSize: '0.9rem', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: c.pageText }}>
           {post.content}
         </div>
+        {!isFirst && onReply && (
+          <button onClick={() => onReply(post)} style={{ background: 'none', border: 'none', color: c.linkColor, cursor: 'pointer', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, padding: 0 }}>
+            <Reply size={12} /> Reply
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-function StackedPost({ post, isFirst, colors: c, contentRadius }: { post: Message; isFirst: boolean; colors: any; contentRadius: number }) {
+function StackedPost({ post, isFirst, colors: c, contentRadius, onReply }: { post: Message; isFirst: boolean; colors: any; contentRadius: number; onReply?: (post: Message) => void }) {
   return (
     <div style={{
       padding: '16px 20px',
@@ -285,9 +308,19 @@ function StackedPost({ post, isFirst, colors: c, contentRadius }: { post: Messag
           </span>
         )}
       </div>
+      {post.replyToId && post.replyTo && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: c.mutedText, padding: '4px 8px', background: c.pageBg, borderRadius: 4, borderLeft: `2px solid ${c.accent}`, marginBottom: 6 }}>
+          <Reply size={12} /> Replying to {post.replyTo.author?.displayName}: {(post.replyTo.content || '').slice(0, 80)}
+        </div>
+      )}
       <div style={{ fontSize: '0.9rem', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: c.pageText }}>
         {post.content}
       </div>
+      {!isFirst && onReply && (
+        <button onClick={() => onReply(post)} style={{ background: 'none', border: 'none', color: c.linkColor, cursor: 'pointer', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, padding: 0 }}>
+          <Reply size={12} /> Reply
+        </button>
+      )}
     </div>
   );
 }

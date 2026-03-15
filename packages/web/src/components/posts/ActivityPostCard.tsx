@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, Suspense } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { Footprints, Bike, Mountain, Clock, TrendingUp, Ruler, Edit3, Trash2, SmilePlus, MessageCircle, Share2, Forward, Copy, Check, Pin, Flag, Repeat2, X, Eye, Reply, UserPlus, UserMinus } from 'lucide-react';
 import { api } from '../../lib/api.js';
 import { Avatar } from '../common/Avatar.js';
@@ -9,6 +9,7 @@ import { usePersonalCollectionsStore } from '../../stores/personalCollections.js
 import { useFollowsStore } from '../../stores/follows.js';
 import { useNavigate } from 'react-router-dom';
 import type { PersonalActivityItem, UserPost, UserPostComment, PersonalVisibility } from '@crabac/shared';
+import { MiniMap } from '../common/MiniMap.js';
 
 const LazyGpxMapModal = React.lazy(() => import('../messages/GpxMapModal.js'));
 
@@ -18,45 +19,6 @@ const ACTIVITY_TYPE_CONFIG: Record<string, { icon: React.ComponentType<any>; lab
   walk: { icon: Footprints, label: 'Walk', color: '#2ecc71' },
   hike: { icon: Mountain, label: 'Hike', color: '#e67e22' },
 };
-
-function generateMiniMapPoints(geojson: any, width: number, height: number): string {
-  const coords: [number, number][] = [];
-  if (!geojson?.features) return '';
-  for (const feature of geojson.features) {
-    const geom = feature.geometry;
-    if (geom.type === 'LineString') {
-      for (const c of geom.coordinates) coords.push([c[0], c[1]]);
-    } else if (geom.type === 'MultiLineString') {
-      for (const line of geom.coordinates) {
-        for (const c of line) coords.push([c[0], c[1]]);
-      }
-    }
-  }
-  if (coords.length < 2) return '';
-  const maxPts = 80;
-  let sampled = coords;
-  if (coords.length > maxPts) {
-    const step = (coords.length - 1) / (maxPts - 1);
-    sampled = [];
-    for (let i = 0; i < maxPts - 1; i++) sampled.push(coords[Math.round(i * step)]);
-    sampled.push(coords[coords.length - 1]);
-  }
-  let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
-  for (const [lng, lat] of sampled) {
-    if (lng < minLng) minLng = lng;
-    if (lng > maxLng) maxLng = lng;
-    if (lat < minLat) minLat = lat;
-    if (lat > maxLat) maxLat = lat;
-  }
-  const pad = 0.08, lngRange = (maxLng - minLng) || 0.001, latRange = (maxLat - minLat) || 0.001;
-  return sampled
-    .map(([lng, lat]) => {
-      const x = ((lng - minLng) / lngRange) * (1 - 2 * pad) + pad;
-      const y = (1 - (lat - minLat) / latRange) * (1 - 2 * pad) + pad;
-      return `${(x * width).toFixed(1)},${(y * height).toFixed(1)}`;
-    })
-    .join(' ');
-}
 
 function formatDuration(sec: number): string {
   const h = Math.floor(sec / 3600);
@@ -155,11 +117,6 @@ export function ActivityPostCard({ post, currentUserId, isOwn, onReaction, onFet
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [activityId]);
-
-  const polyline = useMemo(() => {
-    if (!activity?.geojson) return '';
-    return generateMiniMapPoints(activity.geojson, 380, 100);
-  }, [activity?.geojson]);
 
   const config = activity ? (ACTIVITY_TYPE_CONFIG[activity.activityType] || ACTIVITY_TYPE_CONFIG.run) : ACTIVITY_TYPE_CONFIG.run;
   const Icon = config.icon;
@@ -267,21 +224,12 @@ export function ActivityPostCard({ post, currentUserId, isOwn, onReaction, onFet
   return (
     <div data-post-id={post.id} style={cardStyle}>
       {/* Route map preview - clickable to open detail */}
-      {polyline && (
+      {activity?.geojson && (
         <div
-          style={{ padding: '12px 12px 0', cursor: 'pointer' }}
+          style={{ padding: '12px 12px 0', cursor: 'pointer', aspectRatio: '1', overflow: 'hidden', borderRadius: 'var(--radius)' }}
           onClick={() => setShowMap(true)}
         >
-          <svg viewBox="0 0 380 100" style={{ width: '100%', height: 80, display: 'block' }}>
-            <polyline
-              points={polyline}
-              fill="none"
-              stroke={config.color}
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <MiniMap geojson={activity.geojson} bounds={activity.bounds} width="100%" height="100%" lineColor={config.color} />
         </div>
       )}
 

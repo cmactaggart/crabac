@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.10.0
+## API Version 0.11.1
 
 Base URL: `https://app.crab.ac/api`
 
@@ -547,9 +547,19 @@ Resolve or dismiss a report. Requires global admin.
 
 Get notification settings for the current user in a space. Requires auth.
 
+**Response:** `{ muteAll, muteMentions, muteEvents, muteBlog, ... }`
+
 ### PUT /spaces/:spaceId/settings/me
 
 Update notification settings. Requires auth.
+
+**Body:** Any subset of settings fields, including:
+| Field | Type | Description |
+|-------|------|-------------|
+| `muteAll` | boolean | Mute all notifications from this space |
+| `muteMentions` | boolean | Mute mention notifications |
+| `muteEvents` | boolean | Mute calendar event notifications |
+| `muteBlog` | boolean | Mute blog post notifications |
 
 ---
 
@@ -621,13 +631,17 @@ Create a channel. Requires `MANAGE_CHANNELS`.
 | `name` | string | yes | Lowercase alphanumeric + hyphens |
 | `topic` | string | no | Max 1024 chars |
 | `type` | string | no | `text`, `announcement`, `read_only`, `forum`, `media_gallery`, `route_library` |
-| `isPrivate` | boolean | no | |
+| `isPrivate` | boolean | no | Make channel private (hidden from non-members) |
 | `isPublic` | boolean | no | For public board/gallery/route access |
 | `categoryId` | string | no | |
+| `memberIds` | string[] | no | User IDs to grant access (private channels only) |
+| `roleOverrides` | string[] | no | Role IDs to grant VIEW_CHANNELS override (private channels only) |
+
+When `isPrivate` is `true`, the creating user is automatically added as a channel member. Users in `memberIds` are added to the `channel_members` table. Roles in `roleOverrides` receive a channel permission override granting `VIEW_CHANNELS | SEND_MESSAGES | ATTACH_FILES | ADD_REACTIONS`.
 
 ### GET /spaces/:spaceId/channels
 
-List channels. Requires membership or public access. Filtered by user's permission overrides.
+List channels. Requires membership or public access. Filtered by user's permission overrides. Private channels are only visible to administrators, direct channel members, and users with a role that has a `VIEW_CHANNELS` allow override on the channel.
 
 ### PUT /spaces/:spaceId/channels/reorder
 
@@ -646,7 +660,9 @@ Bulk reorder channels. Requires `MANAGE_CHANNELS`.
 
 Update channel. Requires `MANAGE_CHANNELS`.
 
-**Body:** `{ name?, topic?, type?, isPublic?, position? }`
+**Body:** `{ name?, topic?, type?, isPublic?, isPrivate?, position? }`
+
+When toggling `isPrivate` to `true`, the channel becomes hidden from non-members. When toggling to `false`, the channel becomes visible to all members again.
 
 ### DELETE /spaces/:spaceId/channels/:channelId
 
@@ -669,6 +685,30 @@ Set permission override for a role on a channel. Requires `MANAGE_CHANNELS`.
 ### DELETE /spaces/:spaceId/channels/:channelId/overrides/:roleId
 
 Remove a permission override. Requires `MANAGE_CHANNELS`.
+
+---
+
+## Channel Members (Private Channels)
+
+Manage per-user access to private channels. All endpoints require `MANAGE_CHANNELS`.
+
+### GET /spaces/:spaceId/channels/:channelId/members
+
+List direct members of a private channel.
+
+**Response:** Array of `{ id, username, displayName, avatarUrl }`
+
+### PUT /spaces/:spaceId/channels/:channelId/members/:userId
+
+Add a user as a direct member of the channel. Idempotent (ignores conflicts).
+
+**Response:** `{ success: true }`
+
+### DELETE /spaces/:spaceId/channels/:channelId/members/:userId
+
+Remove a user from the channel's direct member list.
+
+**Response:** `{ success: true }`
 
 ---
 
@@ -935,13 +975,15 @@ Delete a thread. Requires `MANAGE_THREADS`.
 
 ### GET /spaces/:spaceId/channels/:channelId/threads/:threadId/posts
 
-List thread posts.
+List thread posts. Posts that reference another post via `replyToId` include a `replyTo` object with the referenced post's `id`, `content`, and `author` (id, username, displayName).
 
 ### POST /spaces/:spaceId/channels/:channelId/threads/:threadId/posts
 
 Create a post in a thread. Requires `SEND_MESSAGES`.
 
 **Body:** `{ content: string, replyToId?: string }`
+
+When `replyToId` is provided, the response and real-time socket event include a `replyTo` object with the referenced post's content and author info.
 
 ---
 
@@ -1029,6 +1071,8 @@ Update an event. Requires `MANAGE_CALENDAR`.
 
 Delete an event. Requires `MANAGE_CALENDAR`.
 
+**Side effects:** Before deletion, all users who RSVP'd "going" or "maybe" receive an `event_cancelled` notification with push notification.
+
 ### Event RSVP
 
 #### POST /spaces/:spaceId/calendar/events/:eventId/rsvp
@@ -1038,6 +1082,8 @@ RSVP to an event. Requires membership.
 **Body:** `{ status: 'going' | 'maybe' | 'not_going' }`
 
 **Response:** Updated CalendarEvent object.
+
+**Side effects:** When a user RSVPs, the event creator receives an `event_rsvp` notification with push notification (unless the RSVP is from the creator themselves). The notification includes the RSVP user's name, status, and event details.
 
 #### DELETE /spaces/:spaceId/calendar/events/:eventId/rsvp
 
@@ -1243,6 +1289,8 @@ Create a blog post. Requires `MANAGE_BLOG`.
 | `content` | string | yes | Max 100,000 chars (Markdown) |
 | `status` | string | no | `draft` (default) or `published` |
 | `isPublic` | boolean | no | Visible on public blog |
+
+**Side effects:** When a post is published (either created with `status: 'published'` or updated from `draft` to `published`), a `new_blog_post` notification is sent to all space members (excluding the author) with push notifications. The notification uses the space avatar as its image and text: "New blog post from {space name}: {post title}".
 
 **Response:** BlogPost object.
 
@@ -2003,9 +2051,15 @@ Remove a reaction from a comment.
 
 List notifications (paginated). Requires auth.
 
-Notification types: `mention`, `reply`, `reaction`, `dm`, `dm_request`, `friend_request`, `portal_invite`, `event_cancelled`, `new_event`, `post_tag`, `post_comment`.
+Notification types: `mention`, `reply`, `reaction`, `dm`, `dm_request`, `friend_request`, `portal_invite`, `event_cancelled`, `event_rsvp`, `new_event`, `new_blog_post`, `post_tag`, `post_comment`.
 
 The `new_event` notification is sent to all space members when a calendar event is created. It includes `spaceName`, `eventName`, `eventDate`, `eventTime`, `spaceId`, and `eventId` in the notification data. It also triggers a push notification and deep links to the event in the space calendar.
+
+The `event_rsvp` notification is sent to the event creator when another user RSVPs to their event. It includes `eventId`, `eventName`, `eventDate`, `eventTime`, `spaceId`, `spaceName`, `rsvpUsername`, `rsvpDisplayName`, and `rsvpStatus`. Clicking the notification navigates to the event in the space calendar.
+
+The `event_cancelled` notification is sent to all users who RSVP'd "going" or "maybe" when an event is cancelled or deleted. It includes `eventId`, `eventName`, `eventDate`, `eventTime`, `spaceId`, and `spaceName`.
+
+The `new_blog_post` notification is sent to all space members when a blog post is published (respects per-member blog mute preference). It includes `postId`, `postTitle`, `spaceName`, `spaceSlug`, `spaceId`, `spaceIconUrl`, and `authorUsername` in the notification data. The push notification uses the space icon as its image. Clicking the notification navigates to the blog post within the space.
 
 ### GET /notifications/unread-count
 

@@ -2,6 +2,7 @@ import { db } from '../../database/connection.js';
 import { snowflake } from '../_shared.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { eventBus } from '../../lib/event-bus.js';
+import { createNotification } from '../notifications/notifications.service.js';
 import type { RecurrenceRule } from '@crabac/shared';
 
 // ─── Categories ───
@@ -215,8 +216,17 @@ export async function listUpcomingEvents(spaceId: string, limit: number, userId?
 }
 
 export async function deleteEvent(id: string) {
-  const deleted = await db('calendar_events').where('id', id).delete();
-  if (!deleted) throw new NotFoundError('Calendar event');
+  const event = await db('calendar_events').where('id', id).first();
+  if (!event) throw new NotFoundError('Calendar event');
+
+  // Notify "going" RSVPs before deletion
+  const space = await db('spaces').where('id', event.space_id).first();
+  await notifyEventCancellation(
+    String(id), event.name, event.event_date, event.event_time,
+    String(event.space_id), space?.name || '',
+  );
+
+  await db('calendar_events').where('id', id).delete();
 }
 
 // ─── RSVP ───
@@ -231,6 +241,29 @@ export async function upsertRsvp(eventId: string, userId: string, status: 'going
      ON DUPLICATE KEY UPDATE status = VALUES(status)`,
     [eventId, userId, status],
   );
+
+  // Notify event creator about the RSVP
+  if (String(event.creator_id) !== userId) {
+    const space = await db('spaces').where('id', event.space_id).first();
+    const rsvpUser = await db('users').where('id', userId).select('username', 'display_name').first();
+
+    // Format date
+    let dateStr = event.event_date;
+    if (dateStr instanceof Date) dateStr = formatDateStr(dateStr);
+    else if (typeof dateStr === 'string' && dateStr.includes('T')) dateStr = dateStr.split('T')[0];
+
+    await createNotification(String(event.creator_id), 'event_rsvp', {
+      eventId: String(eventId),
+      eventName: event.name,
+      eventDate: dateStr,
+      eventTime: event.event_time || null,
+      spaceId: String(event.space_id),
+      spaceName: space?.name || '',
+      rsvpUsername: rsvpUser?.username || '',
+      rsvpDisplayName: rsvpUser?.display_name || '',
+      rsvpStatus: status,
+    });
+  }
 }
 
 export async function removeRsvp(eventId: string, userId: string) {

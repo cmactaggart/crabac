@@ -128,7 +128,11 @@ export async function listThreadPosts(
   const messageIds = rows.map((r: any) => r.id);
   const reactions = await getReactionsForMessages(messageIds);
 
-  return rows.map((r: any) => formatPost(r, reactions.get(r.id) || []));
+  // Get replyTo data for posts that have reply_to_id
+  const replyToIds = rows.filter((r: any) => r.reply_to_id).map((r: any) => r.reply_to_id);
+  const replyToMap = await getReplyToData(replyToIds);
+
+  return rows.map((r: any) => formatPost(r, reactions.get(r.id) || [], replyToMap.get(String(r.reply_to_id))));
 }
 
 export async function createThreadPost(
@@ -171,7 +175,8 @@ export async function createThreadPost(
     )
     .first();
 
-  const formatted = formatPost(post, []);
+  const replyToMap = data.replyToId ? await getReplyToData([data.replyToId]) : new Map();
+  const formatted = formatPost(post, [], replyToMap.get(data.replyToId!));
   const channelId = String(thread.channel_id);
   const channel = await db('channels').where('id', channelId).select('space_id').first();
   const spaceId = channel ? String(channel.space_id) : null;
@@ -251,7 +256,7 @@ function formatThreadSummary(row: any) {
   };
 }
 
-function formatPost(row: any, reactions: any[]) {
+function formatPost(row: any, reactions: any[], replyTo?: any) {
   let metadata = row.metadata;
   if (typeof metadata === 'string') {
     try { metadata = JSON.parse(metadata); } catch { metadata = null; }
@@ -278,6 +283,7 @@ function formatPost(row: any, reactions: any[]) {
       baseColor: row.author_base_color || null,
       accentColor: row.author_accent_color || null,
     },
+    replyTo: replyTo || null,
   };
 }
 
@@ -311,4 +317,33 @@ async function getReactionsForMessages(messageIds: string[]): Promise<Map<string
     result.set(msgId, Array.from(byEmoji.values()));
   }
   return result;
+}
+
+async function getReplyToData(replyToIds: string[]): Promise<Map<string, any>> {
+  if (replyToIds.length === 0) return new Map();
+
+  const rows = await db('messages')
+    .join('users', 'messages.author_id', 'users.id')
+    .whereIn('messages.id', replyToIds)
+    .select(
+      'messages.id',
+      'messages.content',
+      'users.id as author_id',
+      'users.username as author_username',
+      'users.display_name as author_display_name',
+    );
+
+  const map = new Map<string, any>();
+  for (const row of rows) {
+    map.set(String(row.id), {
+      id: row.id,
+      content: row.content,
+      author: {
+        id: row.author_id,
+        username: row.author_username,
+        displayName: row.author_display_name,
+      },
+    });
+  }
+  return map;
 }

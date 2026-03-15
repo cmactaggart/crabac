@@ -31,11 +31,11 @@ interface ChannelsState {
   fetchChannels: (spaceId: string) => Promise<void>;
   fetchCategories: (spaceId: string) => Promise<void>;
   setActiveChannel: (id: string | null) => void;
-  createChannel: (spaceId: string, name: string, topic?: string, categoryId?: string, type?: string) => Promise<Channel>;
+  createChannel: (spaceId: string, name: string, topic?: string, categoryId?: string, type?: string, isPrivate?: boolean, memberIds?: string[], roleOverrides?: string[]) => Promise<Channel>;
   createCategory: (spaceId: string, name: string) => Promise<void>;
   fetchUnreads: (spaceId: string) => Promise<void>;
   markRead: (spaceId: string, channelId: string, messageId: string) => Promise<void>;
-  updateChannel: (spaceId: string, channelId: string, data: { name?: string; topic?: string; type?: string; isPublic?: boolean }) => Promise<void>;
+  updateChannel: (spaceId: string, channelId: string, data: { name?: string; topic?: string; type?: string; isPublic?: boolean; isPrivate?: boolean }) => Promise<void>;
   deleteChannel: (spaceId: string, channelId: string) => Promise<void>;
   updateCategory: (spaceId: string, categoryId: string, data: { name?: string }) => Promise<void>;
   deleteCategory: (spaceId: string, categoryId: string) => Promise<void>;
@@ -82,10 +82,10 @@ export const useChannelsStore = create<ChannelsState>((set, get) => ({
 
   setActiveChannel: (id) => set({ activeChannelId: id }),
 
-  createChannel: async (spaceId, name, topic, categoryId, type) => {
+  createChannel: async (spaceId, name, topic, categoryId, type, isPrivate, memberIds, roleOverrides) => {
     const channel = await api<Channel>(`/spaces/${spaceId}/channels`, {
       method: 'POST',
-      body: JSON.stringify({ name, topic, categoryId, type }),
+      body: JSON.stringify({ name, topic, categoryId, type, isPrivate, memberIds, roleOverrides }),
     });
     set((s) => ({ channels: [...s.channels, channel] }));
     return channel;

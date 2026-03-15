@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Image, Map, CalendarDays, Upload, Plus, Trash2, Share2, Edit3, MapPinned, X, FileText, Users, ImagePlus, MapPin, SmilePlus, Newspaper, LogOut, Activity, Bike, Footprints, Mountain, Timer, TrendingUp, Save } from 'lucide-react';
+import { Image, Map, CalendarDays, Upload, Plus, Trash2, Share2, Edit3, MapPinned, X, FileText, Users, ImagePlus, MapPin, SmilePlus, Newspaper, LogOut, Activity, Bike, Footprints, Mountain, Timer, TrendingUp, Save, PenTool } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { usePersonalCollectionsStore } from '../stores/personalCollections.js';
@@ -21,10 +21,12 @@ import { SpaceSidebar } from '../components/layout/SpaceSidebar.js';
 import { ProfileSidebar } from '../components/layout/ProfileSidebar.js';
 import { PersonalNewsletterView } from '../components/newsletter/PersonalNewsletterView.js';
 import { IdentitySwitcher } from '../components/common/IdentitySwitcher.js';
+import { MiniMap } from '../components/common/MiniMap.js';
 import { api } from '../lib/api.js';
 import type { PersonalGalleryItem, PersonalRouteItem, PersonalEvent, PersonalEventCategory, PersonalActivityItem, PersonalActivityStats, PersonalVisibility, UserPost, ActivityType } from '@crabac/shared';
 
 const LazyGpxMapModal = React.lazy(() => import('../components/messages/GpxMapModal.js'));
+const LazyRouteBuilderModal = React.lazy(() => import('../components/route-builder/RouteBuilderModal.js'));
 
 type SubTab = 'feed' | 'photos' | 'activities' | 'events' | 'newsletter';
 type ActivitiesSubTab = 'stats' | 'activities' | 'routes';
@@ -78,6 +80,7 @@ export function YouPage() {
   const activeSpace = managedSpaces.find((s) => s.id === activeSpaceId) || null;
   const [spacePosts, setSpacePosts] = useState<UserPost[]>([]);
   const [spacePostsLoading, setSpacePostsLoading] = useState(false);
+  const [profileLinks, setProfileLinks] = useState<{ id: string; label: string; url: string; position: number }[]>([]);
 
   useEffect(() => {
     fetchSummary();
@@ -88,6 +91,8 @@ export function YouPage() {
       if (prefs.defaultVisibility) setDefaultVisibility(prefs.defaultVisibility);
       if (prefs.newsletterEnabled) setNewsletterEnabled(true);
     }).catch(() => {});
+    api<{ id: string; label: string; url: string; position: number }[]>('/users/me/profile-links')
+      .then(setProfileLinks).catch(() => {});
   }, []);
 
   // Fetch space posts when identity is switched
@@ -305,6 +310,7 @@ export function YouPage() {
             displayName={user?.displayName || '?'}
             username={user?.username || ''}
             bio={user?.bio}
+            profileLinks={profileLinks}
             baseColor={user?.baseColor}
             accentColor={user?.accentColor}
             followingCount={followCounts.followingCount}
@@ -586,39 +592,6 @@ function PhotosTab({ items, loading, defaultVisibility = 'private', onUpload, on
 
 const ACTIVITY_TYPE_COLORS: Record<string, string> = { run: '#e74c3c', bike: '#3498db', walk: '#2ecc71', hike: '#e67e22' };
 
-function generateMiniMapPoints(geojson: any, width: number, height: number): string {
-  const coords: [number, number][] = [];
-  if (!geojson?.features) return '';
-  for (const feature of geojson.features) {
-    const geom = feature.geometry;
-    if (geom.type === 'LineString') {
-      for (const c of geom.coordinates) coords.push([c[0], c[1]]);
-    } else if (geom.type === 'MultiLineString') {
-      for (const line of geom.coordinates) for (const c of line) coords.push([c[0], c[1]]);
-    }
-  }
-  if (coords.length < 2) return '';
-  const maxPts = 80;
-  let sampled = coords;
-  if (coords.length > maxPts) {
-    const step = (coords.length - 1) / (maxPts - 1);
-    sampled = [];
-    for (let i = 0; i < maxPts - 1; i++) sampled.push(coords[Math.round(i * step)]);
-    sampled.push(coords[coords.length - 1]);
-  }
-  let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
-  for (const [lng, lat] of sampled) {
-    if (lng < minLng) minLng = lng; if (lng > maxLng) maxLng = lng;
-    if (lat < minLat) minLat = lat; if (lat > maxLat) maxLat = lat;
-  }
-  const pad = 0.08, lngRange = (maxLng - minLng) || 0.001, latRange = (maxLat - minLat) || 0.001;
-  return sampled.map(([lng, lat]) => {
-    const x = ((lng - minLng) / lngRange) * (1 - 2 * pad) + pad;
-    const y = (1 - (lat - minLat) / latRange) * (1 - 2 * pad) + pad;
-    return `${(x * width).toFixed(1)},${(y * height).toFixed(1)}`;
-  }).join(' ');
-}
-
 const ACTIVITY_TYPE_LABELS: Record<string, string> = { run: 'Running', bike: 'Cycling', walk: 'Walking', hike: 'Hiking' };
 const ACTIVITY_TYPE_ICONS: Record<string, React.ReactNode> = {
   run: <Footprints size={16} />,
@@ -856,21 +829,11 @@ function ActivityFeedView({ items, loading, onUpdate, onDelete, onSaveAsRoute }:
           ) : (
             <>
               {/* Mini route map - click to open detail */}
-              {(() => {
-                const pts = item.geojson ? generateMiniMapPoints(item.geojson, 380, 80) : '';
-                return pts ? (
-                  <svg viewBox="0 0 380 80" style={{ width: '100%', height: 60, display: 'block', marginBottom: 6, cursor: 'pointer' }} onClick={() => setMapItem(item)}>
-                    <polyline
-                      points={pts}
-                      fill="none"
-                      stroke={ACTIVITY_TYPE_COLORS[item.activityType] || 'var(--accent)'}
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                ) : null;
-              })()}
+              {item.geojson && (
+                <div style={{ marginBottom: 6, cursor: 'pointer', aspectRatio: '1', overflow: 'hidden', borderRadius: 'var(--radius)' }} onClick={() => setMapItem(item)}>
+                  <MiniMap geojson={item.geojson} bounds={item.bounds} width="100%" height="100%" lineColor={ACTIVITY_TYPE_COLORS[item.activityType] || 'var(--accent)'} />
+                </div>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ color: ACTIVITY_TYPE_COLORS[item.activityType] || 'var(--accent)', flexShrink: 0 }}>
                   {ACTIVITY_TYPE_ICONS[item.activityType] || <Activity size={16} />}
@@ -954,6 +917,7 @@ function RoutesTab({ items, loading, defaultVisibility = 'private', onUpload, on
   const [routeName, setRouteName] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [visibility, setVisibility] = useState<PersonalVisibility>(defaultVisibility);
+  const [showRouteBuilder, setShowRouteBuilder] = useState(false);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -981,9 +945,14 @@ function RoutesTab({ items, loading, defaultVisibility = 'private', onUpload, on
     <div>
       <div style={styles.tabHeader}>
         <h3 style={styles.tabTitle}>My Routes</h3>
-        <button onClick={() => fileRef.current?.click()} style={styles.uploadBtn}>
-          <Upload size={14} /> Upload GPX
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={() => setShowRouteBuilder(true)} style={styles.uploadBtn}>
+            <PenTool size={14} /> Create Route
+          </button>
+          <button onClick={() => fileRef.current?.click()} style={styles.uploadBtn}>
+            <Upload size={14} /> Upload GPX
+          </button>
+        </div>
         <input ref={fileRef} type="file" accept=".gpx" onChange={handleFileSelect} style={{ display: 'none' }} />
       </div>
 
@@ -1052,6 +1021,19 @@ function RoutesTab({ items, loading, defaultVisibility = 'private', onUpload, on
           </div>
         ))}
       </div>
+
+      {showRouteBuilder && (
+        <Suspense fallback={null}>
+          <LazyRouteBuilderModal
+            onClose={() => setShowRouteBuilder(false)}
+            onSave={async (file, name, data) => {
+              await onUpload(file, name, data);
+              setShowRouteBuilder(false);
+            }}
+            defaultVisibility={defaultVisibility}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

@@ -241,11 +241,14 @@ export function FeedPage() {
   const { channelSidebarOpen } = useLayoutStore();
   const { fetchUnreadCount } = useNotificationsStore();
   const { counts: followCounts, fetchCounts: fetchFollowCounts } = useFollowsStore();
+  const [profileLinks, setProfileLinks] = useState<{ id: string; label: string; url: string; position: number }[]>([]);
 
   useEffect(() => {
     fetchSpaces();
     fetchUnreadCount();
     if (user?.id) fetchFollowCounts(user.id);
+    api<{ id: string; label: string; url: string; position: number }[]>('/users/me/profile-links')
+      .then(setProfileLinks).catch(() => {});
   }, []);
 
   if (isMobile) {
@@ -271,6 +274,7 @@ export function FeedPage() {
           displayName={user?.displayName || '?'}
           username={user?.username || ''}
           bio={user?.bio}
+          profileLinks={profileLinks}
           baseColor={user?.baseColor}
           accentColor={user?.accentColor}
           followingCount={followCounts.followingCount}

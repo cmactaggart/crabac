@@ -1,6 +1,7 @@
 import { db } from '../../database/connection.js';
 import { snowflake } from '../_shared.js';
 import { NotFoundError } from '../../lib/errors.js';
+import { eventBus } from '../../lib/event-bus.js';
 
 function postBaseQuery() {
   return db('blog_posts')
@@ -80,6 +81,13 @@ export async function createPost(
     published_at: status === 'published' ? db.fn.now() : null,
   });
 
+  if (status === 'published') {
+    eventBus.emit('blog.post.published', {
+      post: { id: String(id), authorId: authorId, title: data.title },
+      spaceId,
+    });
+  }
+
   return getPost(String(id));
 }
 
@@ -112,6 +120,15 @@ export async function updatePost(
   updates.updated_at = db.fn.now(3);
 
   await db('blog_posts').where('id', postId).update(updates);
+
+  // Emit notification when first published
+  if (data.status === 'published' && existing.status !== 'published') {
+    eventBus.emit('blog.post.published', {
+      post: { id: postId, authorId: String(existing.author_id), title: data.title || existing.title },
+      spaceId: String(existing.space_id),
+    });
+  }
+
   return getPost(postId);
 }
 

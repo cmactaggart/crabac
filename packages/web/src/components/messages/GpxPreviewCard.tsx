@@ -1,9 +1,10 @@
-import React, { useState, useMemo, Suspense } from 'react';
+import React, { useState, Suspense } from 'react';
 import { MapPin, MapPinned, Mountain, Clock, Download, X } from 'lucide-react';
 import type { Attachment, GpxTrackMetadata, DistanceUnits, RouteItem, Channel } from '@crabac/shared';
 import { api } from '../../lib/api.js';
 import { usePreferencesStore } from '../../stores/preferences.js';
 import { useChannelsStore } from '../../stores/channels.js';
+import { MiniMap } from '../common/MiniMap.js';
 
 const LazyGpxMapModal = React.lazy(() => import('./GpxMapModal.js'));
 
@@ -35,66 +36,9 @@ function formatElevation(m: number, units: DistanceUnits): string {
   return `${m} m`;
 }
 
-/**
- * Generate SVG polyline points from GeoJSON coordinates.
- * Samples down to ~100 points and projects to a viewBox.
- */
-function generateMiniMapPoints(gpx: GpxTrackMetadata, width: number, height: number): string {
-  const coords: [number, number][] = [];
-
-  if (!gpx.geojson?.features) return '';
-
-  for (const feature of gpx.geojson.features) {
-    const geom = feature.geometry;
-    if (geom.type === 'LineString') {
-      for (const c of geom.coordinates) coords.push([c[0], c[1]]);
-    } else if (geom.type === 'MultiLineString') {
-      for (const line of geom.coordinates) {
-        for (const c of line) coords.push([c[0], c[1]]);
-      }
-    }
-  }
-
-  if (coords.length < 2) return '';
-
-  // Downsample to ~100 points
-  const maxPts = 100;
-  let sampled = coords;
-  if (coords.length > maxPts) {
-    const step = (coords.length - 1) / (maxPts - 1);
-    sampled = [];
-    for (let i = 0; i < maxPts - 1; i++) {
-      sampled.push(coords[Math.round(i * step)]);
-    }
-    sampled.push(coords[coords.length - 1]);
-  }
-
-  // Compute bounds
-  let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
-  for (const [lng, lat] of sampled) {
-    if (lng < minLng) minLng = lng;
-    if (lng > maxLng) maxLng = lng;
-    if (lat < minLat) minLat = lat;
-    if (lat > maxLat) maxLat = lat;
-  }
-
-  const pad = 0.05;
-  const lngRange = (maxLng - minLng) || 0.001;
-  const latRange = (maxLat - minLat) || 0.001;
-
-  return sampled
-    .map(([lng, lat]) => {
-      const x = ((lng - minLng) / lngRange) * (1 - 2 * pad) + pad;
-      const y = (1 - (lat - minLat) / latRange) * (1 - 2 * pad) + pad; // flip Y
-      return `${(x * width).toFixed(1)},${(y * height).toFixed(1)}`;
-    })
-    .join(' ');
-}
-
 export function GpxPreviewCard({ attachment, gpx }: Props) {
   const [showModal, setShowModal] = useState(false);
   const [showAddToLibrary, setShowAddToLibrary] = useState(false);
-  const polylinePoints = useMemo(() => generateMiniMapPoints(gpx, 160, 100), [gpx]);
   const units = usePreferencesStore((s) => s.preferences.distanceUnits);
   const channels = useChannelsStore((s) => s.channels);
   const routeLibraryChannels = channels.filter((c: Channel) => c.type === 'route_library');
@@ -102,18 +46,14 @@ export function GpxPreviewCard({ attachment, gpx }: Props) {
   return (
     <>
       <div style={styles.card} onClick={() => setShowModal(true)} role="button" tabIndex={0}>
-        {/* Mini SVG map */}
+        {/* Mini map */}
         <div style={styles.miniMap}>
-          <svg viewBox="0 0 160 100" style={{ width: '100%', height: '100%' }}>
-            <polyline
-              points={polylinePoints}
-              fill="none"
-              stroke="var(--accent)"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <MiniMap
+            geojson={gpx.geojson}
+            bounds={gpx.bounds}
+            width={160}
+            height={160}
+          />
         </div>
 
         {/* Info */}
@@ -287,7 +227,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   miniMap: {
     width: 160,
-    height: 100,
+    height: 160,
     background: 'var(--bg-tertiary, var(--bg-primary))',
     borderRadius: 'var(--radius)',
     flexShrink: 0,

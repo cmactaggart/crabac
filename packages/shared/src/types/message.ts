@@ -53,6 +53,15 @@ export interface Message {
     accentColor?: string | null;
     isBot?: boolean;
   };
+  replyTo?: {
+    id: string;
+    content: string;
+    author?: {
+      id: string;
+      username: string;
+      displayName: string;
+    };
+  } | null;
 }
 
 export interface CreateMessageRequest {

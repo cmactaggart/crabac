@@ -19,7 +19,13 @@ channelsRoutes.post(
   validate(validation.createChannelSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const channel = await channelsService.createChannel(req.params.spaceId, req.body);
+      const channel = await channelsService.createChannel(
+        req.params.spaceId,
+        req.body,
+        req.user!.userId,
+        req.body.memberIds,
+        req.body.roleOverrides,
+      );
       res.status(201).json(channel);
     } catch (err) {
       next(err);
@@ -79,6 +85,50 @@ channelsRoutes.delete(
     try {
       await channelsService.deleteChannel(req.params.spaceId, req.params.channelId);
       res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ─── Channel Members (Private Channels) ───
+
+// List channel members
+channelsRoutes.get(
+  '/:spaceId/channels/:channelId/members',
+  requirePermission(Permissions.MANAGE_CHANNELS),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const members = await channelsService.getChannelMembers(req.params.channelId);
+      res.json(members);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Add channel member
+channelsRoutes.put(
+  '/:spaceId/channels/:channelId/members/:userId',
+  requirePermission(Permissions.MANAGE_CHANNELS),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await channelsService.addChannelMember(req.params.channelId, req.params.userId);
+      res.json({ success: true });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Remove channel member
+channelsRoutes.delete(
+  '/:spaceId/channels/:channelId/members/:userId',
+  requirePermission(Permissions.MANAGE_CHANNELS),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await channelsService.removeChannelMember(req.params.channelId, req.params.userId);
+      res.json({ success: true });
     } catch (err) {
       next(err);
     }

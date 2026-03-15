@@ -1,8 +1,11 @@
-import { useState } from 'react';
-import { X, Hash } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Hash, Lock, Search } from 'lucide-react';
 import { useChannelsStore } from '../../stores/channels.js';
+import { useSpacesStore } from '../../stores/spaces.js';
 import { useNavigate } from 'react-router-dom';
-import type { ChannelCategory, ChannelType } from '@crabac/shared';
+import { api } from '../../lib/api.js';
+import type { ChannelCategory, ChannelType, Role } from '@crabac/shared';
+import { Avatar } from '../common/Avatar.js';
 
 interface Props {
   spaceId: string;
@@ -15,10 +18,20 @@ export function CreateChannelModal({ spaceId, categories, onClose }: Props) {
   const [topic, setTopic] = useState('');
   const [channelType, setChannelType] = useState<ChannelType>('text');
   const [categoryId, setCategoryId] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [selectedRoles, setSelectedRoles] = useState<Set<string>>(new Set());
+  const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
+  const [memberSearch, setMemberSearch] = useState('');
+  const [roles, setRoles] = useState<Role[]>([]);
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
   const createChannel = useChannelsStore((s) => s.createChannel);
+  const members = useSpacesStore((s) => s.members);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    api<Role[]>(`/spaces/${spaceId}/roles`).then(setRoles).catch(() => {});
+  }, [spaceId]);
 
   const sanitizeName = (input: string) =>
     input.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
@@ -26,6 +39,30 @@ export function CreateChannelModal({ spaceId, categories, onClose }: Props) {
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setName(sanitizeName(e.target.value));
   };
+
+  const toggleRole = (roleId: string) => {
+    setSelectedRoles((prev) => {
+      const next = new Set(prev);
+      if (next.has(roleId)) next.delete(roleId);
+      else next.add(roleId);
+      return next;
+    });
+  };
+
+  const toggleMember = (userId: string) => {
+    setSelectedMembers((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  };
+
+  const filteredMembers = members.filter((m) => {
+    if (!memberSearch) return true;
+    const q = memberSearch.toLowerCase();
+    return m.user?.username?.toLowerCase().includes(q) || m.user?.displayName?.toLowerCase().includes(q);
+  });
 
   const handleCreate = async () => {
     if (!name.trim()) return;
@@ -38,6 +75,9 @@ export function CreateChannelModal({ spaceId, categories, onClose }: Props) {
         topic.trim() || undefined,
         categoryId || undefined,
         channelType,
+        isPrivate || undefined,
+        isPrivate ? Array.from(selectedMembers) : undefined,
+        isPrivate ? Array.from(selectedRoles) : undefined,
       );
       onClose();
       navigate(`/space/${spaceId}/channel/${channel.id}`);
@@ -47,6 +87,8 @@ export function CreateChannelModal({ spaceId, categories, onClose }: Props) {
       setCreating(false);
     }
   };
+
+  const nonSystemRoles = roles.filter((r: any) => !r.isSystem && !r.isDefault && !r.isGuest);
 
   return (
     <div style={styles.overlay} onClick={onClose}>
@@ -62,7 +104,11 @@ export function CreateChannelModal({ spaceId, categories, onClose }: Props) {
           <div style={styles.field}>
             <label style={styles.label}>Channel Name</label>
             <div style={styles.nameInputWrapper}>
-              <Hash size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+              {isPrivate ? (
+                <Lock size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+              ) : (
+                <Hash size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+              )}
               <input
                 value={name}
                 onChange={handleNameChange}
@@ -91,6 +137,77 @@ export function CreateChannelModal({ spaceId, categories, onClose }: Props) {
               <option value="route_library">Route Library</option>
             </select>
           </div>
+
+          <div style={styles.field}>
+            <label style={styles.label}>Private Channel</label>
+            <button
+              onClick={() => setIsPrivate(!isPrivate)}
+              style={{
+                ...styles.toggle,
+                background: isPrivate ? 'var(--accent)' : 'var(--bg-tertiary)',
+              }}
+            >
+              <div style={{
+                ...styles.toggleKnob,
+                transform: isPrivate ? 'translateX(20px)' : 'translateX(0)',
+              }} />
+            </button>
+            <span style={styles.hint}>
+              {isPrivate ? 'Only selected members and roles can see this channel' : 'Visible to all members'}
+            </span>
+          </div>
+
+          {isPrivate && (
+            <>
+              {nonSystemRoles.length > 0 && (
+                <div style={styles.field}>
+                  <label style={styles.label}>Allowed Roles</label>
+                  <div style={styles.checkboxList}>
+                    {nonSystemRoles.map((role: any) => (
+                      <label key={role.id} style={styles.checkboxItem}>
+                        <input
+                          type="checkbox"
+                          checked={selectedRoles.has(role.id)}
+                          onChange={() => toggleRole(role.id)}
+                        />
+                        {role.color && (
+                          <span style={{ width: 10, height: 10, borderRadius: '50%', background: role.color, flexShrink: 0 }} />
+                        )}
+                        <span>{role.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div style={styles.field}>
+                <label style={styles.label}>Individual Members</label>
+                <div style={styles.searchWrapper}>
+                  <Search size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                  <input
+                    value={memberSearch}
+                    onChange={(e) => setMemberSearch(e.target.value)}
+                    placeholder="Search members..."
+                    style={styles.searchInput}
+                  />
+                </div>
+                <div style={styles.memberList}>
+                  {filteredMembers.slice(0, 50).map((m) => (
+                    <label key={m.userId} style={styles.checkboxItem}>
+                      <input
+                        type="checkbox"
+                        checked={selectedMembers.has(m.userId)}
+                        onChange={() => toggleMember(m.userId)}
+                      />
+                      <Avatar src={m.user?.avatarUrl || null} name={m.user?.displayName || m.user?.username || '?'} size={20} />
+                      <span>{m.user?.displayName || m.user?.username}</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>@{m.user?.username}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
 
           <div style={styles.field}>
             <label style={styles.label}>Topic <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
@@ -151,10 +268,13 @@ const styles: Record<string, React.CSSProperties> = {
   modal: {
     background: 'var(--bg-primary)',
     borderRadius: 'var(--radius)',
-    width: 440,
+    width: 480,
     maxWidth: '90vw',
+    maxHeight: '85vh',
     boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
     overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
   },
   header: {
     display: 'flex',
@@ -162,6 +282,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     padding: '16px 20px',
     borderBottom: '1px solid var(--border)',
+    flexShrink: 0,
   },
   closeBtn: {
     background: 'none',
@@ -176,6 +297,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     gap: 16,
+    overflowY: 'auto',
+    flex: 1,
   },
   field: {
     display: 'flex',
@@ -221,6 +344,66 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '0.7rem',
     color: 'var(--text-muted)',
   },
+  toggle: {
+    width: 44,
+    height: 24,
+    borderRadius: 12,
+    border: 'none',
+    cursor: 'pointer',
+    position: 'relative',
+    padding: 2,
+    transition: 'background 0.2s',
+  },
+  toggleKnob: {
+    width: 20,
+    height: 20,
+    borderRadius: '50%',
+    background: 'white',
+    transition: 'transform 0.2s',
+  },
+  checkboxList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    maxHeight: 150,
+    overflowY: 'auto',
+    padding: '6px 0',
+  },
+  checkboxItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '4px 8px',
+    fontSize: '0.85rem',
+    cursor: 'pointer',
+    borderRadius: 'var(--radius)',
+    color: 'var(--text-primary)',
+  },
+  searchWrapper: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '6px 10px',
+    background: 'var(--bg-input)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius)',
+  },
+  searchInput: {
+    flex: 1,
+    background: 'none',
+    border: 'none',
+    color: 'var(--text-primary)',
+    fontSize: '0.85rem',
+    outline: 'none',
+  },
+  memberList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    maxHeight: 200,
+    overflowY: 'auto',
+    padding: '4px 0',
+  },
   footer: {
     display: 'flex',
     justifyContent: 'flex-end',
@@ -228,6 +411,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '16px 20px',
     borderTop: '1px solid var(--border)',
     background: 'var(--bg-secondary)',
+    flexShrink: 0,
   },
   cancelBtn: {
     padding: '8px 16px',

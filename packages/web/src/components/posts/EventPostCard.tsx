@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useMemo, Suspense } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { CalendarDays, MapPin, Clock, Check, HelpCircle, X } from 'lucide-react';
 import { api } from '../../lib/api.js';
+import { MiniMap } from '../common/MiniMap.js';
 
 const LazyGpxMapModal = React.lazy(() => import('../messages/GpxMapModal.js'));
 
@@ -44,45 +45,6 @@ function computeBoundsFromGeojson(geojson: any): { minLat: number; maxLat: numbe
   return { minLat, maxLat, minLng, maxLng };
 }
 
-function generateMiniMapPoints(geojson: any, width: number, height: number): string {
-  const coords: [number, number][] = [];
-  if (!geojson?.features) return '';
-  for (const feature of geojson.features) {
-    const geom = feature.geometry;
-    if (geom.type === 'LineString') {
-      for (const c of geom.coordinates) coords.push([c[0], c[1]]);
-    } else if (geom.type === 'MultiLineString') {
-      for (const line of geom.coordinates) {
-        for (const c of line) coords.push([c[0], c[1]]);
-      }
-    }
-  }
-  if (coords.length < 2) return '';
-  const maxPts = 80;
-  let sampled = coords;
-  if (coords.length > maxPts) {
-    const step = (coords.length - 1) / (maxPts - 1);
-    sampled = [];
-    for (let i = 0; i < maxPts - 1; i++) sampled.push(coords[Math.round(i * step)]);
-    sampled.push(coords[coords.length - 1]);
-  }
-  let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
-  for (const [lng, lat] of sampled) {
-    if (lng < minLng) minLng = lng;
-    if (lng > maxLng) maxLng = lng;
-    if (lat < minLat) minLat = lat;
-    if (lat > maxLat) maxLat = lat;
-  }
-  const pad = 0.08, lngRange = (maxLng - minLng) || 0.001, latRange = (maxLat - minLat) || 0.001;
-  return sampled
-    .map(([lng, lat]) => {
-      const x = ((lng - minLng) / lngRange) * (1 - 2 * pad) + pad;
-      const y = (1 - (lat - minLat) / latRange) * (1 - 2 * pad) + pad;
-      return `${(x * width).toFixed(1)},${(y * height).toFixed(1)}`;
-    })
-    .join(' ');
-}
-
 export function EventPostCard({ eventId, spaceId }: { eventId: string; spaceId: string }) {
   const [event, setEvent] = useState<CalendarEvent | null>(null);
   const [loading, setLoading] = useState(true);
@@ -95,11 +57,6 @@ export function EventPostCard({ eventId, spaceId }: { eventId: string; spaceId: 
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [eventId, spaceId]);
-
-  const routePolyline = useMemo(() => {
-    if (!event?.route?.geojson) return '';
-    return generateMiniMapPoints(event.route.geojson, 380, 80);
-  }, [event?.route?.geojson]);
 
   if (loading) {
     return (
@@ -198,17 +155,8 @@ export function EventPostCard({ eventId, spaceId }: { eventId: string; spaceId: 
             style={{ marginTop: 8, padding: '6px 8px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', cursor: 'pointer' }}
             onClick={() => setShowRouteDetail(true)}
           >
-            {routePolyline && (
-              <svg viewBox="0 0 380 80" style={{ width: '100%', height: 60, display: 'block', marginBottom: 4 }}>
-                <polyline
-                  points={routePolyline}
-                  fill="none"
-                  stroke="var(--accent)"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+            {event.route.geojson && (
+              <MiniMap geojson={event.route.geojson} bounds={computeBoundsFromGeojson(event.route.geojson)} width="100%" height={160} style={{ marginBottom: 4, borderRadius: 'var(--radius)' }} />
             )}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
               <span style={{ fontWeight: 600 }}>{event.route.name}</span>

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCheck, AtSign, Reply, Zap, Tag, Users, Mail, CalendarX, CalendarPlus, MessageCircle } from 'lucide-react';
+import { CheckCheck, AtSign, Reply, Zap, Tag, Users, Mail, CalendarX, CalendarPlus, Calendar, MessageCircle, BookOpen } from 'lucide-react';
 import { useNotificationsStore } from '../../stores/notifications.js';
 import { Avatar } from '../common/Avatar.js';
 import type { Notification, MentionNotificationData, ReplyNotificationData, PostCommentNotificationData, PostTagNotificationData } from '@crabac/shared';
@@ -54,6 +54,12 @@ export function NotificationDropdown({ onClose }: Props) {
       } else {
         navigate(`/space/${data.spaceId}?tab=calendar&event=${data.eventId}`);
       }
+      onClose();
+    } else if (notification.type === 'event_rsvp' && data.spaceId) {
+      navigate(`/space/${data.spaceId}?tab=calendar&event=${data.eventId}`);
+      onClose();
+    } else if (notification.type === 'new_blog_post' && data.spaceId) {
+      navigate(`/space/${data.spaceId}?tab=blog&post=${data.postId}`);
       onClose();
     } else if (data.spaceId && data.channelId) {
       navigate(`/space/${data.spaceId}/channel/${data.channelId}`);
@@ -158,6 +164,10 @@ function formatTitle(n: Notification): string {
       return `${data.taggedByDisplayName} tagged you in a post`;
     case 'post_comment':
       return `${data.commenterDisplayName} commented on your post`;
+    case 'event_rsvp':
+      return `${data.rsvpDisplayName || data.rsvpUsername} RSVP'd ${data.rsvpStatus} to ${data.eventName}`;
+    case 'new_blog_post':
+      return `New blog post from ${data.spaceName}: ${data.postTitle}`;
     default:
       return 'Notification';
   }
@@ -189,6 +199,10 @@ function getNotificationAvatar(n: Notification): { src: string | null; name: str
     }
     case 'new_event':
       return { src: data.spaceIconUrl || null, name: data.spaceName || '?' };
+    case 'event_rsvp':
+      return { src: null, name: data.rsvpDisplayName || data.rsvpUsername || '?' };
+    case 'new_blog_post':
+      return { src: data.spaceIconUrl || null, name: data.spaceName || '?' };
     default:
       return { src: null, name: '' };
   }
@@ -205,6 +219,8 @@ function getNotificationIcon(type: string) {
     case 'post_comment': return <MessageCircle size={16} style={{ color: 'var(--accent)' }} />;
     case 'event_cancelled': return <CalendarX size={16} style={{ color: 'var(--danger)' }} />;
     case 'new_event': return <CalendarPlus size={16} style={{ color: 'var(--accent)' }} />;
+    case 'event_rsvp': return <Calendar size={16} style={{ color: 'var(--accent)' }} />;
+    case 'new_blog_post': return <BookOpen size={16} style={{ color: 'var(--accent)' }} />;
     default: return null;
   }
 }

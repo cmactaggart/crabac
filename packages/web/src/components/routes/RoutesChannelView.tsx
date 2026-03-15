@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense } from 'react';
-import { MapPinned, Plus, Star, Download, Search, X, List, LayoutGrid, ChevronDown, Trash2, MapPin, Mountain, TrendingUp, Copy, CalendarPlus, Flag } from 'lucide-react';
+import { MapPinned, Plus, Star, Download, Search, X, List, LayoutGrid, ChevronDown, Trash2, MapPin, Mountain, TrendingUp, Copy, CalendarPlus, Flag, Settings } from 'lucide-react';
 import { getSocket } from '../../lib/socket.js';
 import { api } from '../../lib/api.js';
 import { Permissions, hasPermission, combinePermissions } from '@crabac/shared';
 import type { Channel, RouteItem, RouteCategory, Role, CalendarEvent } from '@crabac/shared';
+import { ChannelSettingsPanel } from '../channels/ChannelSettingsPanel.js';
+import { useHasSpacePermission } from '../settings/SpaceSettingsModal.js';
 import { useAuthStore } from '../../stores/auth.js';
 import { useSpacesStore } from '../../stores/spaces.js';
 import { usePreferencesStore } from '../../stores/preferences.js';
@@ -12,6 +14,7 @@ import { RouteUploadModal } from './RouteUploadModal.js';
 import { CreateEventModal } from '../calendar/CreateEventModal.js';
 import { RouteCategoryManager } from './RouteCategoryManager.js';
 import { ReportModal } from '../moderation/ReportModal.js';
+import { MiniMap } from '../common/MiniMap.js';
 import { useIsMobile } from '../../hooks/useIsMobile.js';
 import type { DistanceUnits } from '@crabac/shared';
 
@@ -44,47 +47,6 @@ function activityLabel(type: string | null): string | null {
   return null;
 }
 
-function generateMiniMapPoints(geojson: any, width: number, height: number): string {
-  const coords: [number, number][] = [];
-  if (!geojson?.features) return '';
-  for (const feature of geojson.features) {
-    const geom = feature.geometry;
-    if (geom.type === 'LineString') {
-      for (const c of geom.coordinates) coords.push([c[0], c[1]]);
-    } else if (geom.type === 'MultiLineString') {
-      for (const line of geom.coordinates) {
-        for (const c of line) coords.push([c[0], c[1]]);
-      }
-    }
-  }
-  if (coords.length < 2) return '';
-  const maxPts = 80;
-  let sampled = coords;
-  if (coords.length > maxPts) {
-    const step = (coords.length - 1) / (maxPts - 1);
-    sampled = [];
-    for (let i = 0; i < maxPts - 1; i++) sampled.push(coords[Math.round(i * step)]);
-    sampled.push(coords[coords.length - 1]);
-  }
-  let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
-  for (const [lng, lat] of sampled) {
-    if (lng < minLng) minLng = lng;
-    if (lng > maxLng) maxLng = lng;
-    if (lat < minLat) minLat = lat;
-    if (lat > maxLat) maxLat = lat;
-  }
-  const pad = 0.08;
-  const lngRange = (maxLng - minLng) || 0.001;
-  const latRange = (maxLat - minLat) || 0.001;
-  return sampled
-    .map(([lng, lat]) => {
-      const x = ((lng - minLng) / lngRange) * (1 - 2 * pad) + pad;
-      const y = (1 - (lat - minLat) / latRange) * (1 - 2 * pad) + pad;
-      return `${(x * width).toFixed(1)},${(y * height).toFixed(1)}`;
-    })
-    .join(' ');
-}
-
 interface Props {
   channelId: string;
   channel: Channel | null;
@@ -112,7 +74,9 @@ export function RoutesChannelView({ channelId, channel, spaceId, showBackButton,
   const [showCreateEvent, setShowCreateEvent] = useState(false);
   const [prefillRouteId, setPrefillRouteId] = useState('');
   const [reportTarget, setReportTarget] = useState<RouteItem | null>(null);
+  const [showChannelSettings, setShowChannelSettings] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const canManageChannels = useHasSpacePermission(spaceId, Permissions.MANAGE_CHANNELS);
 
   const user = useAuthStore((s) => s.user);
   const spaces = useSpacesStore((s) => s.spaces);
@@ -266,6 +230,7 @@ export function RoutesChannelView({ channelId, channel, spaceId, showBackButton,
   };
 
   return (
+    <div style={{ display: 'flex', flex: 1, minWidth: 0, minHeight: 0 }}>
     <div style={styles.container}>
       {/* Header */}
       <div style={styles.header}>
@@ -290,6 +255,15 @@ export function RoutesChannelView({ channelId, channel, spaceId, showBackButton,
               title="Table view"
             ><List size={15} /></button>
           </div>
+        )}
+        {canManageChannels && (
+          <button
+            onClick={() => setShowChannelSettings(!showChannelSettings)}
+            style={{ ...styles.backBtn, color: showChannelSettings ? 'var(--accent)' : 'var(--text-secondary)' }}
+            title="Channel Settings"
+          >
+            <Settings size={18} />
+          </button>
         )}
         {canUpload && (
           <button onClick={() => setShowUpload(true)} style={styles.uploadBtn}>
@@ -504,6 +478,14 @@ export function RoutesChannelView({ channelId, channel, spaceId, showBackButton,
       )}
 
     </div>
+    {showChannelSettings && channel && (
+      <ChannelSettingsPanel
+        spaceId={spaceId}
+        channel={channel}
+        onClose={() => setShowChannelSettings(false)}
+      />
+    )}
+    </div>
   );
 }
 
@@ -522,21 +504,15 @@ function RouteCard({ item, units, canDelete, isOwn, onStar, onDelete, onClick, o
   onCreateEvent: () => void;
   onReport?: () => void;
 }) {
-  const polyline = useMemo(() => generateMiniMapPoints(item.geojson, 200, 120), [item.geojson]);
-
   return (
     <div style={styles.card}>
       <div style={styles.cardMap} onClick={onClick}>
-        <svg viewBox="0 0 200 120" style={{ width: '100%', height: '100%' }}>
-          <polyline
-            points={polyline}
-            fill="none"
-            stroke="var(--accent)"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <MiniMap
+          geojson={item.geojson}
+          bounds={item.bounds}
+          width="100%"
+          height="100%"
+        />
       </div>
       <div style={styles.cardBody}>
         <div style={styles.cardTitleRow}>
@@ -659,7 +635,7 @@ function RouteTable({ items, units, sortField, sortOrder, userId, canManage, onS
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { display: 'flex', flexDirection: 'column', height: '100%' },
+  container: { display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0 },
   header: { display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid var(--border)', flexShrink: 0 },
   backBtn: { background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px 8px', borderRadius: 'var(--radius)', fontSize: '0.85rem' },
   headerInfo: { display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 },
@@ -681,7 +657,7 @@ const styles: Record<string, React.CSSProperties> = {
   // Card view
   cardGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 },
   card: { background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden', display: 'flex', flexDirection: 'column' },
-  cardMap: { height: 120, background: 'var(--bg-tertiary)', cursor: 'pointer', overflow: 'hidden' },
+  cardMap: { aspectRatio: '1', background: 'var(--bg-tertiary)', cursor: 'pointer', overflow: 'hidden' },
   cardBody: { padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 },
   cardTitleRow: { display: 'flex', alignItems: 'center', gap: 6 },
   cardTitle: { fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)', cursor: 'pointer', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },

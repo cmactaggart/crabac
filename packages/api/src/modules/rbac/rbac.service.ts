@@ -75,30 +75,71 @@ export async function computePermissions(spaceId: string, userId: string, cache?
  * Applies channel-level permission overrides on top of space-level permissions.
  * Administrators always get ALL_PERMISSIONS (overrides can't deny admins).
  */
-export async function computeChannelPermissions(spaceId: string, channelId: string, userId: string, cache?: Map<string, string>): Promise<bigint> {
+export async function computeChannelPermissions(
+  spaceId: string, channelId: string, userId: string,
+  cache?: Map<string, string>,
+  memberSet?: Set<string>,
+): Promise<bigint> {
   const basePerms = await computePermissions(spaceId, userId, cache);
 
   // Administrators bypass channel overrides
   if ((basePerms & Permissions.ADMINISTRATOR) !== 0n) return ALL_PERMISSIONS;
+
+  // Check if channel is private
+  const channel = await db('channels').where('id', channelId).select('is_private').first();
 
   // Get user's role IDs in this space
   const userRoles = await db('member_roles')
     .where({ space_id: spaceId, user_id: userId })
     .select('role_id');
 
-  if (userRoles.length === 0) return basePerms;
-
   const roleIds = userRoles.map((r: any) => r.role_id);
 
   // Get channel overrides for those roles
-  const overrides = await db('channel_permission_overrides')
-    .where('channel_id', channelId)
-    .whereIn('role_id', roleIds)
-    .select('allow', 'deny');
+  const overrides = roleIds.length > 0
+    ? await db('channel_permission_overrides')
+        .where('channel_id', channelId)
+        .whereIn('role_id', roleIds)
+        .select('allow', 'deny')
+    : [];
 
+  if (channel?.is_private) {
+    // Check if user is a direct channel member
+    const isDirectMember = memberSet
+      ? memberSet.has(String(channelId))
+      : !!(await db('channel_members').where({ channel_id: channelId, user_id: userId }).first());
+
+    if (isDirectMember) {
+      // Direct member: apply overrides normally with VIEW_CHANNELS guaranteed
+      if (overrides.length === 0) return basePerms | Permissions.VIEW_CHANNELS;
+      let aggregateAllow = 0n;
+      let aggregateDeny = 0n;
+      for (const ov of overrides) {
+        aggregateAllow |= BigInt(ov.allow);
+        aggregateDeny |= BigInt(ov.deny);
+      }
+      return ((basePerms | aggregateAllow) & ~aggregateDeny) | Permissions.VIEW_CHANNELS;
+    }
+
+    // Check if any role grants VIEW_CHANNELS via allow override
+    const hasRoleAccess = overrides.some((ov: any) => (BigInt(ov.allow) & Permissions.VIEW_CHANNELS) !== 0n);
+    if (hasRoleAccess) {
+      let aggregateAllow = 0n;
+      let aggregateDeny = 0n;
+      for (const ov of overrides) {
+        aggregateAllow |= BigInt(ov.allow);
+        aggregateDeny |= BigInt(ov.deny);
+      }
+      return (basePerms | aggregateAllow) & ~aggregateDeny;
+    }
+
+    // No access to private channel
+    return 0n;
+  }
+
+  // Not private — existing behavior
   if (overrides.length === 0) return basePerms;
 
-  // Aggregate: allow = OR of all allows, deny = OR of all denies
   let aggregateAllow = 0n;
   let aggregateDeny = 0n;
   for (const ov of overrides) {
@@ -106,7 +147,6 @@ export async function computeChannelPermissions(spaceId: string, channelId: stri
     aggregateDeny |= BigInt(ov.deny);
   }
 
-  // Apply: deny wins over allow (matching Discord behavior)
   return (basePerms | aggregateAllow) & ~aggregateDeny;
 }
 

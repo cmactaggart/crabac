@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Hash, Pin, Search, Users, ArrowLeft, Mail } from 'lucide-react';
+import { Hash, Pin, Search, Users, ArrowLeft, Mail, Settings, Lock } from 'lucide-react';
 import { NotificationBell } from '../notifications/NotificationBell.js';
 import { useMessagesStore } from '../../stores/messages.js';
 import { useAuthStore } from '../../stores/auth.js';
@@ -13,7 +13,10 @@ import { MessageInput } from './MessageInput.js';
 import { PinnedMessages } from './PinnedMessages.js';
 import { ThreadPanel } from './ThreadPanel.js';
 import { SearchPanel } from '../search/SearchPanel.js';
+import { ChannelSettingsPanel } from '../channels/ChannelSettingsPanel.js';
 import { UserProfilePopover } from '../common/UserProfilePopover.js';
+import { useHasSpacePermission } from '../settings/SpaceSettingsModal.js';
+import { Permissions } from '@crabac/shared';
 import type { Channel, Message } from '@crabac/shared';
 
 interface Props {
@@ -41,6 +44,8 @@ export function MessageArea({ channelId, channel, spaceId, showBackButton, onBac
   const navigate = useNavigate();
 
   const [profilePopover, setProfilePopover] = useState<{ userId: string; rect: DOMRect } | null>(null);
+  const [showChannelSettings, setShowChannelSettings] = useState(false);
+  const canManageChannels = useHasSpacePermission(spaceId, Permissions.MANAGE_CHANNELS);
 
   useChannelSocket(channelId);
 
@@ -110,7 +115,7 @@ export function MessageArea({ channelId, channel, spaceId, showBackButton, onBac
                 <ArrowLeft size={20} />
               </button>
             )}
-            <Hash size={20} style={{ color: 'var(--text-muted)' }} />
+            {channel?.isPrivate ? <Lock size={20} style={{ color: 'var(--text-muted)' }} /> : <Hash size={20} style={{ color: 'var(--text-muted)' }} />}
             <span style={styles.channelName}>{channel?.name || 'channel'}</span>
             {channel?.topic && (
               <>
@@ -153,6 +158,15 @@ export function MessageArea({ channelId, channel, spaceId, showBackButton, onBac
             >
               <Pin size={18} />
             </button>
+            {canManageChannels && (
+              <button
+                onClick={() => setShowChannelSettings(!showChannelSettings)}
+                style={{ ...styles.headerBtn, color: showChannelSettings ? 'var(--accent)' : 'var(--text-secondary)' }}
+                title="Channel Settings"
+              >
+                <Settings size={18} />
+              </button>
+            )}
             <button
               onClick={() => toggleSearch(channelId, channel?.name)}
               style={{ ...styles.headerBtn, color: showSearch ? 'var(--accent)' : 'var(--text-secondary)' }}
@@ -212,6 +226,13 @@ export function MessageArea({ channelId, channel, spaceId, showBackButton, onBac
           channelId={channelId}
           channelName={channel?.name}
           onClose={() => useMessagesStore.getState().clearSearch()}
+        />
+      )}
+      {showChannelSettings && channel && (
+        <ChannelSettingsPanel
+          spaceId={spaceId}
+          channel={channel}
+          onClose={() => setShowChannelSettings(false)}
         />
       )}
 

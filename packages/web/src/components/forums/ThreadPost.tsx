@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Trash2, Flag } from 'lucide-react';
+import { Trash2, Flag, Reply } from 'lucide-react';
 import { Avatar } from '../common/Avatar.js';
 import { Markdown } from '../common/Markdown.js';
 import { useAuthStore } from '../../stores/auth.js';
@@ -13,9 +13,10 @@ interface Props {
   isFirstPost?: boolean;
   canModerate?: boolean;
   onReport?: (post: Message) => void;
+  onReply?: (post: Message) => void;
 }
 
-export function ThreadPost({ post, channelId, isFirstPost, canModerate, onReport }: Props) {
+export function ThreadPost({ post, channelId, isFirstPost, canModerate, onReport, onReply }: Props) {
   const date = new Date(post.id ? snowflakeToDate(post.id) : Date.now());
   const currentUser = useAuthStore((s) => s.user);
   const deleteMessage = useMessagesStore((s) => s.deleteMessage);
@@ -68,7 +69,23 @@ export function ThreadPost({ post, channelId, isFirstPost, canModerate, onReport
               <Flag size={14} />
             </button>
           )}
+          {!isFirstPost && hovering && onReply && (
+            <button onClick={() => onReply(post)} style={styles.replyBtn} title="Reply">
+              <Reply size={14} />
+            </button>
+          )}
         </div>
+        {post.replyToId && post.replyTo && (
+          <div style={styles.replyIndicator}>
+            <Reply size={12} />
+            <span>Replying to {post.replyTo.author?.displayName || 'a post'}</span>
+            {post.replyTo.content && (
+              <span style={styles.replyPreview}>
+                {post.replyTo.content.length > 100 ? post.replyTo.content.slice(0, 100) + '...' : post.replyTo.content}
+              </span>
+            )}
+          </div>
+        )}
         <div style={styles.content}>
           <Markdown content={post.content} />
         </div>
@@ -170,6 +187,36 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     opacity: 0.7,
+  },
+  replyBtn: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--text-muted)',
+    cursor: 'pointer',
+    padding: 2,
+    borderRadius: 'var(--radius)',
+    display: 'flex',
+    alignItems: 'center',
+    opacity: 0.7,
+  },
+  replyIndicator: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    fontSize: '0.75rem',
+    color: 'var(--text-muted)',
+    padding: '4px 8px',
+    background: 'var(--bg-tertiary)',
+    borderRadius: 'var(--radius)',
+    borderLeft: '2px solid var(--accent)',
+  },
+  replyPreview: {
+    color: 'var(--text-secondary)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    flex: 1,
+    minWidth: 0,
   },
   content: {
     fontSize: '0.9rem',
