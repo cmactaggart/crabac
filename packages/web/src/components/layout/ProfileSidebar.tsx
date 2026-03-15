@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { LogOut, Pencil, ExternalLink } from 'lucide-react';
 import { Avatar } from '../common/Avatar.js';
-import { UserSettingsModal } from '../common/UserSettingsModal.js';
+import { UserSettingsModal } from '../settings/user/UserSettingsModal.js';
 import { IdentitySwitcher } from '../common/IdentitySwitcher.js';
 
 interface ProfileLink {

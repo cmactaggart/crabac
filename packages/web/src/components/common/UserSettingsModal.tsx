@@ -1,11 +1,17 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, Shuffle, Plus, Trash2, ExternalLink } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth.js';
+import { usePreferencesStore } from '../../stores/preferences.js';
 import { getSocket } from '../../lib/socket.js';
 import { api } from '../../lib/api.js';
 import { Avatar } from './Avatar.js';
 import { LetterIcon } from '../icons/LetterIcon.js';
-import type { UserProfileLink } from '@crabac/shared';
+import type { UserProfileLink, DistanceUnits } from '@crabac/shared';
+
+const UNIT_OPTIONS: { value: DistanceUnits; label: string; desc: string }[] = [
+  { value: 'us_customary', label: 'US', desc: 'mi, ft' },
+  { value: 'metric', label: 'Metric', desc: 'km, m' },
+];
 
 const COLOR_PALETTE = [
   { base: '#667eea', accent: '#764ba2' },
@@ -47,6 +53,7 @@ export function UserSettingsModal({ onClose }: Props) {
   const updateProfile = useAuthStore((s) => s.updateProfile);
   const uploadAvatar = useAuthStore((s) => s.uploadAvatar);
   const setStatus = useAuthStore((s) => s.setStatus);
+  const { preferences, updatePreferences } = usePreferencesStore();
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [bio, setBio] = useState(user?.bio || '');
   const [baseColor, setBaseColor] = useState(user?.baseColor || '#667eea');
@@ -240,6 +247,32 @@ export function UserSettingsModal({ onClose }: Props) {
               maxLength={255}
             />
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'right' }}>{bio.length}/255</div>
+          </div>
+
+          {/* Units */}
+          <div style={styles.field}>
+            <label style={styles.label}>Units</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {UNIT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => updatePreferences({ distanceUnits: opt.value })}
+                  style={{
+                    ...styles.statusBtn,
+                    minWidth: 80,
+                    textAlign: 'center' as const,
+                    justifyContent: 'center',
+                    borderColor: preferences.distanceUnits === opt.value ? 'var(--accent)' : 'var(--border)',
+                    background: preferences.distanceUnits === opt.value ? 'var(--bg-tertiary)' : 'transparent',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{opt.label}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{opt.desc}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Profile Links */}

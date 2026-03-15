@@ -3,7 +3,7 @@ import { X, Upload, MapPin, Mountain, TrendingUp, Check, FolderHeart } from 'luc
 import { api } from '../../lib/api.js';
 import type { RouteCategory, RouteItem, PersonalRouteItem } from '@crabac/shared';
 import { usePreferencesStore } from '../../stores/preferences.js';
-import type { DistanceUnits } from '@crabac/shared';
+import { formatDistance, formatElevation } from '../../lib/units.js';
 
 type Tab = 'upload' | 'my-routes';
 
@@ -16,15 +16,6 @@ interface Props {
   initialTab?: Tab;
 }
 
-function formatDistance(km: number, units: DistanceUnits): string {
-  if (units === 'imperial') return `${(km * 0.621371).toFixed(1)} mi`;
-  return `${km.toFixed(1)} km`;
-}
-
-function formatElevation(m: number, units: DistanceUnits): string {
-  if (units === 'imperial') return `${Math.round(m * 3.28084)} ft`;
-  return `${m} m`;
-}
 
 export function RouteUploadModal({ channelId, spaceId, categories, onClose, onComplete, initialTab = 'upload' }: Props) {
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -339,8 +330,8 @@ export function RouteUploadModal({ channelId, spaceId, categories, onClose, onCo
                     <div style={{ flex: 1, textAlign: 'left' }}>
                       <div style={{ fontWeight: 600 }}>{item.name}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        {item.distanceKm?.toFixed(1)} km
-                        {item.elevationGainM != null && ` · ${item.elevationGainM}m`}
+                        {item.distanceKm != null && formatDistance(item.distanceKm, units)}
+                        {item.elevationGainM != null && ` · ${formatElevation(item.elevationGainM, units)}`}
                       </div>
                     </div>
                     {selectedPersonal.has(item.id) && <Check size={16} color="var(--accent)" />}

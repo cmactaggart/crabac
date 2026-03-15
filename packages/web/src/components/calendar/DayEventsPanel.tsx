@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { X, Clock, MapPin, Check, HelpCircle, Mountain } from 'lucide-react';
 import type { CalendarEvent } from '@crabac/shared';
+import { usePreferencesStore } from '../../stores/preferences.js';
+import { formatDistance, formatElevation } from '../../lib/units.js';
 import { api } from '../../lib/api.js';
 
 interface Props {
@@ -61,6 +63,7 @@ function EventCard({ ev, spaceId, onEventClick }: {
   spaceId: string;
   onEventClick: (event: CalendarEvent) => void;
 }) {
+  const units = usePreferencesStore((s) => s.preferences.distanceUnits);
   const [rsvpCounts, setRsvpCounts] = useState(ev.rsvpCounts ?? { going: 0, maybe: 0, notGoing: 0 });
   const [myRsvp, setMyRsvp] = useState<string | null>(ev.myRsvp ?? null);
   const [rsvpLoading, setRsvpLoading] = useState(false);
@@ -137,8 +140,8 @@ function EventCard({ ev, spaceId, onEventClick }: {
           <div style={styles.routeRow}>
             <Mountain size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
             <span style={styles.routeName}>{ev.route.name}</span>
-            <span style={styles.routeStat}>{ev.route.distanceKm.toFixed(1)} km</span>
-            <span style={styles.routeStat}>+{ev.route.elevationGainM} m</span>
+            <span style={styles.routeStat}>{formatDistance(ev.route.distanceKm, units)}</span>
+            {ev.route.elevationGainM != null && <span style={styles.routeStat}>+{formatElevation(ev.route.elevationGainM, units)}</span>}
           </div>
         )}
       </div>

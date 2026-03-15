@@ -17,6 +17,8 @@ import { ProfileSidebar } from '../components/layout/ProfileSidebar.js';
 import { useFollowsStore } from '../stores/follows.js';
 import { useIdentityStore } from '../stores/identity.js';
 import { api } from '../lib/api.js';
+import { usePreferencesStore } from '../stores/preferences.js';
+import { formatDistance, formatElevation } from '../lib/units.js';
 import { MiniMap } from '../components/common/MiniMap.js';
 import type { PersonalGalleryItem, PersonalRouteItem, PersonalEvent, PersonalActivityItem, PersonalActivityStats, UserPost, UserPostComment, UserCollectionsSummary, FriendshipStatus, PersonalVisibility, FollowCounts } from '@crabac/shared';
 
@@ -865,6 +867,7 @@ function ReadOnlyActivitiesTabContainer({
   userId: string;
   onFetchStats: (opts: { period: string }) => void;
 }) {
+  const units = usePreferencesStore((s) => s.preferences.distanceUnits);
   const [subTab, setSubTab] = useState<ActivitiesSubTab>('stats');
   const [statsPeriod, setStatsPeriod] = useState('ytd');
   const [mapItem, setMapItem] = useState<PersonalActivityItem | null>(null);
@@ -926,7 +929,7 @@ function ReadOnlyActivitiesTabContainer({
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     <div>
                       <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>Distance</div>
-                      <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{s.totalDistanceKm.toFixed(1)} km</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{formatDistance(s.totalDistanceKm, units)}</div>
                     </div>
                     <div>
                       <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>Time</div>
@@ -934,7 +937,7 @@ function ReadOnlyActivitiesTabContainer({
                     </div>
                     <div>
                       <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>Elevation</div>
-                      <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{Math.round(s.totalElevationGainM)}m</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{formatElevation(s.totalElevationGainM, units)}</div>
                     </div>
                     <div>
                       <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>Activities</div>
@@ -969,9 +972,9 @@ function ReadOnlyActivitiesTabContainer({
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{item.name}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 2 }}>
-                        {item.distanceKm != null && <span>{item.distanceKm.toFixed(1)} km</span>}
+                        {item.distanceKm != null && <span>{formatDistance(item.distanceKm, units)}</span>}
                         {item.durationSec != null && <span>{formatDuration(item.durationSec)}</span>}
-                        {item.elevationGainM != null && <span>{Math.round(item.elevationGainM)}m gain</span>}
+                        {item.elevationGainM != null && <span>{formatElevation(item.elevationGainM, units)} gain</span>}
                         <span style={{ textTransform: 'capitalize' }}>{ACTIVITY_TYPE_LABELS[item.activityType]}</span>
                       </div>
                     </div>
@@ -1025,6 +1028,7 @@ function ReadOnlyActivitiesTabContainer({
 // ─── Read-Only Routes Tab ───
 
 function ReadOnlyRoutesTab({ items }: { items: PersonalRouteItem[] }) {
+  const units = usePreferencesStore((s) => s.preferences.distanceUnits);
   if (items.length === 0) {
     return <div style={styles.emptyState}>No routes yet</div>;
   }
@@ -1038,8 +1042,8 @@ function ReadOnlyRoutesTab({ items }: { items: PersonalRouteItem[] }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{item.name}</div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 2 }}>
-                <span>{item.distanceKm.toFixed(1)} km</span>
-                {item.elevationGainM != null && <span>{Math.round(item.elevationGainM)}m gain</span>}
+                <span>{formatDistance(item.distanceKm, units)}</span>
+                {item.elevationGainM != null && <span>{formatElevation(item.elevationGainM, units)} gain</span>}
                 {item.activityType && <span style={{ textTransform: 'capitalize' }}>{item.activityType}</span>}
               </div>
             </div>

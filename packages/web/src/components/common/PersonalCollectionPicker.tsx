@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { X, Check } from 'lucide-react';
 import { api } from '../../lib/api.js';
+import { usePreferencesStore } from '../../stores/preferences.js';
+import { formatDistance, formatElevation } from '../../lib/units.js';
 import type { PersonalGalleryItem, PersonalRouteItem, PersonalEvent } from '@crabac/shared';
 
 interface Props {
@@ -11,6 +13,7 @@ interface Props {
 }
 
 export function PersonalCollectionPicker({ type, onSelect, onClose, multiSelect = true }: Props) {
+  const units = usePreferencesStore((s) => s.preferences.distanceUnits);
   const [items, setItems] = useState<any[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -102,8 +105,8 @@ export function PersonalCollectionPicker({ type, onSelect, onClose, multiSelect 
                   <div style={{ flex: 1, textAlign: 'left' }}>
                     <div style={{ fontWeight: 600 }}>{item.name}</div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      {item.distanceKm?.toFixed(1)} km
-                      {item.elevationGainM != null && ` · ${item.elevationGainM}m`}
+                      {item.distanceKm != null && formatDistance(item.distanceKm, units)}
+                      {item.elevationGainM != null && ` · ${formatElevation(item.elevationGainM, units)}`}
                     </div>
                   </div>
                   {selected.has(item.id) && <Check size={16} color="var(--accent)" />}

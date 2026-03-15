@@ -3,6 +3,8 @@ import { X, Pencil, Trash2, MapPin, Check, HelpCircle, XCircle, Repeat, Share2 }
 import type { CalendarEvent, EventRsvp } from '@crabac/shared';
 import { useCalendarStore } from '../../stores/calendar.js';
 import { useAuthStore } from '../../stores/auth.js';
+import { usePreferencesStore } from '../../stores/preferences.js';
+import { formatDistance, formatElevation } from '../../lib/units.js';
 import { ShareToSpacePicker } from '../common/ShareToSpacePicker.js';
 import { api } from '../../lib/api.js';
 import { MiniMap } from '../common/MiniMap.js';
@@ -42,6 +44,7 @@ function activityLabel(type: string | null): string {
 }
 
 export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }: Props) {
+  const units = usePreferencesStore((s) => s.preferences.distanceUnits);
   const deleteEvent = useCalendarStore((s) => s.deleteEvent);
   const rsvp = useCalendarStore((s) => s.rsvp);
   const removeRsvp = useCalendarStore((s) => s.removeRsvp);
@@ -225,8 +228,8 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 12, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  <span>{event.route.distanceKm.toFixed(1)} km</span>
-                  {event.route.elevationGainM != null && <span>+{event.route.elevationGainM} m</span>}
+                  <span>{formatDistance(event.route.distanceKm, units)}</span>
+                  {event.route.elevationGainM != null && <span>+{formatElevation(event.route.elevationGainM, units)}</span>}
                 </div>
               </div>
               {event.route.url && (

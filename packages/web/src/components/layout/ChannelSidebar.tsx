@@ -8,7 +8,7 @@ import { useSpacesStore } from '../../stores/spaces.js';
 import { useLayoutStore } from '../../stores/layout.js';
 import { useAuthStore } from '../../stores/auth.js';
 import { useChannelsStore } from '../../stores/channels.js';
-import { UserSettingsModal } from '../common/UserSettingsModal.js';
+import { UserSettingsModal } from '../settings/user/UserSettingsModal.js';
 import { InviteModal } from '../common/InviteModal.js';
 import { SpaceSettingsModal, useCanManageSpace, useHasSpacePermission } from '../settings/SpaceSettingsModal.js';
 import { Avatar } from '../common/Avatar.js';

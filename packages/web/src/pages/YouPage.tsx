@@ -23,6 +23,8 @@ import { PersonalNewsletterView } from '../components/newsletter/PersonalNewslet
 import { IdentitySwitcher } from '../components/common/IdentitySwitcher.js';
 import { MiniMap } from '../components/common/MiniMap.js';
 import { api } from '../lib/api.js';
+import { usePreferencesStore } from '../stores/preferences.js';
+import { formatDistance, formatElevation } from '../lib/units.js';
 import type { PersonalGalleryItem, PersonalRouteItem, PersonalEvent, PersonalEventCategory, PersonalActivityItem, PersonalActivityStats, PersonalVisibility, UserPost, ActivityType } from '@crabac/shared';
 
 const LazyGpxMapModal = React.lazy(() => import('../components/messages/GpxMapModal.js'));
@@ -698,6 +700,7 @@ function ActivityStatsView({ stats, period, onPeriodChange }: {
   period: string;
   onPeriodChange: (period: string) => void;
 }) {
+  const units = usePreferencesStore((s) => s.preferences.distanceUnits);
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -728,7 +731,7 @@ function ActivityStatsView({ stats, period, onPeriodChange }: {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 <div>
                   <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>Distance</div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{s.totalDistanceKm.toFixed(1)} km</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{formatDistance(s.totalDistanceKm, units)}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>Time</div>
@@ -736,7 +739,7 @@ function ActivityStatsView({ stats, period, onPeriodChange }: {
                 </div>
                 <div>
                   <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>Elevation</div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{Math.round(s.totalElevationGainM)}m</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{formatElevation(s.totalElevationGainM, units)}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>Activities</div>
@@ -768,6 +771,7 @@ function ActivityFeedView({ items, loading, onUpdate, onDelete, onSaveAsRoute }:
   onDelete: (id: string) => Promise<void>;
   onSaveAsRoute: (id: string) => Promise<any>;
 }) {
+  const units = usePreferencesStore((s) => s.preferences.distanceUnits);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
@@ -845,9 +849,9 @@ function ActivityFeedView({ items, loading, onUpdate, onDelete, onSaveAsRoute }:
                     <span style={styles.activityBadge}>{ACTIVITY_TYPE_LABELS[item.activityType] || item.activityType}</span>
                   </div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                    {item.distanceKm != null && <span>{item.distanceKm.toFixed(1)} km</span>}
+                    {item.distanceKm != null && <span>{formatDistance(item.distanceKm, units)}</span>}
                     {item.durationSec != null && <span>{formatDuration(item.durationSec)}</span>}
-                    {item.elevationGainM != null && <span>{Math.round(item.elevationGainM)}m gain</span>}
+                    {item.elevationGainM != null && <span>{formatElevation(item.elevationGainM, units)} gain</span>}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
@@ -911,6 +915,7 @@ function RoutesTab({ items, loading, defaultVisibility = 'private', onUpload, on
   onUpdate: (id: string, data: Record<string, any>) => Promise<void>;
   onShare: (id: string) => void;
 }) {
+  const units = usePreferencesStore((s) => s.preferences.distanceUnits);
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -998,8 +1003,8 @@ function RoutesTab({ items, loading, defaultVisibility = 'private', onUpload, on
                 )}
               </div>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4 }}>
-                {item.distanceKm != null && <span>{item.distanceKm.toFixed(1)} km</span>}
-                {item.elevationGainM != null && <span> · {item.elevationGainM}m gain</span>}
+                {item.distanceKm != null && <span>{formatDistance(item.distanceKm, units)}</span>}
+                {item.elevationGainM != null && <span> · {formatElevation(item.elevationGainM, units)} gain</span>}
                 {item.durationSec != null && <span> · {Math.round(item.durationSec / 60)} min</span>}
               </div>
               {item.description && (
@@ -1053,6 +1058,7 @@ function EventsTab({ items, loading, categories, routes, defaultVisibility = 'pr
   onDeleteCategory: (id: string) => Promise<void>;
   onFetchRoutes: () => Promise<void>;
 }) {
+  const units = usePreferencesStore((s) => s.preferences.distanceUnits);
   const [showForm, setShowForm] = useState(false);
   const [eventName, setEventName] = useState('');
   const [eventDate, setEventDate] = useState('');
@@ -1232,7 +1238,7 @@ function EventsTab({ items, loading, categories, routes, defaultVisibility = 'pr
                   <select value={routeId} onChange={(e) => setRouteId(e.target.value)} style={styles.formInput}>
                     <option value="">Select a route...</option>
                     {routes.map((r) => (
-                      <option key={r.id} value={r.id}>{r.name} ({r.distanceKm?.toFixed(1)} km)</option>
+                      <option key={r.id} value={r.id}>{r.name} ({r.distanceKm != null ? formatDistance(r.distanceKm, units) : ''})</option>
                     ))}
                   </select>
                 )}
@@ -1332,7 +1338,7 @@ function EventsTab({ items, loading, categories, routes, defaultVisibility = 'pr
                 {item.route && (
                   <div style={{ fontSize: '0.78rem', color: 'var(--accent)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
                     <MapPinned size={12} />
-                    {item.route.name} ({item.route.distanceKm?.toFixed(1)} km)
+                    {item.route.name} ({item.route.distanceKm != null ? formatDistance(item.route.distanceKm, units) : ''})
                   </div>
                 )}
                 {item.description && (

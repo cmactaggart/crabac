@@ -1,14 +1,21 @@
 import { useState, useRef, useEffect } from 'react';
 import { Camera, Plus, X, GripVertical } from 'lucide-react';
 import { useAuthStore } from '../../../stores/auth.js';
+import { usePreferencesStore } from '../../../stores/preferences.js';
 import { Avatar } from '../../common/Avatar.js';
 import { api } from '../../../lib/api.js';
-import type { UserProfileLink } from '@crabac/shared';
+import type { UserProfileLink, DistanceUnits } from '@crabac/shared';
+
+const UNIT_OPTIONS: { value: DistanceUnits; label: string; desc: string }[] = [
+  { value: 'us_customary', label: 'US', desc: 'mi, ft' },
+  { value: 'metric', label: 'Metric', desc: 'km, m' },
+];
 
 export function ProfileTab() {
   const user = useAuthStore((s) => s.user);
   const updateProfile = useAuthStore((s) => s.updateProfile);
   const uploadAvatar = useAuthStore((s) => s.uploadAvatar);
+  const { preferences, updatePreferences } = usePreferencesStore();
 
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [bio, setBio] = useState(user?.bio || '');
@@ -117,6 +124,33 @@ export function ProfileTab() {
           maxLength={255}
         />
         <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'right', marginTop: 2 }}>{bio.length}/255</div>
+      </div>
+
+      {/* Units */}
+      <div>
+        <label style={styles.label}>Units</label>
+        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+          {UNIT_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => updatePreferences({ distanceUnits: opt.value })}
+              style={{
+                padding: '8px 14px',
+                borderRadius: 'var(--radius)',
+                border: '1px solid',
+                cursor: 'pointer',
+                textAlign: 'center' as const,
+                minWidth: 80,
+                background: preferences.distanceUnits === opt.value ? 'var(--accent)' : 'var(--bg-input)',
+                color: preferences.distanceUnits === opt.value ? 'white' : 'var(--text-secondary)',
+                borderColor: preferences.distanceUnits === opt.value ? 'var(--accent)' : 'var(--border)',
+              }}
+            >
+              <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{opt.label}</div>
+              <div style={{ fontSize: '0.7rem', opacity: 0.8 }}>{opt.desc}</div>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Profile Links */}

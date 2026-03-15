@@ -5,6 +5,8 @@ import { boardApi } from '../../lib/boardApi.js';
 import { RouteDetailOverlay } from './PublicRoutesHome.js';
 import { usePublicTheme } from '../../contexts/PublicThemeContext.js';
 import { MiniMap } from '../../components/common/MiniMap.js';
+import { usePreferencesStore } from '../../stores/preferences.js';
+import { formatDistance, formatElevation, formatFlatness } from '../../lib/units.js';
 
 type ViewMode = 'card' | 'table';
 type SortField = 'newest' | 'name' | 'distance' | 'elevation' | 'flatness';
@@ -41,23 +43,12 @@ interface RouteCategory {
   name: string;
 }
 
-function formatDistance(km: number): string {
-  const mi = km * 0.621371;
-  return `${mi.toFixed(1)} mi`;
-}
-
-function formatElevation(m: number): string {
-  return `${Math.round(m * 3.28084)} ft`;
-}
-
-function formatFlatness(f: number): string {
-  return `${f.toFixed(0)} ft/mi`;
-}
 
 export function PublicRoutesView() {
   const { spaceSlug, channelName } = useParams();
   const theme = usePublicTheme();
   const c = theme.colors;
+  const units = usePreferencesStore((s) => s.preferences.distanceUnits);
   const [items, setItems] = useState<RouteItem[]>([]);
   const [categories, setCategories] = useState<RouteCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -244,9 +235,9 @@ export function PublicRoutesView() {
                   <td style={{ padding: '10px 12px', color: c.pageText, whiteSpace: 'nowrap' }}>{item.author?.displayName || ''}</td>
                   <td style={{ padding: '10px 12px', color: c.pageText, whiteSpace: 'nowrap' }}>{item.category?.name || ''}</td>
                   <td style={{ padding: '10px 12px', color: c.pageText, whiteSpace: 'nowrap' }}>{activityLabel(item.activityType) || ''}</td>
-                  <td style={{ padding: '10px 12px', color: c.pageText, whiteSpace: 'nowrap', textAlign: 'right' }}>{formatDistance(item.distanceKm)}</td>
-                  <td style={{ padding: '10px 12px', color: c.pageText, whiteSpace: 'nowrap', textAlign: 'right' }}>{item.elevationGainM != null ? `+${formatElevation(item.elevationGainM)}` : '--'}</td>
-                  <td style={{ padding: '10px 12px', color: c.pageText, whiteSpace: 'nowrap', textAlign: 'right' }}>{item.flatness != null ? formatFlatness(item.flatness) : '--'}</td>
+                  <td style={{ padding: '10px 12px', color: c.pageText, whiteSpace: 'nowrap', textAlign: 'right' }}>{formatDistance(item.distanceKm, units)}</td>
+                  <td style={{ padding: '10px 12px', color: c.pageText, whiteSpace: 'nowrap', textAlign: 'right' }}>{item.elevationGainM != null ? `+${formatElevation(item.elevationGainM, units)}` : '--'}</td>
+                  <td style={{ padding: '10px 12px', color: c.pageText, whiteSpace: 'nowrap', textAlign: 'right' }}>{item.flatness != null ? formatFlatness(item.flatness, units) : '--'}</td>
                   <td style={{ padding: '10px 12px', color: c.pageText, whiteSpace: 'nowrap', textAlign: 'right' }}>
                     <a href={item.url} download={item.originalName} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.78rem', color: c.accent, textDecoration: 'none' }}><Download size={13} /></a>
                   </td>
@@ -273,6 +264,7 @@ export function PublicRoutesView() {
 function PublicRouteCard({ item, onStar, onClick }: { item: RouteItem; onStar: () => void; onClick: () => void }) {
   const theme = usePublicTheme();
   const c = theme.colors;
+  const units = usePreferencesStore((s) => s.preferences.distanceUnits);
   return (
     <div style={{ background: c.contentBg, border: `1px solid ${c.contentBorder}`, borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column' as const, cursor: 'pointer' }} onClick={onClick} role="button" tabIndex={0}>
       <div style={{ aspectRatio: '1', background: '#f3f4f6', overflow: 'hidden' }}>
@@ -297,12 +289,12 @@ function PublicRouteCard({ item, onStar, onClick }: { item: RouteItem; onStar: (
           )}
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 10px', fontSize: '0.78rem', color: c.secondaryText }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><MapPin size={13} /> {formatDistance(item.distanceKm)}</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><MapPin size={13} /> {formatDistance(item.distanceKm, units)}</span>
           {item.elevationGainM != null && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Mountain size={13} /> +{formatElevation(item.elevationGainM)}</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Mountain size={13} /> +{formatElevation(item.elevationGainM, units)}</span>
           )}
           {item.flatness != null && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><TrendingUp size={13} /> {formatFlatness(item.flatness)}</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><TrendingUp size={13} /> {formatFlatness(item.flatness, units)}</span>
           )}
         </div>
         {item.description && (

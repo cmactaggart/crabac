@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { X, MapPinned, ImagePlus, Trash2 } from 'lucide-react';
 import { useCalendarStore } from '../../stores/calendar.js';
 import { useChannelsStore } from '../../stores/channels.js';
+import { usePreferencesStore } from '../../stores/preferences.js';
+import { formatDistance } from '../../lib/units.js';
 import { api } from '../../lib/api.js';
 import type { CalendarEvent, RouteItem, Channel } from '@crabac/shared';
 
@@ -15,6 +17,7 @@ interface Props {
 }
 
 export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRouteId, onClose, onCreated }: Props) {
+  const units = usePreferencesStore((s) => s.preferences.distanceUnits);
   const categories = useCalendarStore((s) => s.categories);
   const fetchCategories = useCalendarStore((s) => s.fetchCategories);
   const createEvent = useCalendarStore((s) => s.createEvent);
@@ -371,7 +374,7 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
                     >
                       <option value="">Select a route...</option>
                       {routeOptions.map((r) => (
-                        <option key={r.id} value={r.id}>{r.name} ({r.distanceKm.toFixed(1)} km)</option>
+                        <option key={r.id} value={r.id}>{r.name} ({formatDistance(r.distanceKm, units)})</option>
                       ))}
                     </select>
                   )}

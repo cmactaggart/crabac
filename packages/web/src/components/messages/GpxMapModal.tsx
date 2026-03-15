@@ -2,8 +2,9 @@ import { useEffect, useRef, useCallback } from 'react';
 import { X, Download, MapPin, Mountain, Clock } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import type { Attachment, GpxTrackMetadata, DistanceUnits } from '@crabac/shared';
+import type { Attachment, GpxTrackMetadata } from '@crabac/shared';
 import { usePreferencesStore } from '../../stores/preferences.js';
+import { formatDistance, formatElevation } from '../../lib/units.js';
 
 interface Props {
   attachment: Attachment;
@@ -19,20 +20,6 @@ function formatDuration(seconds: number): string {
   return `${m}m`;
 }
 
-function formatDistance(km: number, units: DistanceUnits): string {
-  if (units === 'imperial') {
-    const mi = km * 0.621371;
-    if (mi < 0.1) return `${Math.round(km * 3280.84)} ft`;
-    return `${mi.toFixed(1)} mi`;
-  }
-  if (km < 1) return `${Math.round(km * 1000)} m`;
-  return `${km.toFixed(1)} km`;
-}
-
-function formatElevation(m: number, units: DistanceUnits): string {
-  if (units === 'imperial') return `${Math.round(m * 3.28084)} ft`;
-  return `${m} m`;
-}
 
 /** Extract [lng, lat] coords from all line features in the geojson */
 function extractLineCoords(geojson: any): { features: any[]; allCoords: [number, number][] } {
@@ -213,7 +200,7 @@ function GpxMapModal({ attachment, gpx, onClose }: Props) {
   }, [gpx]);
 
   const toggleUnits = useCallback(() => {
-    updatePreferences({ distanceUnits: units === 'imperial' ? 'metric' : 'imperial' });
+    updatePreferences({ distanceUnits: units === 'us_customary' ? 'metric' : 'us_customary' });
   }, [units, updatePreferences]);
 
   return (
@@ -226,7 +213,7 @@ function GpxMapModal({ attachment, gpx, onClose }: Props) {
           </div>
           <div style={styles.headerRight}>
             <button onClick={toggleUnits} style={styles.unitsBtn}>
-              {units === 'imperial' ? 'mi' : 'km'}
+              {units === 'us_customary' ? 'mi' : 'km'}
             </button>
             <a
               href={attachment.url}

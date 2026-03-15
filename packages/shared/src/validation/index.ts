@@ -212,7 +212,7 @@ export const totpDisableSchema = z.object({
 
 // User Preferences
 export const updateUserPreferencesSchema = z.object({
-  distanceUnits: z.enum(['metric', 'imperial']).optional(),
+  distanceUnits: z.enum(['metric', 'us_customary']).optional(),
   defaultVisibility: z.enum(['public', 'private', 'friends', 'spaces']).optional(),
   profileVisibility: z.enum(['public', 'private', 'friends', 'spaces']).optional(),
   activitiesVisibility: z.enum(['public', 'private', 'friends', 'spaces']).nullable().optional(),

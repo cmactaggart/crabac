@@ -2,6 +2,8 @@ import React, { useEffect, useState, Suspense } from 'react';
 import { CalendarDays, MapPin, Clock, Check, HelpCircle, X } from 'lucide-react';
 import { api } from '../../lib/api.js';
 import { MiniMap } from '../common/MiniMap.js';
+import { usePreferencesStore } from '../../stores/preferences.js';
+import { formatDistance, formatElevation } from '../../lib/units.js';
 
 const LazyGpxMapModal = React.lazy(() => import('../messages/GpxMapModal.js'));
 
@@ -50,6 +52,7 @@ export function EventPostCard({ eventId, spaceId }: { eventId: string; spaceId: 
   const [loading, setLoading] = useState(true);
   const [rsvpLoading, setRsvpLoading] = useState(false);
   const [showRouteDetail, setShowRouteDetail] = useState(false);
+  const units = usePreferencesStore((s) => s.preferences.distanceUnits);
 
   useEffect(() => {
     api<CalendarEvent>(`/spaces/${spaceId}/calendar/events/${eventId}`)
@@ -160,8 +163,8 @@ export function EventPostCard({ eventId, spaceId }: { eventId: string; spaceId: 
             )}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
               <span style={{ fontWeight: 600 }}>{event.route.name}</span>
-              {event.route.distanceKm != null && <span>{event.route.distanceKm.toFixed(1)} km</span>}
-              {event.route.elevationGainM != null && <span>+{event.route.elevationGainM} m</span>}
+              {event.route.distanceKm != null && <span>{formatDistance(event.route.distanceKm, units)}</span>}
+              {event.route.elevationGainM != null && <span>+{formatElevation(event.route.elevationGainM, units)}</span>}
             </div>
           </div>
         )}

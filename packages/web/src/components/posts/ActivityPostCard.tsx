@@ -7,6 +7,8 @@ import { ShareToSpacePicker } from '../common/ShareToSpacePicker.js';
 import { VisibilityBadge, CommentRow } from './PostCard.js';
 import { usePersonalCollectionsStore } from '../../stores/personalCollections.js';
 import { useFollowsStore } from '../../stores/follows.js';
+import { usePreferencesStore } from '../../stores/preferences.js';
+import { formatDistance, formatElevation } from '../../lib/units.js';
 import { useNavigate } from 'react-router-dom';
 import type { PersonalActivityItem, UserPost, UserPostComment, PersonalVisibility } from '@crabac/shared';
 import { MiniMap } from '../common/MiniMap.js';
@@ -29,16 +31,6 @@ function formatDuration(sec: number): string {
   return `${s}s`;
 }
 
-function formatDistance(km: number): string {
-  const mi = km * 0.621371;
-  if (mi >= 0.1) return `${mi.toFixed(2)} mi`;
-  return `${(mi * 5280).toFixed(0)} ft`;
-}
-
-function formatElevation(m: number): string {
-  const ft = m * 3.28084;
-  return `${Math.round(ft)} ft`;
-}
 
 export function ActivityPostCard({ post, currentUserId, isOwn, onReaction, onFetchComments, onAddComment, onDeleteComment, onCommentReaction, onRepost, onShare, onReport, onPin, onUnpin, onDelete, showAuthorLink, initialShowComments, onHashtagClick }: {
   post: UserPost;
@@ -60,6 +52,7 @@ export function ActivityPostCard({ post, currentUserId, isOwn, onReaction, onFet
   onHashtagClick?: (tag: string) => void;
 }) {
   const navigate = useNavigate();
+  const units = usePreferencesStore((s) => s.preferences.distanceUnits);
   const activityId = post.metadata?.activityId;
   const [activity, setActivity] = useState<PersonalActivityItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -337,7 +330,7 @@ export function ActivityPostCard({ post, currentUserId, isOwn, onReaction, onFet
               {activity.distanceKm != null && activity.distanceKm > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <Ruler size={13} />
-                  <span>{formatDistance(activity.distanceKm)}</span>
+                  <span>{formatDistance(activity.distanceKm, units)}</span>
                 </div>
               )}
               {activity.durationSec != null && activity.durationSec > 0 && (
@@ -349,7 +342,7 @@ export function ActivityPostCard({ post, currentUserId, isOwn, onReaction, onFet
               {activity.elevationGainM != null && activity.elevationGainM > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <TrendingUp size={13} />
-                  <span>{formatElevation(activity.elevationGainM)}</span>
+                  <span>{formatElevation(activity.elevationGainM, units)}</span>
                 </div>
               )}
             </div>

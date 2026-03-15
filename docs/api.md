@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.11.1
+## API Version 0.11.5
 
 Base URL: `https://app.crab.ac/api`
 
@@ -185,7 +185,7 @@ Regenerate backup codes.
 
 Get current user profile. Requires auth.
 
-**Response:** User object with `id`, `email`, `username`, `displayName`, `avatarUrl`, `isAdmin`, `emailVerified`, `totpEnabled`, `baseColor`, `accentColor`, `status`, `createdAt`.
+**Response:** User object with `id`, `email`, `username`, `displayName`, `avatarUrl`, `bio`, `isAdmin`, `emailVerified`, `totpEnabled`, `baseColor`, `accentColor`, `status`, `createdAt`.
 
 ### DELETE /users/me
 
@@ -206,6 +206,7 @@ Update current user profile. Requires auth.
 | Field | Type | Required |
 |-------|------|----------|
 | `displayName` | string | no |
+| `bio` | string \| null | no | Max 255 chars |
 | `avatarUrl` | string \| null | no |
 | `baseColor` | string \| null | no |
 | `accentColor` | string \| null | no |
@@ -229,12 +230,12 @@ Update user preferences. Requires auth.
 **Body:**
 | Field | Type | Required |
 |-------|------|----------|
-| `distanceUnits` | string | no | `metric` or `imperial` |
+| `distanceUnits` | string | no | `metric` or `us_customary` |
 | `defaultVisibility` | string | no | `public`, `private`, `friends`, or `spaces` |
 | `profileVisibility` | string | no | `public`, `private`, `friends`, or `spaces` |
 | `onboardingCompleted` | boolean | no | |
 | `newsletterEnabled` | boolean | no | Opt in to personal newsletter emails |
-| `activitiesVisibility` | string | no | `public` or `private` — controls whether other users can see your activities |
+| `activitiesVisibility` | string \| null | no | `public`, `private`, `friends`, or `spaces` — controls whether other users can see your activities |
 
 ### GET /users/mutes
 
@@ -263,7 +264,7 @@ Search users by username or display name. Requires auth.
 
 ### GET /users/by-username/:username
 
-Look up a user by username. Requires auth. Returns the user object with an additional `canViewProfile` boolean indicating whether the requesting user can see this profile's content (based on visibility settings and friendship status).
+Look up a user by username. Requires auth. Returns the user object with additional fields: `canViewProfile` boolean (whether the requesting user can see this profile's content), `newsletterEnabled` boolean, and `profileLinks` array.
 
 ### GET /users/profiles/:handle
 
@@ -279,7 +280,9 @@ Resolve a profile handle to either a user or a space. Looks up by username first
   "avatarUrl": "...",
   "baseColor": "...",
   "accentColor": "...",
-  "canViewProfile": true
+  "canViewProfile": true,
+  "newsletterEnabled": false,
+  "profileLinks": []
 }
 ```
 
@@ -294,9 +297,53 @@ Resolve a profile handle to either a user or a space. Looks up by username first
   "iconUrl": "...",
   "memberCount": 42,
   "baseColor": "...",
-  "accentColor": "..."
+  "accentColor": "...",
+  "textColor": "...",
+  "ownerId": "..."
 }
 ```
+
+### Profile Links
+
+#### GET /users/me/profile-links
+
+List own profile links. Requires auth.
+
+**Response:** Array of `{ id, userId, label, url, position, createdAt }`
+
+#### POST /users/me/profile-links
+
+Create a profile link. Requires auth. Max 10 links per user.
+
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `label` | string | yes | Max 100 chars |
+| `url` | string | yes | Max 512 chars |
+
+#### PATCH /users/me/profile-links/:linkId
+
+Update a profile link. Requires auth.
+
+**Body:** `{ label?, url? }`
+
+#### DELETE /users/me/profile-links/:linkId
+
+Delete a profile link. Requires auth.
+
+#### PUT /users/me/profile-links/reorder
+
+Reorder profile links. Requires auth.
+
+**Body:** `{ linkIds: string[] }`
+
+#### GET /users/:userId/profile-links
+
+List another user's profile links. Requires auth.
+
+**Response:** Array of `{ id, userId, label, url, position, createdAt }`
+
+---
 
 ### GET /users/me/managed-social-spaces
 
@@ -507,9 +554,10 @@ Create a report. Requires auth. Cannot report yourself. Prevents duplicate activ
 | `galleryItemId` | string | no | Gallery photo ID |
 | `routeId` | string | no | Route item ID |
 | `forumPostId` | string | no | Forum post (message) ID |
+| `postId` | string | no | User post ID |
 | `reason` | string | yes | 1-2000 chars |
 
-The `contentType` field is auto-set based on which ID is present: `'gallery'`, `'route'`, `'forum_post'`, or `null` for messages/DMs.
+The `contentType` field is auto-set based on which ID is present: `'gallery'`, `'route'`, `'forum_post'`, `'post'`, or `null` for messages/DMs.
 
 **Response:** `201` Report object.
 
@@ -1549,7 +1597,7 @@ Search social posts by text or hashtag. Respects per-user visibility rules.
 
 **Response:** Array of UserPost objects.
 
-### GET /posts/:postId
+### GET /follows/posts/:postId
 
 Get a single post by ID. Requires auth. Space posts are always visible to members; user posts are filtered by visibility based on relationship to the author.
 
@@ -1607,7 +1655,7 @@ Unfollow a user. Returns `400` if the target is a friend (must unfriend instead)
 
 ## Personal Collections
 
-Users have personal collections for photos, routes, activities, and events that live on their profile (independent of any space). Items have a `visibility` field: `public`, `friends`, or `private`. All endpoints require auth.
+Users have personal collections for photos, routes, activities, and events that live on their profile (independent of any space). Items have a `visibility` field: `public`, `friends`, `spaces`, or `private`. All endpoints require auth.
 
 ### Profile Visibility Gate
 
@@ -1619,7 +1667,7 @@ When accessing another user's collections (`/users/:userId/collections/*`), the 
 
 Update the default visibility for all collection items at once.
 
-**Body:** `{ visibility: 'public' | 'friends' | 'private' }`
+**Body:** `{ visibility: 'public' | 'friends' | 'spaces' | 'private' }`
 
 ### Personal Gallery
 
@@ -1695,6 +1743,29 @@ Update a route item.
 #### DELETE /users/me/collections/routes/:itemId
 
 Delete a route item.
+
+#### POST /users/me/collections/routes/elevation
+
+Fetch elevation data for a set of coordinates. Used by the route builder. Requires auth.
+
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `coordinates` | [number, number][] | yes | Array of [lng, lat] pairs (1–100) |
+
+**Response:** `{ elevations: number[] }`
+
+#### POST /users/me/collections/routes/route
+
+Compute a routed path through waypoints. Used by the route builder. Requires auth.
+
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `waypoints` | [number, number][] | yes | Array of [lng, lat] pairs (2+) |
+| `profile` | string | no | `bike` or `foot` (default: `bike`) |
+
+**Response:** Route geometry (GeoJSON LineString coordinates with distance/elevation metadata).
 
 #### POST /users/me/collections/routes/:itemId/copy
 

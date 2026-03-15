@@ -3,42 +3,26 @@ import { MapPinned, Plus, Star, Download, Search, X, List, LayoutGrid, ChevronDo
 import { getSocket } from '../../lib/socket.js';
 import { api } from '../../lib/api.js';
 import { Permissions, hasPermission, combinePermissions } from '@crabac/shared';
-import type { Channel, RouteItem, RouteCategory, Role, CalendarEvent } from '@crabac/shared';
+import type { Channel, RouteItem, RouteCategory, Role, CalendarEvent, DistanceUnits } from '@crabac/shared';
 import { ChannelSettingsPanel } from '../channels/ChannelSettingsPanel.js';
 import { useHasSpacePermission } from '../settings/SpaceSettingsModal.js';
 import { useAuthStore } from '../../stores/auth.js';
 import { useSpacesStore } from '../../stores/spaces.js';
 import { usePreferencesStore } from '../../stores/preferences.js';
 import { useChannelsStore } from '../../stores/channels.js';
+import { formatDistance, formatElevation, formatFlatness } from '../../lib/units.js';
 import { RouteUploadModal } from './RouteUploadModal.js';
 import { CreateEventModal } from '../calendar/CreateEventModal.js';
 import { RouteCategoryManager } from './RouteCategoryManager.js';
 import { ReportModal } from '../moderation/ReportModal.js';
 import { MiniMap } from '../common/MiniMap.js';
 import { useIsMobile } from '../../hooks/useIsMobile.js';
-import type { DistanceUnits } from '@crabac/shared';
 
 const LazyGpxMapModal = React.lazy(() => import('../messages/GpxMapModal.js'));
 
 type ViewMode = 'card' | 'table';
 type SortField = 'newest' | 'name' | 'distance' | 'elevation' | 'flatness';
 
-function formatDistance(km: number, units: DistanceUnits): string {
-  if (units === 'imperial') {
-    const mi = km * 0.621371;
-    return `${mi.toFixed(1)} mi`;
-  }
-  return `${km.toFixed(1)} km`;
-}
-
-function formatElevation(m: number, units: DistanceUnits): string {
-  if (units === 'imperial') return `${Math.round(m * 3.28084)} ft`;
-  return `${m} m`;
-}
-
-function formatFlatness(f: number): string {
-  return `${f.toFixed(0)} ft/mi`;
-}
 
 function activityLabel(type: string | null): string | null {
   if (type === 'ride') return 'Ride';
@@ -425,7 +409,7 @@ export function RoutesChannelView({ channelId, channel, spaceId, showBackButton,
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><MapPin size={14} /> {formatDistance(selectedRoute.distanceKm, units)}</span>
                 {selectedRoute.elevationGainM != null && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Mountain size={14} /> +{formatElevation(selectedRoute.elevationGainM, units)}</span>}
-                {selectedRoute.flatness != null && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><TrendingUp size={14} /> {formatFlatness(selectedRoute.flatness)}</span>}
+                {selectedRoute.flatness != null && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><TrendingUp size={14} /> {formatFlatness(selectedRoute.flatness, units)}</span>}
               </div>
               {selectedRoute.description && (
                 <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{selectedRoute.description}</p>
@@ -533,7 +517,7 @@ function RouteCard({ item, units, canDelete, isOwn, onStar, onDelete, onClick, o
             <span style={styles.statItem}><Mountain size={13} /> +{formatElevation(item.elevationGainM, units)}</span>
           )}
           {item.flatness != null && (
-            <span style={styles.statItem}><TrendingUp size={13} /> {formatFlatness(item.flatness)}</span>
+            <span style={styles.statItem}><TrendingUp size={13} /> {formatFlatness(item.flatness, units)}</span>
           )}
         </div>
         <div style={styles.cardActions}>
@@ -613,7 +597,7 @@ function RouteTable({ items, units, sortField, sortOrder, userId, canManage, onS
               <td style={styles.td}>{activityLabel(item.activityType) || ''}</td>
               <td style={{ ...styles.td, textAlign: 'right' }}>{formatDistance(item.distanceKm, units)}</td>
               <td style={{ ...styles.td, textAlign: 'right' }}>{item.elevationGainM != null ? `+${formatElevation(item.elevationGainM, units)}` : '--'}</td>
-              <td style={{ ...styles.td, textAlign: 'right' }}>{item.flatness != null ? formatFlatness(item.flatness) : '--'}</td>
+              <td style={{ ...styles.td, textAlign: 'right' }}>{item.flatness != null ? formatFlatness(item.flatness, units) : '--'}</td>
               <td style={{ ...styles.td, textAlign: 'right' }}>
                 <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
                   <a href={item.url} download={item.originalName} onClick={(e) => e.stopPropagation()} style={styles.downloadLink}>

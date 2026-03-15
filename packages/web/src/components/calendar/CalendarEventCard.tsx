@@ -1,6 +1,8 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { Calendar, Clock, Tag, MapPin, Check, HelpCircle, X } from 'lucide-react';
 import { api } from '../../lib/api.js';
+import { usePreferencesStore } from '../../stores/preferences.js';
+import { formatDistance, formatElevation } from '../../lib/units.js';
 import { EventDetailModal } from './EventDetailModal.js';
 import { CreateEventModal } from './CreateEventModal.js';
 import { useHasSpacePermission } from '../settings/SpaceSettingsModal.js';
@@ -91,6 +93,7 @@ interface Props {
 }
 
 export function CalendarEventCard({ embed, spaceId }: Props) {
+  const units = usePreferencesStore((s) => s.preferences.distanceUnits);
   const [showDetail, setShowDetail] = useState(false);
   const [fullEvent, setFullEvent] = useState<CalendarEvent | null>(null);
   const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null);
@@ -209,8 +212,8 @@ export function CalendarEventCard({ embed, spaceId }: Props) {
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', gap: 8 }}>
                 <span style={{ fontWeight: 600 }}>{embed.routeName}</span>
-                {embed.routeDistanceKm != null && <span>{embed.routeDistanceKm.toFixed(1)} km</span>}
-                {embed.routeElevationGainM != null && <span>+{embed.routeElevationGainM} m</span>}
+                {embed.routeDistanceKm != null && <span>{formatDistance(embed.routeDistanceKm, units)}</span>}
+                {embed.routeElevationGainM != null && <span>+{formatElevation(embed.routeElevationGainM, units)}</span>}
               </div>
             </div>
           )}

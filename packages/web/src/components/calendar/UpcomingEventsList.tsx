@@ -1,6 +1,8 @@
 import { Check, HelpCircle, Calendar, MapPin } from 'lucide-react';
 import type { CalendarEvent } from '@crabac/shared';
 import { useCalendarStore } from '../../stores/calendar.js';
+import { usePreferencesStore } from '../../stores/preferences.js';
+import { formatDistance } from '../../lib/units.js';
 
 interface Props {
   spaceId: string;
@@ -24,6 +26,7 @@ function formatEventDate(dateStr: string): string {
 }
 
 export function UpcomingEventsList({ spaceId, events, loading, onEventClick }: Props) {
+  const units = usePreferencesStore((s) => s.preferences.distanceUnits);
   const rsvp = useCalendarStore((s) => s.rsvp);
 
   const handleQuickRsvp = async (e: React.MouseEvent, eventId: string, status: 'going' | 'maybe') => {
@@ -79,7 +82,7 @@ export function UpcomingEventsList({ spaceId, events, loading, onEventClick }: P
             )}
             {event.route && (
               <span style={{ ...styles.locationText, ...(event.imageUrl ? { color: 'rgba(255,255,255,0.7)' } : {}) }}>
-                {event.route.name} &middot; {event.route.distanceKm.toFixed(1)} km
+                {event.route.name} &middot; {formatDistance(event.route.distanceKm, units)}
               </span>
             )}
             <div style={styles.cardBottom}>

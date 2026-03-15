@@ -2,7 +2,7 @@ import { db } from '../../database/connection.js';
 import type { UserPreferences } from '@crabac/shared';
 
 const DEFAULTS: UserPreferences = {
-  distanceUnits: 'imperial',
+  distanceUnits: 'us_customary',
   defaultVisibility: 'private',
   profileVisibility: 'spaces',
   activitiesVisibility: null,

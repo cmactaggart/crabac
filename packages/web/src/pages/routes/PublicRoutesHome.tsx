@@ -4,6 +4,8 @@ import { Search, X, Star, Download, MapPin, Mountain, TrendingUp, Link as LinkIc
 import { boardApi } from '../../lib/boardApi.js';
 import { usePublicTheme } from '../../contexts/PublicThemeContext.js';
 import { MiniMap } from '../../components/common/MiniMap.js';
+import { usePreferencesStore } from '../../stores/preferences.js';
+import { formatDistance, formatElevation, formatFlatness } from '../../lib/units.js';
 
 interface RouteItem {
   id: string;
@@ -38,17 +40,6 @@ interface SpaceInfo {
   iconUrl: string | null;
 }
 
-function formatDistance(km: number): string {
-  return `${(km * 0.621371).toFixed(1)} mi`;
-}
-
-function formatElevation(m: number): string {
-  return `${Math.round(m * 3.28084)} ft`;
-}
-
-function formatFlatness(f: number): string {
-  return `${f.toFixed(0)} ft/mi`;
-}
 
 function activityLabel(type: string | null): string | null {
   if (type === 'ride') return 'Ride';
@@ -61,6 +52,7 @@ export function PublicRoutesHome() {
   const { spaceSlug } = useParams();
   const theme = usePublicTheme();
   const c = theme.colors;
+  const units = usePreferencesStore((s) => s.preferences.distanceUnits);
   const [space, setSpace] = useState<SpaceInfo | null>(null);
   const [items, setItems] = useState<RouteItem[]>([]);
   const [channels, setChannels] = useState<ChannelOption[]>([]);
@@ -221,6 +213,7 @@ export function PublicRoutesHome() {
 function RouteCard({ item, spaceSlug, onStar, onClick }: { item: RouteItem; spaceSlug: string; onStar: () => void; onClick: () => void }) {
   const theme = usePublicTheme();
   const c = theme.colors;
+  const units = usePreferencesStore((s) => s.preferences.distanceUnits);
   return (
     <div style={{ background: c.contentBg, border: `1px solid ${c.contentBorder}`, borderRadius: 10, overflow: 'hidden', display: 'flex', flexDirection: 'column' as const, cursor: 'pointer', transition: 'box-shadow 0.15s' }} onClick={onClick} role="button" tabIndex={0}>
       <div style={{ aspectRatio: '1', background: '#f3f4f6', overflow: 'hidden' }}>
@@ -254,12 +247,12 @@ function RouteCard({ item, spaceSlug, onStar, onClick }: { item: RouteItem; spac
           )}
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 10px', fontSize: '0.78rem', color: c.secondaryText }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><MapPin size={13} /> {formatDistance(item.distanceKm)}</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><MapPin size={13} /> {formatDistance(item.distanceKm, units)}</span>
           {item.elevationGainM != null && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Mountain size={13} /> +{formatElevation(item.elevationGainM)}</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Mountain size={13} /> +{formatElevation(item.elevationGainM, units)}</span>
           )}
           {item.flatness != null && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><TrendingUp size={13} /> {formatFlatness(item.flatness)}</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><TrendingUp size={13} /> {formatFlatness(item.flatness, units)}</span>
           )}
         </div>
         {item.description && (
@@ -280,6 +273,7 @@ export function RouteDetailOverlay({ item, spaceSlug, onClose, onStar }: {
 }) {
   const theme = usePublicTheme();
   const c = theme.colors;
+  const units = usePreferencesStore((s) => s.preferences.distanceUnits);
   const [copied, setCopied] = useState(false);
 
   const handleCopyLink = () => {
@@ -324,12 +318,12 @@ export function RouteDetailOverlay({ item, spaceSlug, onClose, onStar }: {
             )}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', fontSize: '0.85rem', color: c.secondaryText }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><MapPin size={14} /> {formatDistance(item.distanceKm)}</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><MapPin size={14} /> {formatDistance(item.distanceKm, units)}</span>
             {item.elevationGainM != null && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Mountain size={14} /> +{formatElevation(item.elevationGainM)}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Mountain size={14} /> +{formatElevation(item.elevationGainM, units)}</span>
             )}
             {item.flatness != null && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><TrendingUp size={14} /> {formatFlatness(item.flatness)}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><TrendingUp size={14} /> {formatFlatness(item.flatness, units)}</span>
             )}
           </div>
           {item.description && (

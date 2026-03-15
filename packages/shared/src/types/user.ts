@@ -107,7 +107,7 @@ export interface FollowCounts {
   followerCount: number;
 }
 
-export type DistanceUnits = 'metric' | 'imperial';
+export type DistanceUnits = 'metric' | 'us_customary';
 
 export interface UserPreferences {
   distanceUnits: DistanceUnits;

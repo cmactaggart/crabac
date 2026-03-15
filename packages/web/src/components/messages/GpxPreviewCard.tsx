@@ -1,8 +1,9 @@
 import React, { useState, Suspense } from 'react';
 import { MapPin, MapPinned, Mountain, Clock, Download, X } from 'lucide-react';
-import type { Attachment, GpxTrackMetadata, DistanceUnits, RouteItem, Channel } from '@crabac/shared';
+import type { Attachment, GpxTrackMetadata, RouteItem, Channel } from '@crabac/shared';
 import { api } from '../../lib/api.js';
 import { usePreferencesStore } from '../../stores/preferences.js';
+import { formatDistance, formatElevation } from '../../lib/units.js';
 import { useChannelsStore } from '../../stores/channels.js';
 import { MiniMap } from '../common/MiniMap.js';
 
@@ -21,20 +22,6 @@ function formatDuration(seconds: number): string {
   return `${m}m`;
 }
 
-function formatDistance(km: number, units: DistanceUnits): string {
-  if (units === 'imperial') {
-    const mi = km * 0.621371;
-    if (mi < 0.1) return `${Math.round(km * 3280.84)} ft`;
-    return `${mi.toFixed(1)} mi`;
-  }
-  if (km < 1) return `${Math.round(km * 1000)} m`;
-  return `${km.toFixed(1)} km`;
-}
-
-function formatElevation(m: number, units: DistanceUnits): string {
-  if (units === 'imperial') return `${Math.round(m * 3.28084)} ft`;
-  return `${m} m`;
-}
 
 export function GpxPreviewCard({ attachment, gpx }: Props) {
   const [showModal, setShowModal] = useState(false);
