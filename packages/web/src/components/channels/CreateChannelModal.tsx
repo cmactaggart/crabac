@@ -14,7 +14,9 @@ interface Props {
 }
 
 export function CreateChannelModal({ spaceId, categories, onClose }: Props) {
-  const [name, setName] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [topic, setTopic] = useState('');
   const [channelType, setChannelType] = useState<ChannelType>('text');
   const [categoryId, setCategoryId] = useState('');
@@ -33,11 +35,21 @@ export function CreateChannelModal({ spaceId, categories, onClose }: Props) {
     api<Role[]>(`/spaces/${spaceId}/roles`).then(setRoles).catch(() => {});
   }, [spaceId]);
 
-  const sanitizeName = (input: string) =>
-    input.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  const toSlug = (input: string) =>
+    input.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '').replace(/[^a-z0-9-]/g, '');
 
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setName(sanitizeName(e.target.value));
+  const handleDisplayNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setDisplayName(val);
+    if (!slugManuallyEdited) {
+      setSlug(toSlug(val));
+    }
+  };
+
+  const handleSlugChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    setSlug(val);
+    setSlugManuallyEdited(true);
   };
 
   const toggleRole = (roleId: string) => {
@@ -65,13 +77,14 @@ export function CreateChannelModal({ spaceId, categories, onClose }: Props) {
   });
 
   const handleCreate = async () => {
-    if (!name.trim()) return;
+    if (!slug.trim()) return;
     setCreating(true);
     setError('');
     try {
       const channel = await createChannel(
         spaceId,
-        name.trim(),
+        slug.trim(),
+        displayName.trim() || undefined,
         topic.trim() || undefined,
         categoryId || undefined,
         channelType,
@@ -110,16 +123,27 @@ export function CreateChannelModal({ spaceId, categories, onClose }: Props) {
                 <Hash size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
               )}
               <input
-                value={name}
-                onChange={handleNameChange}
-                placeholder="new-channel"
+                value={displayName}
+                onChange={handleDisplayNameChange}
+                placeholder="e.g. General Chat 🚀"
                 style={styles.nameInput}
                 autoFocus
                 maxLength={100}
                 onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
               />
             </div>
-            <span style={styles.hint}>Lowercase letters, numbers, and hyphens only</span>
+          </div>
+
+          <div style={styles.field}>
+            <label style={styles.label}>Slug</label>
+            <input
+              value={slug}
+              onChange={handleSlugChange}
+              placeholder="general-chat"
+              style={styles.input}
+              maxLength={100}
+            />
+            <span style={styles.hint}>Used in URLs — auto-generated from the name</span>
           </div>
 
           <div style={styles.field}>
@@ -241,10 +265,10 @@ export function CreateChannelModal({ spaceId, categories, onClose }: Props) {
           <button onClick={onClose} style={styles.cancelBtn}>Cancel</button>
           <button
             onClick={handleCreate}
-            disabled={!name.trim() || creating}
+            disabled={!slug.trim() || creating}
             style={{
               ...styles.createBtn,
-              opacity: !name.trim() || creating ? 0.5 : 1,
+              opacity: !slug.trim() || creating ? 0.5 : 1,
             }}
           >
             {creating ? 'Creating...' : 'Create Channel'}

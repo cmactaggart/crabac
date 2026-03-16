@@ -26,6 +26,7 @@ export function ChannelSettingsPanel({ spaceId, channel, onClose }: Props) {
   const members = useSpacesStore((s) => s.members);
 
   const [name, setName] = useState(channel.name);
+  const [displayName, setDisplayName] = useState(channel.displayName || '');
   const [topic, setTopic] = useState(channel.topic || '');
   const [type, setType] = useState<ChannelType>(channel.type as ChannelType);
   const [isPrivate, setIsPrivate] = useState(channel.isPrivate);
@@ -102,6 +103,7 @@ export function ChannelSettingsPanel({ spaceId, channel, onClose }: Props) {
     try {
       await updateChannel(spaceId, channel.id, {
         name: name !== channel.name ? name : undefined,
+        displayName: displayName !== (channel.displayName || '') ? (displayName || null) : undefined,
         topic: topic !== (channel.topic || '') ? topic || undefined : undefined,
         type: type !== channel.type ? type : undefined,
         isPrivate: isPrivate !== channel.isPrivate ? isPrivate : undefined,
@@ -154,6 +156,17 @@ export function ChannelSettingsPanel({ spaceId, channel, onClose }: Props) {
               style={styles.input}
               disabled={channel.isAdmin}
             />
+          </div>
+
+          <div style={styles.field}>
+            <label style={styles.label}>Display Name</label>
+            <input
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              style={styles.input}
+              placeholder="Optional — supports emoji"
+            />
+            <span style={styles.hint}>Shown in sidebar and header. Leave empty to use the channel name.</span>
           </div>
 
           <div style={styles.field}>

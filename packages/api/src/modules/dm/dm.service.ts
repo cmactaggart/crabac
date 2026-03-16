@@ -4,6 +4,7 @@ import { NotFoundError, ForbiddenError, BadRequestError } from '../../lib/errors
 import { eventBus } from '../../lib/event-bus.js';
 import { areFriends } from '../friends/friends.service.js';
 import * as searchService from '../search/search.service.js';
+import { processDMEmbeds, reprocessDMEmbeds, getDMEmbedsForMessages } from '../messages/embeds.service.js';
 
 // ─── Conversations ───
 
@@ -322,15 +323,17 @@ export async function listMessages(conversationId: string, options: { before?: s
 
   const rows = await query;
   const messageIds = rows.map((r: any) => String(r.id));
-  const [reactionsMap, attachmentsMap] = await Promise.all([
+  const [reactionsMap, attachmentsMap, embedsMap] = await Promise.all([
     getDMReactionsForMessages(messageIds),
     getDMAttachmentsForMessages(messageIds),
+    getDMEmbedsForMessages(messageIds),
   ]);
 
   return rows.map((r: any) => formatDM(
     r,
     reactionsMap.get(String(r.id)) || [],
     attachmentsMap.get(String(r.id)) || [],
+    embedsMap.get(String(r.id)) || [],
   )).reverse();
 }
 
@@ -353,6 +356,13 @@ export async function sendMessage(conversationId: string, authorId: string, cont
   if (!opts?.skipEvent) {
     eventBus.emit('dm.created', { message, conversationId });
   }
+
+  // Handle link embeds (fire-and-forget)
+  if (content) {
+    processDMEmbeds(String(id), String(conversationId), content)
+      .catch((err) => console.error('DM embed processing error:', err));
+  }
+
   return message;
 }
 
@@ -367,6 +377,11 @@ export async function editMessage(conversationId: string, messageId: string, use
 
   const message = await getDM(messageId);
   eventBus.emit('dm.updated', { message, conversationId });
+
+  // Re-process embeds on edit (fire-and-forget)
+  reprocessDMEmbeds(String(messageId), String(conversationId), content)
+    .catch((err) => console.error('DM embed reprocess error:', err));
+
   return message;
 }
 
@@ -613,14 +628,15 @@ async function getDM(messageId: string) {
     .first();
 
   if (!row) throw new NotFoundError('Message');
-  const [reactions, attachments] = await Promise.all([
+  const [reactions, attachments, embeds] = await Promise.all([
     getDMReactionsForMessage(messageId),
     getDMAttachmentsForMessages([messageId]),
+    getDMEmbedsForMessages([messageId]),
   ]);
-  return formatDM(row, reactions, attachments.get(messageId) || []);
+  return formatDM(row, reactions, attachments.get(messageId) || [], embeds.get(messageId) || []);
 }
 
-function formatDM(row: any, reactions: any[] = [], attachments: any[] = []) {
+function formatDM(row: any, reactions: any[] = [], attachments: any[] = [], embeds: any[] = []) {
   return {
     id: row.id.toString(),
     conversationId: row.conversation_id.toString(),
@@ -629,6 +645,7 @@ function formatDM(row: any, reactions: any[] = [], attachments: any[] = []) {
     editedAt: row.edited_at,
     reactions,
     attachments,
+    embeds,
     author: {
       id: row.author_id.toString(),
       username: row.author_username,

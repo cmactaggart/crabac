@@ -435,7 +435,7 @@ function MessageItem({
                       <Markdown content={message.content} />
                     </div>
                   ) : (
-                    <MessageEmbeds content={message.content} spaceId={spaceId} />
+                    <MessageEmbeds content={message.content} spaceId={spaceId} embeds={message.embeds} />
                   )}
                 </>
               )}

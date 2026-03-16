@@ -116,7 +116,7 @@ export function MessageArea({ channelId, channel, spaceId, showBackButton, onBac
               </button>
             )}
             {channel?.isPrivate ? <Lock size={20} style={{ color: 'var(--text-muted)' }} /> : <Hash size={20} style={{ color: 'var(--text-muted)' }} />}
-            <span style={styles.channelName}>{channel?.name || 'channel'}</span>
+            <span style={styles.channelName}>{channel?.displayName || channel?.name || 'channel'}</span>
             {channel?.topic && (
               <>
                 <span style={styles.divider} />

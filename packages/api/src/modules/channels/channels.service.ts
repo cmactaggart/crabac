@@ -6,7 +6,7 @@ import { computePermissions, computeChannelPermissions } from '../rbac/rbac.serv
 
 export async function createChannel(
   spaceId: string,
-  data: { name: string; topic?: string; type?: string; isPrivate?: boolean; isPublic?: boolean; categoryId?: string },
+  data: { name: string; displayName?: string; topic?: string; type?: string; isPrivate?: boolean; isPublic?: boolean; categoryId?: string },
   userId?: string,
   memberIds?: string[],
   roleOverrides?: string[],
@@ -23,6 +23,7 @@ export async function createChannel(
     id,
     space_id: spaceId,
     name: data.name,
+    display_name: data.displayName ?? null,
     topic: data.topic ?? null,
     type: data.type ?? 'text',
     is_public: data.isPublic ?? false,
@@ -169,7 +170,7 @@ export async function getChannel(channelId: string) {
 export async function updateChannel(
   spaceId: string,
   channelId: string,
-  data: { name?: string; topic?: string | null; type?: string; isPublic?: boolean; isPrivate?: boolean; position?: number },
+  data: { name?: string; displayName?: string | null; topic?: string | null; type?: string; isPublic?: boolean; isPrivate?: boolean; position?: number },
 ) {
   const channel = await db('channels').where({ id: channelId, space_id: spaceId }).first();
   if (!channel) throw new NotFoundError('Channel');
@@ -181,6 +182,7 @@ export async function updateChannel(
 
   const updates: Record<string, any> = {};
   if (data.name !== undefined) updates.name = data.name;
+  if (data.displayName !== undefined) updates.display_name = data.displayName;
   if (data.topic !== undefined) updates.topic = data.topic;
   if (data.type !== undefined) updates.type = data.type;
   if (data.isPublic !== undefined) updates.is_public = data.isPublic;
@@ -337,6 +339,7 @@ function formatChannel(row: any) {
     id: row.id,
     spaceId: row.space_id,
     name: row.name,
+    displayName: row.display_name || null,
     topic: row.topic,
     type: row.type,
     isPublic: row.is_public ?? false,

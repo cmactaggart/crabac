@@ -4,6 +4,7 @@ export interface Channel {
   id: string;
   spaceId: string;
   name: string;
+  displayName: string | null;
   topic: string | null;
   type: ChannelType;
   isPublic: boolean;
@@ -28,6 +29,7 @@ export interface ChannelPermissionOverride {
 
 export interface CreateChannelRequest {
   name: string;
+  displayName?: string;
   topic?: string;
   type?: ChannelType;
   isPrivate?: boolean;
@@ -36,6 +38,7 @@ export interface CreateChannelRequest {
 
 export interface UpdateChannelRequest {
   name?: string;
+  displayName?: string | null;
   topic?: string;
   type?: ChannelType;
   position?: number;

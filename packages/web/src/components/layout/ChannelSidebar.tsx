@@ -402,7 +402,7 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
         icon: <Trash2 size={16} />,
         danger: true,
         onClick: () => {
-          if (window.confirm(`Delete #${ch.name}? This cannot be undone.`)) {
+          if (window.confirm(`Delete #${ch.displayName || ch.name}? This cannot be undone.`)) {
             deleteChannel(space.id, ch.id);
             if (activeChannelId === ch.id) {
               const remaining = channels.filter((c) => c.id !== ch.id);
@@ -554,7 +554,7 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
         ) : (
           <ChannelIcon size={18} style={{ color: iconColor, flexShrink: 0 }} />
         )}
-        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ch.name}</span>
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ch.displayName || ch.name}</span>
         {hasUnread && (
           <span style={sidebarStyles.badge}>
             {unread.unreadCount > 99 ? '99+' : unread.unreadCount}
@@ -764,7 +764,7 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
             {draggedChannel && (
               <div style={{ background: 'var(--bg-tertiary)', borderRadius: 'var(--radius)', padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.9rem', color: 'var(--text-primary)', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
                 <Hash size={18} style={{ color: 'var(--text-muted)' }} />
-                {draggedChannel.name}
+                {draggedChannel.displayName || draggedChannel.name}
               </div>
             )}
             {draggedCategory && (

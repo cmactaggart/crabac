@@ -1,13 +1,14 @@
 import { useEffect } from 'react';
 import { getSocket } from '../lib/socket.js';
 import { useDMStore } from '../stores/dm.js';
-import type { DirectMessage, Reaction } from '@crabac/shared';
+import type { DirectMessage, Reaction, LinkEmbed } from '@crabac/shared';
 
 export function useDMSocket(conversationId: string | null) {
   const addMessage = useDMStore((s) => s.addMessage);
   const updateMessage = useDMStore((s) => s.updateMessage);
   const removeMessage = useDMStore((s) => s.removeMessage);
   const updateReactions = useDMStore((s) => s.updateReactions);
+  const updateEmbeds = useDMStore((s) => s.updateEmbeds);
   const setTyping = useDMStore((s) => s.setTyping);
 
   useEffect(() => {
@@ -36,6 +37,10 @@ export function useDMSocket(conversationId: string | null) {
       updateReactions(payload.messageId, payload.reactions);
     };
 
+    const onEmbedsReady = (payload: { conversationId: string; messageId: string; embeds: LinkEmbed[] }) => {
+      updateEmbeds(payload.messageId, payload.embeds);
+    };
+
     const onTyping = (payload: { conversationId: string; userId: string; username: string }) => {
       if (payload.conversationId === conversationId) {
         setTyping(payload.userId, payload.username);
@@ -46,6 +51,7 @@ export function useDMSocket(conversationId: string | null) {
     socket.on('dm:updated', onUpdated);
     socket.on('dm:deleted', onDeleted);
     socket.on('dm:reactions_updated', onReactionsUpdated);
+    socket.on('dm:embeds_ready', onEmbedsReady);
     socket.on('dm:typing', onTyping);
 
     return () => {
@@ -53,9 +59,10 @@ export function useDMSocket(conversationId: string | null) {
       socket.off('dm:updated', onUpdated);
       socket.off('dm:deleted', onDeleted);
       socket.off('dm:reactions_updated', onReactionsUpdated);
+      socket.off('dm:embeds_ready', onEmbedsReady);
       socket.off('dm:typing', onTyping);
     };
-  }, [conversationId, addMessage, updateMessage, removeMessage, updateReactions, setTyping]);
+  }, [conversationId, addMessage, updateMessage, removeMessage, updateReactions, updateEmbeds, setTyping]);
 }
 
 export function useDMTypingEmit(conversationId: string | null) {

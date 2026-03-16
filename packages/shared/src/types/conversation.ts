@@ -27,6 +27,7 @@ export interface DirectMessage {
   editedAt: string | null;
   reactions: import('./message.js').Reaction[];
   attachments?: import('./message.js').Attachment[];
+  embeds?: import('./message.js').LinkEmbed[];
   author: {
     id: string;
     username: string;

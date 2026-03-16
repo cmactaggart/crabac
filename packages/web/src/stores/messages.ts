@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../lib/api.js';
-import type { Message, Reaction, ThreadResponse, SearchResult } from '@crabac/shared';
+import type { Message, Reaction, LinkEmbed, ThreadResponse, SearchResult } from '@crabac/shared';
 
 interface MessagesState {
   messages: Message[];
@@ -35,6 +35,7 @@ interface MessagesState {
   updateMessage: (message: Message) => void;
   removeMessage: (messageId: string) => void;
   updateReactions: (messageId: string, reactions: Reaction[]) => void;
+  updateEmbeds: (messageId: string, embeds: LinkEmbed[]) => void;
   setTyping: (userId: string, username: string) => void;
   clearTyping: (userId: string) => void;
 
@@ -178,6 +179,14 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
     set((s) => ({
       messages: s.messages.map((m) =>
         m.id === messageId ? { ...m, reactions } : m,
+      ),
+    }));
+  },
+
+  updateEmbeds: (messageId, embeds) => {
+    set((s) => ({
+      messages: s.messages.map((m) =>
+        m.id === messageId ? { ...m, embeds } : m,
       ),
     }));
   },

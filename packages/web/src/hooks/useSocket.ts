@@ -1,13 +1,14 @@
 import { useEffect } from 'react';
 import { getSocket } from '../lib/socket.js';
 import { useMessagesStore } from '../stores/messages.js';
-import type { Message, Reaction } from '@crabac/shared';
+import type { Message, Reaction, LinkEmbed } from '@crabac/shared';
 
 export function useChannelSocket(channelId: string | null) {
   const addMessage = useMessagesStore((s) => s.addMessage);
   const updateMessage = useMessagesStore((s) => s.updateMessage);
   const removeMessage = useMessagesStore((s) => s.removeMessage);
   const updateReactions = useMessagesStore((s) => s.updateReactions);
+  const updateEmbeds = useMessagesStore((s) => s.updateEmbeds);
   const setTyping = useMessagesStore((s) => s.setTyping);
   const catchUpMessages = useMessagesStore((s) => s.catchUpMessages);
 
@@ -49,6 +50,12 @@ export function useChannelSocket(channelId: string | null) {
       }
     };
 
+    const onEmbedsReady = (payload: { channelId: string; messageId: string; embeds: LinkEmbed[] }) => {
+      if (payload.channelId === channelId) {
+        updateEmbeds(payload.messageId, payload.embeds);
+      }
+    };
+
     const onTyping = (payload: { channelId: string; userId: string; username: string }) => {
       if (payload.channelId === channelId) {
         setTyping(payload.userId, payload.username);
@@ -60,6 +67,7 @@ export function useChannelSocket(channelId: string | null) {
     socket.on('message:updated', onUpdated);
     socket.on('message:deleted', onDeleted);
     socket.on('message:reactions_updated', onReactionsUpdated);
+    socket.on('message:embeds_ready', onEmbedsReady);
     socket.on('member:typing', onTyping);
 
     return () => {
@@ -69,9 +77,10 @@ export function useChannelSocket(channelId: string | null) {
       socket.off('message:updated', onUpdated);
       socket.off('message:deleted', onDeleted);
       socket.off('message:reactions_updated', onReactionsUpdated);
+      socket.off('message:embeds_ready', onEmbedsReady);
       socket.off('member:typing', onTyping);
     };
-  }, [channelId, addMessage, updateMessage, removeMessage, updateReactions, setTyping, catchUpMessages]);
+  }, [channelId, addMessage, updateMessage, removeMessage, updateReactions, updateEmbeds, setTyping, catchUpMessages]);
 }
 
 export function useTypingEmit(channelId: string | null) {

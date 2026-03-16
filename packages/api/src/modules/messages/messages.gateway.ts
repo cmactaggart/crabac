@@ -35,6 +35,11 @@ export function registerMessageGateway() {
     io.to(`channel:${channelId}`).emit('message:deleted', { channelId, messageId });
   });
 
+  eventBus.on('message.embeds_ready', ({ channelId, messageId, embeds }) => {
+    if (!io) return;
+    io.to(`channel:${channelId}`).emit('message:embeds_ready', { channelId, messageId, embeds });
+  });
+
   eventBus.on('message.reactions_updated', ({ channelId, messageId, reactions }) => {
     if (!io) return;
     io.to(`channel:${channelId}`).emit('message:reactions_updated', { channelId, messageId, reactions });

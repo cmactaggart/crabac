@@ -1,14 +1,17 @@
 import { MessageLinkEmbed, extractMessageLinks } from './MessageLinkEmbed.js';
 import { SpaceLinkEmbed, extractSpaceLinks } from '../spaces/SpaceLinkEmbed.js';
 import { CalendarEventCard, extractCalendarEvent } from '../calendar/CalendarEventCard.js';
+import { UrlLinkEmbed } from './UrlLinkEmbed.js';
 import { Markdown } from '../common/Markdown.js';
+import type { LinkEmbed } from '@crabac/shared';
 
 interface MessageEmbedsProps {
   content: string;
   spaceId?: string;
+  embeds?: LinkEmbed[];
 }
 
-export function MessageEmbeds({ content, spaceId }: MessageEmbedsProps) {
+export function MessageEmbeds({ content, spaceId, embeds }: MessageEmbedsProps) {
   const calEvent = extractCalendarEvent(content);
   if (calEvent) {
     return (
@@ -36,6 +39,9 @@ export function MessageEmbeds({ content, spaceId }: MessageEmbedsProps) {
           spaceId={ref.type === 'id' ? ref.value : undefined}
           spaceSlug={ref.type === 'slug' ? ref.value : undefined}
         />
+      ))}
+      {embeds && embeds.map((embed) => (
+        <UrlLinkEmbed key={embed.id} embed={embed} />
       ))}
     </>
   );

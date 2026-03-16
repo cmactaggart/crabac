@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../lib/api.js';
-import type { Conversation, DirectMessage, Reaction } from '@crabac/shared';
+import type { Conversation, DirectMessage, Reaction, LinkEmbed } from '@crabac/shared';
 
 interface DMState {
   conversations: Conversation[];
@@ -38,6 +38,7 @@ interface DMState {
   deleteMessage: (conversationId: string, messageId: string) => Promise<void>;
   toggleReaction: (conversationId: string, messageId: string, emoji: string, hasReacted: boolean) => void;
   updateReactions: (messageId: string, reactions: Reaction[]) => void;
+  updateEmbeds: (messageId: string, embeds: LinkEmbed[]) => void;
   addMessage: (message: DirectMessage) => void;
   updateMessage: (message: DirectMessage) => void;
   removeMessage: (messageId: string) => void;
@@ -263,6 +264,14 @@ export const useDMStore = create<DMState>((set, get) => ({
     set((s) => ({
       messages: s.messages.map((m) =>
         m.id === messageId ? { ...m, reactions } : m,
+      ),
+    }));
+  },
+
+  updateEmbeds: (messageId, embeds) => {
+    set((s) => ({
+      messages: s.messages.map((m) =>
+        m.id === messageId ? { ...m, embeds } : m,
       ),
     }));
   },

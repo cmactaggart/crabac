@@ -46,6 +46,7 @@ export const joinSpaceSchema = z.object({
 // Channels
 export const createChannelSchema = z.object({
   name: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/, 'Channel name can only contain lowercase letters, numbers, and hyphens'),
+  displayName: z.string().min(1).max(100).optional(),
   topic: z.string().max(1024).optional(),
   type: z.enum(['text', 'announcement', 'read_only', 'forum', 'media_gallery', 'route_library']).optional(),
   isPrivate: z.boolean().optional(),
@@ -57,6 +58,7 @@ export const createChannelSchema = z.object({
 
 export const updateChannelSchema = z.object({
   name: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).optional(),
+  displayName: z.string().min(1).max(100).nullable().optional(),
   topic: z.string().max(1024).nullable().optional(),
   type: z.enum(['text', 'announcement', 'read_only', 'forum', 'media_gallery', 'route_library']).optional(),
   isPublic: z.boolean().optional(),

@@ -28,6 +28,17 @@ export interface Reaction {
   users: { id: string; username: string }[];
 }
 
+export interface LinkEmbed {
+  id: string;
+  url: string;
+  title: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  faviconUrl: string | null;
+  siteName: string | null;
+  ogType: string | null;
+}
+
 export type MessageType = 'user' | 'portal_invite' | 'system';
 
 export interface Message {
@@ -43,6 +54,7 @@ export interface Message {
   messageType: MessageType;
   metadata: Record<string, any> | null;
   attachments?: Attachment[];
+  embeds?: LinkEmbed[];
   reactions: Reaction[];
   author?: {
     id: string;

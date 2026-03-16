@@ -5,6 +5,7 @@ import { eventBus } from '../../lib/event-bus.js';
 import * as mentionsService from './mentions.service.js';
 import * as notificationsService from '../notifications/notifications.service.js';
 import * as searchService from '../search/search.service.js';
+import { processMessageEmbeds, reprocessMessageEmbeds, getEmbedsForMessages } from './embeds.service.js';
 import { getVisibleChannelIds, getMutedChannels } from '../channels/channels.service.js';
 
 // ─── Messages CRUD ───
@@ -39,13 +40,14 @@ export async function listMessages(channelId: string, options: { before?: string
 
   const rows = await query;
   const messageIds = rows.map((r: any) => r.id);
-  const [reactions, replyCounts, attachments] = await Promise.all([
+  const [reactions, replyCounts, attachments, embeds] = await Promise.all([
     getReactionsForMessages(messageIds),
     getReplyCountsForMessages(messageIds),
     getAttachmentsForMessages(messageIds),
+    getEmbedsForMessages(messageIds),
   ]);
 
-  const formatted = rows.map((r: any) => formatMessage(r, reactions.get(r.id) || [], replyCounts.get(r.id) || 0, attachments.get(r.id) || []));
+  const formatted = rows.map((r: any) => formatMessage(r, reactions.get(r.id) || [], replyCounts.get(r.id) || 0, attachments.get(r.id) || [], embeds.get(r.id) || []));
   return options.after ? formatted : formatted.reverse();
 }
 
@@ -92,6 +94,12 @@ export async function createMessage(
       .catch((err) => console.error('Reply notification error:', err));
   }
 
+  // Handle link embeds (fire-and-forget)
+  if (data.content) {
+    processMessageEmbeds(String(id), channelId, data.content)
+      .catch((err) => console.error('Embed processing error:', err));
+  }
+
   return message;
 }
 
@@ -112,6 +120,11 @@ export async function updateMessage(channelId: string, messageId: string, userId
 
   const message = await getMessage(messageId);
   eventBus.emit('message.updated', { message, channelId });
+
+  // Re-process embeds on edit (fire-and-forget)
+  reprocessMessageEmbeds(String(messageId), channelId, content)
+    .catch((err) => console.error('Embed reprocess error:', err));
+
   return message;
 }
 
@@ -219,12 +232,13 @@ export async function getPinnedMessages(channelId: string) {
     .orderBy('messages.id', 'desc');
 
   const messageIds = rows.map((r: any) => r.id);
-  const [reactions, attachments] = await Promise.all([
+  const [reactions, attachments, embeds] = await Promise.all([
     getReactionsForMessages(messageIds),
     getAttachmentsForMessages(messageIds),
+    getEmbedsForMessages(messageIds),
   ]);
 
-  return rows.map((r: any) => formatMessage(r, reactions.get(r.id) || [], 0, attachments.get(r.id) || []));
+  return rows.map((r: any) => formatMessage(r, reactions.get(r.id) || [], 0, attachments.get(r.id) || [], embeds.get(r.id) || []));
 }
 
 // ─── Threads ───
@@ -255,14 +269,15 @@ export async function getThreadMessages(channelId: string, parentId: string, opt
 
   const rows = await query;
   const allIds = [parentId, ...rows.map((r: any) => r.id)];
-  const [reactions, attachments] = await Promise.all([
+  const [reactions, attachments, embeds] = await Promise.all([
     getReactionsForMessages(allIds),
     getAttachmentsForMessages(allIds),
+    getEmbedsForMessages(allIds),
   ]);
 
   return {
     parent,
-    replies: rows.map((r: any) => formatMessage(r, reactions.get(r.id) || [], 0, attachments.get(r.id) || [])),
+    replies: rows.map((r: any) => formatMessage(r, reactions.get(r.id) || [], 0, attachments.get(r.id) || [], embeds.get(r.id) || [])),
   };
 }
 
@@ -437,13 +452,14 @@ export async function getMessageById(messageId: string) {
     .first();
 
   if (!row) throw new NotFoundError('Message');
-  const [reactions, replyCount, attachments] = await Promise.all([
+  const [reactions, replyCount, attachments, embeds] = await Promise.all([
     getReactionsForMessage(messageId),
     getReplyCount(messageId),
     getAttachmentsForMessages([messageId]),
+    getEmbedsForMessages([messageId]),
   ]);
   return {
-    ...formatMessage(row, reactions, replyCount, attachments.get(messageId) || []),
+    ...formatMessage(row, reactions, replyCount, attachments.get(messageId) || [], embeds.get(messageId) || []),
     channelName: row.channel_name,
     spaceId: String(row.space_id),
   };
@@ -507,12 +523,13 @@ async function getMessage(messageId: string) {
     .first();
 
   if (!row) throw new NotFoundError('Message');
-  const [reactions, replyCount, attachments] = await Promise.all([
+  const [reactions, replyCount, attachments, embeds] = await Promise.all([
     getReactionsForMessage(messageId),
     getReplyCount(messageId),
     getAttachmentsForMessages([messageId]),
+    getEmbedsForMessages([messageId]),
   ]);
-  return formatMessage(row, reactions, replyCount, attachments.get(messageId) || []);
+  return formatMessage(row, reactions, replyCount, attachments.get(messageId) || [], embeds.get(messageId) || []);
 }
 
 async function getReactionsForMessage(messageId: string) {
@@ -583,7 +600,7 @@ async function getReplyCountsForMessages(messageIds: string[]): Promise<Map<stri
   return map;
 }
 
-function formatMessage(row: any, reactions: any[], replyCount: number, attachments: any[]) {
+function formatMessage(row: any, reactions: any[], replyCount: number, attachments: any[], embeds: any[] = []) {
   let metadata = row.metadata;
   if (typeof metadata === 'string') {
     try { metadata = JSON.parse(metadata); } catch { metadata = null; }
@@ -602,6 +619,7 @@ function formatMessage(row: any, reactions: any[], replyCount: number, attachmen
     metadata: metadata ?? null,
     reactions,
     attachments,
+    embeds,
     author: {
       id: row.author_id,
       username: row.author_username,

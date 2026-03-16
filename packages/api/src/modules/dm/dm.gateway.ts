@@ -45,6 +45,11 @@ export function registerDMGateway() {
     io.to(`dm:${conversationId}`).emit('dm:deleted', { conversationId, messageId });
   });
 
+  eventBus.on('dm.embeds_ready', ({ conversationId, messageId, embeds }) => {
+    if (!io) return;
+    io.to(`dm:${conversationId}`).emit('dm:embeds_ready', { conversationId, messageId, embeds });
+  });
+
   eventBus.on('dm.reactions_updated', ({ conversationId, messageId, reactions }) => {
     if (!io) return;
     io.to(`dm:${conversationId}`).emit('dm:reactions_updated', { conversationId, messageId, reactions });

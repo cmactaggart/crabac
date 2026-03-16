@@ -1166,7 +1166,7 @@ function DMMessageItem({
             </div>
           </div>
         ) : (
-          <MessageEmbeds content={message.content} />
+          <MessageEmbeds content={message.content} embeds={message.embeds} />
         )}
       </div>
 
