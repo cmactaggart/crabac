@@ -11,6 +11,8 @@ import { Login } from './pages/Login.js';
 import { Register } from './pages/Register.js';
 import { VerifyEmail } from './pages/VerifyEmail.js';
 import { MagicLink } from './pages/MagicLink.js';
+import { ForgotPassword } from './pages/ForgotPassword.js';
+import { ResetPassword } from './pages/ResetPassword.js';
 import { MfaChallenge } from './pages/MfaChallenge.js';
 import { InviteLanding } from './pages/InviteLanding.js';
 import { SpaceView } from './pages/SpaceView.js';
@@ -23,6 +25,7 @@ import { YouPage } from './pages/YouPage.js';
 import { FeedPage } from './pages/FeedPage.js';
 import { PostDetailPage } from './pages/PostDetailPage.js';
 import { PublicProfilePage } from './pages/PublicProfilePage.js';
+import { RouteBuilderPage } from './pages/RouteBuilderPage.js';
 import { OnboardingModal } from './components/common/OnboardingModal.js';
 import { api } from './lib/api.js';
 import { BottomTabBar } from './components/layout/BottomTabBar.js';
@@ -86,6 +89,8 @@ export function App() {
         <Route path="/register" element={user ? <Navigate to="/" /> : <Register />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/auth/magic" element={<MagicLink />} />
+        <Route path="/forgot-password" element={user ? <Navigate to="/" /> : <ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/mfa-challenge" element={<MfaChallenge />} />
         <Route path="/invite/:code" element={<InviteLanding />} />
         <Route path="/space/:spaceId/channel/:channelId/message/:messageId" element={user ? <SpaceView /> : <Navigate to="/login" />} />
@@ -98,6 +103,7 @@ export function App() {
         <Route path="/notifications" element={user ? <NotificationsPage /> : <Navigate to="/login" />} />
         <Route path="/feed" element={user ? <FeedPage /> : <Navigate to="/login" />} />
         <Route path="/you" element={user ? <YouPage /> : <Navigate to="/login" />} />
+        <Route path="/route-builder" element={user ? <RouteBuilderPage /> : <Navigate to="/login" />} />
         <Route path="/p/:username/post/:postId" element={user ? <PostDetailPage /> : <Navigate to="/login" />} />
         <Route path="/p/:username" element={user ? <PublicProfilePage /> : <Navigate to="/login" />} />
         <Route path="/account" element={user ? <AccountPage /> : <Navigate to="/login" />} />

@@ -6,6 +6,7 @@ import { authenticate } from './auth.middleware.js';
 import * as authService from './auth.service.js';
 import * as verificationService from './verification.service.js';
 import * as magicLinkService from './magic-link.service.js';
+import * as passwordResetService from './password-reset.service.js';
 
 export const authRoutes = Router();
 
@@ -120,6 +121,36 @@ authRoutes.post(
       const { token } = req.body;
       const result = await authService.loginWithMagicLink(token);
       res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Password reset
+authRoutes.post(
+  '/forgot-password',
+  strictAuthLimiter,
+  validate(validation.forgotPasswordSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await passwordResetService.requestPasswordReset(req.body.email);
+      res.json({ success: true });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+authRoutes.post(
+  '/reset-password',
+  strictAuthLimiter,
+  validate(validation.resetPasswordSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { token, password } = req.body;
+      await passwordResetService.resetPassword(token, password);
+      res.json({ success: true });
     } catch (err) {
       next(err);
     }

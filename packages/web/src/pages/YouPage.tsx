@@ -55,7 +55,8 @@ export function YouPage() {
   const highlightPostId = searchParams.get('post');
   const highlightCommentId = searchParams.get('comment');
   const isMobile = useIsMobile();
-  const [activeTab, setActiveTab] = useState<SubTab>('feed');
+  const initialTab = (searchParams.get('tab') as SubTab) || 'feed';
+  const [activeTab, setActiveTab] = useState<SubTab>(initialTab);
   const [showSettings, setShowSettings] = useState(false);
   const [shareItem, setShareItem] = useState<{ type: 'gallery' | 'route' | 'event' | 'post'; id: string } | null>(null);
   const [defaultVisibility, setDefaultVisibility] = useState<PersonalVisibility>('private');
@@ -253,6 +254,7 @@ export function YouPage() {
                     onDeleteActivity={deleteActivity}
                     onSaveAsRoute={saveActivityAsRoute}
                     onFetchActivityStats={fetchActivityStats}
+                    initialSubTab={searchParams.get('subtab') as ActivitiesSubTab | null}
                   />
                 )}
                 {activeTab === 'events' && (
@@ -449,6 +451,7 @@ export function YouPage() {
                     onDeleteActivity={deleteActivity}
                     onSaveAsRoute={saveActivityAsRoute}
                     onFetchActivityStats={fetchActivityStats}
+                    initialSubTab={searchParams.get('subtab') as ActivitiesSubTab | null}
                   />
                 )}
                 {activeTab === 'events' && (
@@ -614,7 +617,7 @@ function ActivitiesTabContainer({
   activityItems, activityStats, routeItems, loading,
   defaultVisibility = 'private',
   onUploadRoute, onDeleteRoute, onUpdateRoute, onShareRoute,
-  onUpdateActivity, onDeleteActivity, onSaveAsRoute, onFetchActivityStats,
+  onUpdateActivity, onDeleteActivity, onSaveAsRoute, onFetchActivityStats, initialSubTab,
 }: {
   activityItems: PersonalActivityItem[];
   activityStats: PersonalActivityStats | null;
@@ -629,8 +632,9 @@ function ActivitiesTabContainer({
   onDeleteActivity: (id: string) => Promise<void>;
   onSaveAsRoute: (id: string) => Promise<any>;
   onFetchActivityStats: (opts?: { period?: string; year?: number }) => Promise<void>;
+  initialSubTab?: ActivitiesSubTab | null;
 }) {
-  const [subTab, setSubTab] = useState<ActivitiesSubTab>('stats');
+  const [subTab, setSubTab] = useState<ActivitiesSubTab>(initialSubTab || 'stats');
   const [statsPeriod, setStatsPeriod] = useState('ytd');
 
   return (

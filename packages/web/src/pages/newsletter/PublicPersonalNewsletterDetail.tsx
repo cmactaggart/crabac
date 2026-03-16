@@ -29,7 +29,7 @@ export function PublicPersonalNewsletterDetail() {
   if (error || !newsletter) return <div style={{ textAlign: 'center', padding: 40, color: '#c00' }}>{error || 'Not found'}</div>;
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 16px', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
+    <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 16px', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', height: '100vh', overflowY: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
       <Link to={`/newsletter/u/${username}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#5865f2', textDecoration: 'none', fontSize: '0.85rem', marginBottom: 20 }}>
         <ArrowLeft size={16} /> Back to newsletters
       </Link>

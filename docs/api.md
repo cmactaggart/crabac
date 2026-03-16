@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.11.5
+## API Version 0.12.0
 
 Base URL: `https://app.crab.ac/api`
 
@@ -134,6 +134,31 @@ Redeem a magic link token.
 **Body:** `{ token: string }`
 
 **Response:** `{ accessToken, refreshToken, user }`
+
+### POST /auth/forgot-password
+
+Request a password reset email. Always returns success regardless of whether the email exists (prevents email enumeration). Rate limited.
+
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `email` | string | yes | Account email address |
+
+**Response:** `{ success: true }`
+
+### POST /auth/reset-password
+
+Reset password using a token from the reset email. Invalidates all existing refresh tokens (logs out all devices). Rate limited.
+
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `token` | string | yes | Reset token from email link |
+| `password` | string | yes | New password, 8-128 chars |
+
+**Response:** `{ success: true }`
+
+**Errors:** `400` if token is invalid, expired, or already used.
 
 ### POST /auth/mfa/verify
 

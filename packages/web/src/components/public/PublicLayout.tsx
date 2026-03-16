@@ -82,11 +82,14 @@ export function PublicLayout({ pageType }: Props) {
     <PublicThemeProvider value={theme}>
       <div style={{
         minHeight: '100vh',
+        height: '100vh',
         display: 'flex',
         flexDirection: 'column',
         background: c.pageBg,
         color: c.pageText,
         fontFamily: c.fontFamily,
+        overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch',
       }}>
         <header style={{
           background: c.headerBg,

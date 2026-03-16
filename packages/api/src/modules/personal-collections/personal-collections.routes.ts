@@ -14,6 +14,8 @@ import { config } from '../../config.js';
 import { parseGpxFile } from '../messages/gpx.service.js';
 import { eventBus } from '../../lib/event-bus.js';
 import { canViewProfile } from './privacy.service.js';
+import { fetchElevations } from './elevation.service.js';
+import { routeThrough, type RoutingProfile } from './routing.service.js';
 
 // Multer config (shared with galleries)
 const storage = multer.diskStorage({
@@ -171,6 +173,33 @@ personalCollectionsRoutes.post(
       await emitGalleryItemCreated(channelId, result.id);
 
       res.status(201).json(result);
+    } catch (err) { next(err); }
+  },
+);
+
+// ─── Route Builder Helpers ───
+
+personalCollectionsRoutes.post(
+  '/me/collections/routes/elevation',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { coordinates } = validation.elevationQuerySchema.parse(req.body);
+      const elevations = await fetchElevations(coordinates as [number, number][]);
+      res.json({ elevations });
+    } catch (err) { next(err); }
+  },
+);
+
+personalCollectionsRoutes.post(
+  '/me/collections/routes/route',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { waypoints, profile } = validation.routingQuerySchema.parse(req.body);
+      const result = await routeThrough(
+        waypoints as [number, number][],
+        (profile || 'bike') as RoutingProfile,
+      );
+      res.json(result);
     } catch (err) { next(err); }
   },
 );

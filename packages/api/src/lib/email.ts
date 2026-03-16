@@ -33,6 +33,19 @@ export async function sendVerificationEmail(to: string, username: string, token:
   `);
 }
 
+export async function sendPasswordResetEmail(to: string, token: string) {
+  const link = `${config.appUrl}/reset-password?token=${token}`;
+  await sendEmail(to, 'Reset your password — crab.ac', `
+    <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px;">
+      <h2>Reset your password</h2>
+      <p>Click the button below to reset your password. This link expires in 1 hour.</p>
+      <a href="${link}" style="display:inline-block;background:#5865f2;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">Reset Password</a>
+      <p style="margin-top:16px;color:#888;font-size:13px;">Or copy this link: ${link}</p>
+      <p style="color:#888;font-size:13px;">If you didn't request this, you can safely ignore this email.</p>
+    </div>
+  `);
+}
+
 export async function sendMagicLinkEmail(to: string, token: string) {
   const link = `${config.appUrl}/auth/magic?token=${token}`;
   await sendEmail(to, 'Your sign-in link — crab.ac', `

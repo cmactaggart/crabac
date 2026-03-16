@@ -39,7 +39,7 @@ export function PublicPersonalNewsletterHome() {
   if (error) return <div style={{ textAlign: 'center', padding: 40, color: '#c00' }}>{error}</div>;
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 16px', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
+    <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 16px', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', height: '100vh', overflowY: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
       {user && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32 }}>
           {user.avatarUrl && <img src={user.avatarUrl} alt="" style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover' }} />}

@@ -83,6 +83,7 @@ export function Login() {
           {submitting ? 'Signing in...' : 'Sign In'}
         </button>
 
+        <Link to="/forgot-password" style={styles.magicLink}>Forgot password?</Link>
         <Link to="/auth/magic" style={styles.magicLink}>Sign in with magic link</Link>
 
         <p style={styles.footer}>

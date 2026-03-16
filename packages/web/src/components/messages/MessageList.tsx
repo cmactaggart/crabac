@@ -361,7 +361,7 @@ function MessageItem({
         </div>
       )}
 
-      {(!isMuted || showMutedContent) && !compact && !spacedSameAuthor && (() => {
+      {(!isMuted || showMutedContent) && !compact && !spacedSameAuthor && message.messageType !== 'system' && (() => {
         const workflowName = message.metadata?.workflowDisplayName;
         const displayName = workflowName || message.author?.displayName || 'Unknown';
         const isWorkflowIdentity = !!workflowName;
@@ -431,7 +431,7 @@ function MessageItem({
               ) : (
                 <>
                   {message.messageType === 'system' ? (
-                    <div style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.85rem' }}>
+                    <div style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.85rem', marginLeft: -44 + 12, marginTop: 8 }}>
                       <Markdown content={message.content} />
                     </div>
                   ) : (
