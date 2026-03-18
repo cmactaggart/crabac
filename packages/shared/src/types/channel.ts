@@ -18,6 +18,8 @@ export interface Channel {
   isPortal?: boolean;
   portalId?: string;
   sourceSpaceId?: string;
+  // Set on channels in the source space that have been portaled out
+  isPortalSource?: boolean;
 }
 
 export interface ChannelPermissionOverride {

@@ -1,6 +1,6 @@
 import { db } from '../../database/connection.js';
 import { snowflake } from '../_shared.js';
-import { NotFoundError, ForbiddenError } from '../../lib/errors.js';
+import { NotFoundError, ForbiddenError, ConflictError } from '../../lib/errors.js';
 import { Permissions, hasPermission, ALL_PERMISSIONS } from '@crabac/shared';
 import { computePermissions, computeChannelPermissions } from '../rbac/rbac.service.js';
 
@@ -11,6 +11,10 @@ export async function createChannel(
   memberIds?: string[],
   roleOverrides?: string[],
 ) {
+  // Check for duplicate name
+  const existing = await db('channels').where({ space_id: spaceId, name: data.name }).first();
+  if (existing) throw new ConflictError('A channel with that name already exists');
+
   const id = snowflake.generate();
   // Get next position
   const last = await db('channels')
@@ -106,6 +110,17 @@ export async function listChannelsForUser(spaceId: string, userId: string, cache
     }
   }
 
+  // Mark channels that have been portaled out to other spaces
+  const outboundPortals = await db('portals')
+    .where('source_space_id', spaceId)
+    .select('channel_id');
+  const portalSourceIds = new Set(outboundPortals.map((p: any) => String(p.channel_id)));
+  for (const ch of visible) {
+    if (portalSourceIds.has(String(ch.id))) {
+      ch.isPortalSource = true;
+    }
+  }
+
   // Also include portaled channels from other spaces
   const portals = await db('portals')
     .where('target_space_id', spaceId)
@@ -115,6 +130,7 @@ export async function listChannelsForUser(spaceId: string, userId: string, cache
   for (const p of portals) {
     visible.push({
       ...formatChannel(p),
+      categoryId: null, // source space categories don't apply in target space
       isPortal: true,
       portalId: String(p.portal_id),
       sourceSpaceId: String(p.source_space_id),

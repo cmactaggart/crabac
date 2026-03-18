@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, Zap, Send } from 'lucide-react';
 import { usePortalsStore } from '../../stores/portals.js';
+import { useChannelsStore } from '../../stores/channels.js';
 
 interface Props {
   channelId: string;
@@ -22,6 +23,11 @@ export function CreatePortalModal({ channelId, sourceSpaceId, onClose }: Props) 
     setActionError('');
     try {
       await createPortal(sourceSpaceId, channelId, targetSpaceId);
+      // Invalidate target space's channel cache so the portal appears
+      const { spaceCache } = useChannelsStore.getState();
+      const newCache = new Map(spaceCache);
+      newCache.delete(targetSpaceId);
+      useChannelsStore.setState({ spaceCache: newCache });
       setStatus('success');
     } catch (err: any) {
       setActionError(err.message || 'Failed to create portal');

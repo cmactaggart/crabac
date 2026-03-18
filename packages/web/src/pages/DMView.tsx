@@ -953,7 +953,8 @@ function DMMessageList({
 
       {messages.map((msg, i) => {
         const prev = messages[i - 1];
-        const sameAuthor = prev?.authorId === msg.authorId;
+        const prevHasEmbed = prev && ((prev.embeds && prev.embeds.length > 0) || (prev.attachments && prev.attachments.length > 0));
+        const sameAuthor = prev?.authorId === msg.authorId && !prevHasEmbed;
         const gap = sameAuthor && prev ? snowflakeTime(msg.id) - snowflakeTime(prev.id) : Infinity;
         const compact = sameAuthor && gap < 60000;
         const spacedSameAuthor = sameAuthor && gap >= 60000 && gap < 900000;

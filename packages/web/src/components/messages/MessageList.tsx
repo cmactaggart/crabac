@@ -73,8 +73,10 @@ export function MessageList({ messages, loading, hasMore, currentUserId, channel
         // even though they share the space owner's authorId
         const prevWorkflowName = prev?.metadata?.workflowDisplayName;
         const currWorkflowName = msg.metadata?.workflowDisplayName;
+        const prevHasEmbed = prev && ((prev.embeds && prev.embeds.length > 0) || (prev.attachments && prev.attachments.length > 0));
         const sameIdentity = prev?.authorId === msg.authorId
           && !msg.replyToId
+          && !prevHasEmbed
           && prevWorkflowName === currWorkflowName;
         const gap = sameIdentity && prev ? snowflakeTime(msg.id) - snowflakeTime(prev.id) : Infinity;
         // <1min: compact, 1-15min: spaced (no header), >15min: full header

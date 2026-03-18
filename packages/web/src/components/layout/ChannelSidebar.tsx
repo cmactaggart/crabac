@@ -176,13 +176,14 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; channelId: string } | null>(null);
   const [categoryContextMenu, setCategoryContextMenu] = useState<{ x: number; y: number; categoryId: string } | null>(null);
   const [portalChannelId, setPortalChannelId] = useState<string | null>(null);
-  const [showCreateChannel, setShowCreateChannel] = useState(false);
+  const [showCreateChannel, setShowCreateChannel] = useState<string | true | false>(false);
   const [showCreateCategory, setShowCreateCategory] = useState(false);
   const [calendarContextMenu, setCalendarContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [showCalendarCategoryModal, setShowCalendarCategoryModal] = useState(false);
   const [showCalendarEventModal, setShowCalendarEventModal] = useState(false);
   const canManageCalendar = useHasSpacePermission(space?.id || '', Permissions.MANAGE_CALENDAR);
   const [addMenu, setAddMenu] = useState<{ x: number; y: number } | null>(null);
+  const [addMenuCategoryId, setAddMenuCategoryId] = useState<string | null>(null);
   const [showPreferences, setShowPreferences] = useState(false);
   const canManage = useCanManageSpace(space?.id || '');
   const canCreateChannels = useHasSpacePermission(space?.id || '', Permissions.MANAGE_CHANNELS);
@@ -228,9 +229,10 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
   };
 
   // Context menu for + buttons
-  const handleAddMenu = (e: React.MouseEvent) => {
+  const handleAddMenu = (e: React.MouseEvent, categoryId?: string) => {
     e.preventDefault();
     e.stopPropagation();
+    setAddMenuCategoryId(categoryId || null);
     setAddMenu({ x: e.clientX, y: e.clientY });
   };
 
@@ -281,7 +283,7 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
     {
       label: 'Add Channel',
       icon: <Hash size={16} />,
-      onClick: () => setShowCreateChannel(true),
+      onClick: () => setShowCreateChannel(addMenuCategoryId || true),
     },
     {
       label: 'Add Category',
@@ -521,7 +523,8 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
 
     const TypeIcon = ch.type === 'forum' ? MessageSquareDashed : ch.type === 'media_gallery' ? Grid3x3 : ch.type === 'route_library' ? MapPinned : ch.isPrivate ? Lock : Hash;
     const ChannelIcon = ch.isAdmin ? Shield : ch.isPortal ? Zap : TypeIcon;
-    const iconColor = ch.isAdmin ? 'var(--warning, #f0b232)' : ch.isPortal ? 'var(--accent)' : 'var(--text-muted)';
+    const portalColor = '#5a9cf5';
+    const iconColor = ch.isAdmin ? 'var(--warning, #f0b232)' : ch.isPortal ? portalColor : ch.isPortalSource ? portalColor : 'var(--text-muted)';
 
     return (
       <button
@@ -535,7 +538,7 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
           fontWeight: hasUnread ? 700 : 400,
           opacity: isMuted ? 0.5 : 1,
         }}
-        title={ch.isPortal ? `Portal from another space` : ch.isAdmin ? 'Admin channel' : undefined}
+        title={ch.isPortal ? `Portal from another space` : ch.isPortalSource ? 'Portaled to another space' : ch.isAdmin ? 'Admin channel' : undefined}
       >
         {dragHandleListeners && (
           <span
@@ -546,7 +549,7 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
             <GripVertical size={14} />
           </span>
         )}
-        {ch.isPortal ? (
+        {ch.isPortal || ch.isPortalSource ? (
           <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0, gap: 1 }}>
             <Zap size={14} style={{ color: iconColor }} />
             <TypeIcon size={14} style={{ color: iconColor }} />
@@ -701,7 +704,7 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
                   canDrag={canCreateChannels}
                   collapsed={collapsed}
                   onToggle={() => toggleCategory(cat.id)}
-                  onAddClick={handleAddMenu}
+                  onAddClick={(e: React.MouseEvent) => handleAddMenu(e, cat.id)}
                   onContextMenu={(e) => handleCategoryContextMenu(e, cat.id)}
                   canCreateChannels={canCreateChannels}
                 >
@@ -848,6 +851,7 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
         <CreateChannelModal
           spaceId={space.id}
           categories={categories}
+          defaultCategoryId={typeof showCreateChannel === 'string' ? showCreateChannel : undefined}
           onClose={() => setShowCreateChannel(false)}
         />
       )}

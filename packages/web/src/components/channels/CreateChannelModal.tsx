@@ -10,16 +10,17 @@ import { Avatar } from '../common/Avatar.js';
 interface Props {
   spaceId: string;
   categories: ChannelCategory[];
+  defaultCategoryId?: string;
   onClose: () => void;
 }
 
-export function CreateChannelModal({ spaceId, categories, onClose }: Props) {
+export function CreateChannelModal({ spaceId, categories, defaultCategoryId, onClose }: Props) {
   const [displayName, setDisplayName] = useState('');
   const [slug, setSlug] = useState('');
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [topic, setTopic] = useState('');
   const [channelType, setChannelType] = useState<ChannelType>('text');
-  const [categoryId, setCategoryId] = useState('');
+  const [categoryId, setCategoryId] = useState(defaultCategoryId || '');
   const [isPrivate, setIsPrivate] = useState(false);
   const [selectedRoles, setSelectedRoles] = useState<Set<string>>(new Set());
   const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
