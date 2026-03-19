@@ -5,10 +5,15 @@ import { eventBus } from '../../lib/event-bus.js';
 
 export async function listAllSpaces() {
   const spaces = await db('spaces')
-    .select('spaces.*')
+    .select(
+      'spaces.id', 'spaces.name', 'spaces.slug', 'spaces.description',
+      'spaces.icon_url', 'spaces.owner_id', 'spaces.created_at',
+    )
     .select(db.raw('(SELECT COUNT(*) FROM space_members WHERE space_members.space_id = spaces.id) as member_count'))
     .leftJoin('space_settings', 'spaces.id', 'space_settings.space_id')
     .select('space_settings.is_public', 'space_settings.is_featured')
+    .leftJoin('users', 'spaces.owner_id', 'users.id')
+    .select('users.username as owner_username')
     .orderBy('spaces.created_at', 'desc');
 
   return spaces.map((s: any) => ({
@@ -18,6 +23,7 @@ export async function listAllSpaces() {
     description: s.description,
     iconUrl: s.icon_url,
     ownerId: s.owner_id,
+    ownerUsername: s.owner_username ?? null,
     memberCount: Number(s.member_count),
     isPublic: !!s.is_public,
     isFeatured: !!s.is_featured,

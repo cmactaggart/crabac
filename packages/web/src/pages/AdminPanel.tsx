@@ -10,6 +10,7 @@ interface AdminSpace {
   id: string;
   name: string;
   slug: string;
+  ownerUsername: string | null;
   memberCount: number;
   isPublic: boolean;
   isFeatured: boolean;
@@ -106,6 +107,7 @@ function SpacesTab() {
           <tr>
             <th style={styles.th}>Name</th>
             <th style={styles.th}>Slug</th>
+            <th style={styles.th}>Owner</th>
             <th style={styles.th}>Members</th>
             <th style={styles.th}>Public</th>
             <th style={styles.th}>Featured</th>
@@ -117,6 +119,7 @@ function SpacesTab() {
             <tr key={s.id}>
               <td style={styles.td}>{s.name}</td>
               <td style={styles.td}>{s.slug}</td>
+              <td style={{ ...styles.td, color: 'var(--text-secondary)' }}>{s.ownerUsername ?? '—'}</td>
               <td style={styles.td}>{s.memberCount}</td>
               <td style={styles.td}>
                 <span style={{
