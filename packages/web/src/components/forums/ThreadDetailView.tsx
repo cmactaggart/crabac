@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Pin, Lock, Send, Reply, X } from 'lucide-react';
 import { useForumsStore } from '../../stores/forums.js';
+import { useChannelsStore } from '../../stores/channels.js';
+import { useNotificationsStore } from '../../stores/notifications.js';
 import { getSocket } from '../../lib/socket.js';
 import { ThreadPost } from './ThreadPost.js';
 import { ReportModal } from '../moderation/ReportModal.js';
@@ -16,6 +18,8 @@ interface Props {
 
 export function ThreadDetailView({ spaceId, channelId, thread, onBack, canModerate }: Props) {
   const { threadPosts, postsLoading, fetchThreadPosts, createThreadPost, updateThread, addPost, updateThreadInList } = useForumsStore();
+  const markRead = useChannelsStore((s) => s.markRead);
+  const { notifications, markAsRead } = useNotificationsStore();
   const [replyContent, setReplyContent] = useState('');
   const [sending, setSending] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
@@ -25,6 +29,25 @@ export function ThreadDetailView({ spaceId, channelId, thread, onBack, canModera
   useEffect(() => {
     fetchThreadPosts(spaceId, channelId, thread.id);
   }, [spaceId, channelId, thread.id, fetchThreadPosts]);
+
+  // Mark channel as read and clear matching notifications when posts load
+  useEffect(() => {
+    if (threadPosts.length === 0 || !spaceId) return;
+
+    // Mark channel read up to the latest post in the thread
+    const lastPost = threadPosts[threadPosts.length - 1];
+    markRead(spaceId, channelId, lastPost.id);
+
+    // Mark any unread notifications that reference posts in this thread as read
+    const postIds = new Set(threadPosts.map((p) => p.id));
+    for (const n of notifications) {
+      if (n.read) continue;
+      const data = n.data as any;
+      if (data?.messageId && postIds.has(data.messageId)) {
+        markAsRead(n.id);
+      }
+    }
+  }, [threadPosts.length, spaceId, channelId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Socket: join/leave thread room
   useEffect(() => {
