@@ -111,6 +111,28 @@ export function EmojiPicker({ onSelect, onClose }: Props) {
 
   const recentEmojis = useMemo(getRecentEmojis, []);
 
+  // Reposition if off-screen
+  useEffect(() => {
+    if (isMobile || !pickerRef.current) return;
+    const rect = pickerRef.current.getBoundingClientRect();
+    // If top is above viewport, flip to below the trigger
+    if (rect.top < 0) {
+      pickerRef.current.style.top = 'auto';
+      pickerRef.current.style.bottom = 'auto';
+      pickerRef.current.style.top = '32px';
+    }
+    // If bottom is below viewport, ensure it doesn't overflow
+    if (rect.bottom > window.innerHeight) {
+      pickerRef.current.style.top = 'auto';
+      pickerRef.current.style.bottom = '0px';
+    }
+    // If right edge is off-screen, shift left
+    if (rect.right > window.innerWidth) {
+      pickerRef.current.style.right = 'auto';
+      pickerRef.current.style.left = `${window.innerWidth - rect.width - 8}px`;
+    }
+  }, [isMobile]);
+
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {

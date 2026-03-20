@@ -88,13 +88,26 @@ export function UserProfilePopover({ userId, anchorRect, onClose, onMessage, cur
     };
   }, [onClose]);
 
-  // Position below the anchor
-  const top = anchorRect.bottom + 8;
-  const left = Math.min(anchorRect.left, window.innerWidth - 300);
+  // Position below anchor, but flip above if it would go off-screen
+  const [pos, setPos] = useState({ top: anchorRect.bottom + 8, left: Math.min(anchorRect.left, window.innerWidth - 300) });
+  useEffect(() => {
+    if (!popoverRef.current) return;
+    const rect = popoverRef.current.getBoundingClientRect();
+    let { top, left } = pos;
+    if (rect.bottom > window.innerHeight) {
+      top = anchorRect.top - rect.height - 8;
+    }
+    if (top < 0) top = 8;
+    if (rect.right > window.innerWidth) {
+      left = window.innerWidth - rect.width - 8;
+    }
+    if (left < 0) left = 8;
+    if (top !== pos.top || left !== pos.left) setPos({ top, left });
+  }, [profile]); // re-check when profile loads since that changes height
 
   if (!profile) {
     return (
-      <div ref={popoverRef} style={{ ...styles.popover, top, left }}>
+      <div ref={popoverRef} style={{ ...styles.popover, top: pos.top, left: pos.left }}>
         <div style={styles.loading}>Loading...</div>
       </div>
     );
@@ -168,7 +181,7 @@ export function UserProfilePopover({ userId, anchorRect, onClose, onMessage, cur
   };
 
   return (
-    <div ref={popoverRef} style={{ ...styles.popover, top, left }}>
+    <div ref={popoverRef} style={{ ...styles.popover, top: pos.top, left: pos.left }}>
       {/* Banner */}
       <div style={styles.banner} />
 

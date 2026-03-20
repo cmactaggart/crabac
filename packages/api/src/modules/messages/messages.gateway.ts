@@ -1,5 +1,8 @@
 import { eventBus } from '../../lib/event-bus.js';
 import { io } from '../../websocket/socket-server.js';
+import { db } from '../../database/connection.js';
+import { sendPushNotification } from '../notifications/push.service.js';
+import { config } from '../../config.js';
 
 export function registerMessageGateway() {
   eventBus.on('message.created', ({ message, channelId, spaceId }) => {
@@ -22,6 +25,11 @@ export function registerMessageGateway() {
         messageId: message.id,
         spaceId,
       });
+
+      // Send push notifications to members not currently viewing the channel
+      sendChannelMessagePush(message, channelId, spaceId).catch((err) =>
+        console.error('[Gateway] Channel push error:', err),
+      );
     }
   });
 
@@ -54,4 +62,69 @@ export function registerMessageGateway() {
     if (!io) return;
     io.to(`space:${spaceId}`).emit('space:member_left', { spaceId, userId });
   });
+}
+
+async function sendChannelMessagePush(message: any, channelId: string, spaceId: string) {
+  if (!io) return;
+
+  // Get channel info (private flag, display name) and space name in one query
+  const channelInfo = await db('channels')
+    .join('spaces', 'channels.space_id', 'spaces.id')
+    .where('channels.id', channelId)
+    .select(
+      'channels.name as channelName',
+      'channels.display_name as channelDisplayName',
+      'channels.is_private as isPrivate',
+      'spaces.name as spaceName',
+    )
+    .first();
+  if (!channelInfo) return;
+
+  // Get eligible members: channel_members for private channels, space_members otherwise
+  const memberRows = channelInfo.isPrivate
+    ? await db('channel_members').where('channel_id', channelId).whereNot('user_id', message.authorId).select('user_id')
+    : await db('space_members').where('space_id', spaceId).whereNot('user_id', message.authorId).select('user_id');
+
+  if (memberRows.length === 0) return;
+  const memberIds = memberRows.map((r: any) => String(r.user_id));
+
+  // Filter out users who have this channel muted
+  const mutedRows = await db('channel_mutes')
+    .where('channel_id', channelId)
+    .whereIn('user_id', memberIds)
+    .select('user_id');
+  const mutedSet = new Set(mutedRows.map((r: any) => String(r.user_id)));
+
+  // Filter out users who have the author muted
+  const authorMutedRows = await db('user_mutes')
+    .where('muted_user_id', message.authorId)
+    .whereIn('user_id', memberIds)
+    .select('user_id');
+  const authorMutedSet = new Set(authorMutedRows.map((r: any) => String(r.user_id)));
+
+  // Find users currently viewing this channel (they already see it in real time)
+  const connectedSockets = await io.in(`channel:${channelId}`).fetchSockets();
+  const connectedUserIds = new Set(connectedSockets.map((s) => s.data.userId));
+
+  const channelLabel = channelInfo.channelDisplayName || channelInfo.channelName;
+  const senderName = message.author?.displayName || message.author?.username || 'Someone';
+  const title = `${senderName} (#${channelLabel} | ${channelInfo.spaceName})`;
+  const body = message.content?.length > 150 ? message.content.slice(0, 150) + '...' : (message.content || '');
+
+  const pushData: Record<string, string> = {
+    type: 'channel_message',
+    spaceId,
+    channelId,
+    messageId: String(message.id),
+  };
+  if (message.author?.avatarUrl) {
+    pushData.avatarUrl = `${config.apiUrl}${message.author.avatarUrl}`;
+  }
+
+  for (const userId of memberIds) {
+    if (connectedUserIds.has(userId)) continue;
+    if (mutedSet.has(userId)) continue;
+    if (authorMutedSet.has(userId)) continue;
+    sendPushNotification(userId, title, body, pushData);
+  }
 }
