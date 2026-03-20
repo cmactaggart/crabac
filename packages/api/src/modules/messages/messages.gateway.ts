@@ -88,6 +88,32 @@ async function sendChannelMessagePush(message: any, channelId: string, spaceId: 
   if (memberRows.length === 0) return;
   const memberIds = memberRows.map((r: any) => String(r.user_id));
 
+  // Build set of users who will already get a notification-triggered push (reply recipient + mentioned users)
+  // so we don't send them a duplicate channel activity push
+  const notifiedUserIds = new Set<string>();
+
+  // Reply recipient
+  if (message.replyToId) {
+    const parent = await db('messages').where('id', message.replyToId).select('author_id').first();
+    if (parent && String(parent.author_id) !== message.authorId) {
+      notifiedUserIds.add(String(parent.author_id));
+    }
+  }
+
+  // Mentioned users
+  if (message.content) {
+    const mentionRegex = /@([a-zA-Z0-9_-]+)/g;
+    const usernames: string[] = [];
+    let match;
+    while ((match = mentionRegex.exec(message.content)) !== null) {
+      if (match[1] !== 'everyone' && match[1] !== 'here') usernames.push(match[1]);
+    }
+    if (usernames.length > 0) {
+      const mentionedUsers = await db('users').whereIn('username', usernames).select('id');
+      for (const u of mentionedUsers) notifiedUserIds.add(String(u.id));
+    }
+  }
+
   // Filter out users who have this channel muted
   const mutedRows = await db('channel_mutes')
     .where('channel_id', channelId)
@@ -125,6 +151,7 @@ async function sendChannelMessagePush(message: any, channelId: string, spaceId: 
     if (connectedUserIds.has(userId)) continue;
     if (mutedSet.has(userId)) continue;
     if (authorMutedSet.has(userId)) continue;
+    if (notifiedUserIds.has(userId)) continue;
     sendPushNotification(userId, title, body, pushData);
   }
 }
