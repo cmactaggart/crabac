@@ -98,6 +98,55 @@ boardsRoutes.get(
 
 // ─── Public Blog ───
 
+// RSS feed for public blog
+boardsRoutes.get(
+  '/blog/:spaceSlug/feed.xml',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const space = await boardsService.getPublicSpace(req.params.spaceSlug);
+      const settings = await (await import('../../database/connection.js')).db('space_settings').where('space_id', space.id).first();
+      if (!settings?.allow_public_blog) {
+        return res.status(404).json({ error: { message: 'Blog not available' } });
+      }
+      const posts = await blogService.listPublicPosts(String(space.id), { limit: 50 });
+      const { config } = await import('../../config.js');
+      const blogUrl = `${config.appUrl}/blog/${space.slug}`;
+      const feedUrl = `${config.apiUrl}/api/boards/blog/${space.slug}/feed.xml`;
+
+      const escapeXml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+
+      const items = posts.map((post: any) => {
+        const postUrl = `${config.appUrl}/blog/${space.slug}/${post.id}`;
+        return `    <item>
+      <title>${escapeXml(post.title)}</title>
+      <link>${postUrl}</link>
+      <guid isPermaLink="true">${postUrl}</guid>
+      <pubDate>${new Date(post.publishedAt).toUTCString()}</pubDate>
+      <dc:creator>${escapeXml(post.author?.displayName || post.author?.username || 'Unknown')}</dc:creator>${post.summary ? `\n      <description>${escapeXml(post.summary)}</description>` : ''}
+    </item>`;
+      }).join('\n');
+
+      const rss = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>${escapeXml(space.name)}</title>
+    <link>${blogUrl}</link>
+    <description>${escapeXml(space.description || `Blog posts from ${space.name}`)}</description>
+    <atom:link href="${feedUrl}" rel="self" type="application/rss+xml" />
+    <language>en</language>
+    <lastBuildDate>${posts.length > 0 ? new Date(posts[0].publishedAt).toUTCString() : new Date().toUTCString()}</lastBuildDate>
+${items}
+  </channel>
+</rss>`;
+
+      res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8');
+      res.send(rss);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 boardsRoutes.get(
   '/blog/:spaceSlug',
   async (req: Request, res: Response, next: NextFunction) => {

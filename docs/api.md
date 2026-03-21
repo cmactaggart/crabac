@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.14.0
+## API Version 0.14.1
 
 Base URL: `https://app.crab.ac/api`
 
@@ -2421,6 +2421,12 @@ List public published blog posts. Requires `allowPublicBlog` in space settings. 
 Get a single public blog post. Same access requirements as listing.
 
 **Response:** `{ space, post: BlogPost }`
+
+#### GET /boards/blog/:spaceSlug/feed.xml
+
+RSS 2.0 feed of public published blog posts. No auth required. Requires `allowPublicBlog` in space settings. Returns the 50 most recent public posts.
+
+**Response:** `application/rss+xml`
 
 ---
 

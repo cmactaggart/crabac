@@ -17,22 +17,19 @@ The platform is especially well-suited for outdoor activity communities (cycling
 
 ---
 
-## What's New in 0.10.0
+## What's New in 0.14.1
 
-- **Activity tracking** — record runs, rides, walks, and hikes from the mobile app with GPX data; activities appear as rich cards in the social feed with route maps, distance, duration, and elevation stats; inline editing; save-as-route; stats aggregation by type and time period
-- **ICS calendar feeds** — public community calendars now have a subscribable `.ics` endpoint for Apple Calendar, Google Calendar, Outlook, etc.
-- **Post pinning** — pin a post to the top of your profile
-- **Share to DM** — share posts, gallery items, routes, and events directly to DM conversations
-- **Feed search** — full-text search and hashtag filtering across social posts
-- **Workflow variables** — new `{{mention}}` (@username) and `{{space}}` (alias for spaceName) template variables; single-brace `{var}` syntax now supported alongside `{{var}}`
+- **Route builder** — draw and edit routes directly on the map with an interactive builder; generate GPX files from drawn routes without needing external tools
+- **Home screen widgets** — the home screen now shows upcoming events from your spaces and recent blog posts/newsletters in carousel and card layouts
+- **Blog RSS feeds** — public blogs now have an RSS 2.0 feed at `/api/boards/blog/:slug/feed.xml`, with an RSS icon in the blog header for easy discovery
 
 ### Previous highlights
 
+- **Activity tracking** — record runs, rides, walks, and hikes from the mobile app with GPX data; activities appear as rich cards in the social feed with route maps, distance, duration, and elevation stats
 - **Newsletter system** — block editor, email delivery via SES, open/click tracking, subscriptions, daily/weekly digest scheduling
 - **Workflow engine** — trigger-condition-action automations: welcome flows, auto-imports, slash commands, interactive cards, webhooks
-- **Social profiles** — personal galleries, route collections, event calendars, post feed with visibility controls
-- **User posts** — text posts with photo/route attachments, friend tagging, reactions, comments, reposts
-- **Follows & feed** — one-way follows with an aggregated social feed
+- **Social profiles & feed** — personal galleries, route collections, posts with reactions/comments/reposts, follows, and an aggregated news feed
+- **ICS calendar feeds** — public community calendars with subscribable `.ics` endpoints for calendar apps
 
 ---
 
@@ -407,9 +404,10 @@ ICS feed: `app.crab.ac/api/boards/calendar/your-space-slug/feed.ics`
 
 ### Public Blog
 
-Blog posts can individually be made public for an external blog page with full Markdown rendering.
+Blog posts can individually be made public for an external blog page with full Markdown rendering. Public blogs include an RSS 2.0 feed for subscribing in feed readers.
 
 URL: `app.crab.ac/blog/your-space-slug`
+RSS feed: `app.crab.ac/api/boards/blog/your-space-slug/feed.xml`
 
 <!-- TODO: screenshot of public blog page -->
 <!-- ![Screenshot: Public blog](docs/screenshots/public-blog.png) -->
@@ -676,7 +674,7 @@ sudo cloudflared service install
 
 ## API Documentation
 
-See [docs/api.md](docs/api.md) for the complete REST API reference (v0.10.0), including all endpoints, request/response formats, WebSocket events, and permission requirements.
+See [docs/api.md](docs/api.md) for the complete REST API reference (v0.14.1), including all endpoints, request/response formats, WebSocket events, and permission requirements.
 
 ---
 

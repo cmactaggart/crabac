@@ -69,10 +69,24 @@ export function PublicBlogHome() {
       {space && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32 }}>
           {space.iconUrl && <img src={space.iconUrl} alt="" style={{ width: 48, height: 48, borderRadius: 12, objectFit: 'cover' }} />}
-          <div>
+          <div style={{ flex: 1 }}>
             <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: c.headingColor }}>{space.name}</h1>
             {space.description && <p style={{ margin: '4px 0 0', fontSize: '0.9rem', color: c.secondaryText }}>{space.description}</p>}
           </div>
+          <a
+            href={`/api/boards/blog/${spaceSlug}/feed.xml`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="RSS Feed"
+            style={{ color: c.mutedText, display: 'flex', alignItems: 'center', transition: 'color 0.15s' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#f26522')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = c.mutedText)}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="6.18" cy="17.82" r="2.18" />
+              <path d="M4 4.44v2.83c7.03 0 12.73 5.7 12.73 12.73h2.83c0-8.59-6.97-15.56-15.56-15.56zm0 5.66v2.83c3.9 0 7.07 3.17 7.07 7.07h2.83c0-5.47-4.43-9.9-9.9-9.9z" />
+            </svg>
+          </a>
         </div>
       )}
 
