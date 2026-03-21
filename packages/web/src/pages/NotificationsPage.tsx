@@ -169,7 +169,8 @@ function formatTitle(n: Notification): string {
     case 'portal_invite':
       return `Portal invite from ${data.sourceSpaceName}`;
     case 'friend_request':
-      return `${data.fromDisplayName} sent you a friend request`;
+    case 'follow_request':
+      return `${data.fromDisplayName} wants to follow you`;
     case 'dm_request':
       return `${data.fromDisplayName} sent you a message`;
     case 'post_tag':
@@ -204,6 +205,7 @@ function getNotificationAvatar(n: Notification): { src: string | null; name: str
       return { src: d.repliedByAvatarUrl || null, name: d.repliedByUsername };
     }
     case 'friend_request':
+    case 'follow_request':
     case 'dm_request':
       return { src: null, name: data.fromDisplayName || data.fromUsername || '?' };
     case 'post_tag': {
@@ -227,7 +229,8 @@ function getNotificationIcon(type: string) {
     case 'reply': return <Reply size={18} style={{ color: 'var(--accent)' }} />;
     case 'portal_invite': return <Zap size={18} style={{ color: 'var(--accent)' }} />;
     case 'post_tag': return <Tag size={18} style={{ color: 'var(--accent)' }} />;
-    case 'friend_request': return <Users size={18} style={{ color: 'var(--accent)' }} />;
+    case 'friend_request':
+    case 'follow_request': return <Users size={18} style={{ color: 'var(--accent)' }} />;
     case 'dm_request': return <Mail size={18} style={{ color: 'var(--accent)' }} />;
     case 'post_comment': return <MessageCircle size={18} style={{ color: 'var(--accent)' }} />;
     case 'event_cancelled': return <CalendarX size={18} style={{ color: 'var(--danger)' }} />;

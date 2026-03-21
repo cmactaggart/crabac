@@ -9,11 +9,11 @@ export async function blockUser(userId: string, blockedUserId: string) {
     .onConflict(['user_id', 'blocked_user_id'])
     .ignore();
 
-  // Remove from friends if they are friends
-  await db('friendships')
+  // Remove follow relationships in both directions
+  await db('follows')
     .where(function () {
-      this.where({ user_id: userId, friend_id: blockedUserId })
-        .orWhere({ user_id: blockedUserId, friend_id: userId });
+      this.where({ follower_id: userId, following_id: blockedUserId })
+        .orWhere({ follower_id: blockedUserId, following_id: userId });
     })
     .delete();
 

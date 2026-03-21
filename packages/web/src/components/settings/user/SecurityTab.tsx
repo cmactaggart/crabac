@@ -6,7 +6,7 @@ import type { PersonalVisibility } from '@crabac/shared';
 
 const VISIBILITY_OPTIONS: { value: PersonalVisibility; label: string; desc: string }[] = [
   { value: 'private', label: 'Private', desc: 'Only you' },
-  { value: 'friends', label: 'Friends', desc: 'Your friends' },
+  { value: 'followers', label: 'Followers', desc: 'Your followers' },
   { value: 'spaces', label: 'Spaces', desc: 'Shared space members' },
   { value: 'public', label: 'Public', desc: 'Everyone' },
 ];

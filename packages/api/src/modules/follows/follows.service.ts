@@ -1,9 +1,9 @@
 import { db } from '../../database/connection.js';
 import { snowflake } from '../_shared.js';
 import { BadRequestError } from '../../lib/errors.js';
-import { areFriends } from '../friends/friends.service.js';
-import { resolveVisibleLevels } from '../personal-collections/privacy.service.js';
-import type { FollowUser, FollowCounts } from '@crabac/shared';
+import { eventBus } from '../../lib/event-bus.js';
+import { getPreferences } from '../users/preferences.service.js';
+import type { FollowUser, FollowCounts, FollowStatus } from '@crabac/shared';
 
 // ─── Follow / Unfollow ───
 
@@ -12,124 +12,174 @@ export async function followUser(followerId: string, targetId: string) {
     throw new BadRequestError('Cannot follow yourself');
   }
 
-  // If already friends, don't create explicit follow
-  const friends = await areFriends(followerId, targetId);
-  if (friends) {
-    return; // friendship implies follow
-  }
-
   const existing = await db('follows')
     .where({ follower_id: followerId, following_id: targetId })
     .first();
 
-  if (existing) return; // already following
+  if (existing) {
+    if (existing.status === 'pending') {
+      throw new BadRequestError('Follow request already pending');
+    }
+    return { status: 'accepted' as const };
+  }
+
+  // Look up target's follow request policy
+  const prefs = await getPreferences(targetId);
+  let status: 'accepted' | 'pending' = 'accepted';
+
+  if (prefs.followRequestPolicy === 'require_approval') {
+    status = 'pending';
+  } else if (prefs.followRequestPolicy === 'accept_mutual_spaces') {
+    // Check if they share a space
+    const sharedSpace = await db('space_members as sm1')
+      .join('space_members as sm2', 'sm1.space_id', 'sm2.space_id')
+      .where('sm1.user_id', followerId)
+      .where('sm2.user_id', targetId)
+      .first();
+
+    if (!sharedSpace) {
+      status = 'pending';
+    }
+  }
 
   const id = snowflake.generate();
   await db('follows').insert({
     id,
     follower_id: followerId,
     following_id: targetId,
+    status,
   });
+
+  if (status === 'pending') {
+    eventBus.emit('follow.request_sent', { followId: id, followerId, targetId });
+  } else {
+    eventBus.emit('follow.created', { followId: id, followerId, targetId });
+  }
+
+  return { status };
 }
 
 export async function unfollowUser(followerId: string, targetId: string) {
-  // Can't unfollow a friend (they'd need to unfriend)
-  const friends = await areFriends(followerId, targetId);
-  if (friends) {
-    throw new BadRequestError('Cannot unfollow a friend. Remove the friendship instead.');
-  }
-
   await db('follows')
     .where({ follower_id: followerId, following_id: targetId })
     .delete();
 }
 
+// ─── Follow Request Management ───
+
+export async function acceptFollowRequest(userId: string, followerId: string) {
+  const row = await db('follows')
+    .where({ follower_id: followerId, following_id: userId, status: 'pending' })
+    .first();
+
+  if (!row) throw new BadRequestError('No pending follow request from this user');
+
+  await db('follows')
+    .where({ follower_id: followerId, following_id: userId })
+    .update({ status: 'accepted' });
+
+  eventBus.emit('follow.accepted', { followerId, targetId: userId });
+}
+
+export async function declineFollowRequest(userId: string, followerId: string) {
+  const deleted = await db('follows')
+    .where({ follower_id: followerId, following_id: userId, status: 'pending' })
+    .delete();
+
+  if (!deleted) throw new BadRequestError('No pending follow request from this user');
+}
+
+export async function removeFollower(userId: string, followerId: string) {
+  await db('follows')
+    .where({ follower_id: followerId, following_id: userId, status: 'accepted' })
+    .delete();
+}
+
+export async function listPendingFollowRequests(userId: string): Promise<FollowUser[]> {
+  const rows = await db('follows')
+    .join('users', 'follows.follower_id', 'users.id')
+    .where({ 'follows.following_id': userId, 'follows.status': 'pending' })
+    .select(
+      'users.id',
+      'users.username',
+      'users.display_name',
+      'users.avatar_url',
+      'users.base_color',
+      'users.accent_color',
+    );
+
+  return rows.map(formatFollowUser);
+}
+
+export async function listSentFollowRequests(userId: string): Promise<FollowUser[]> {
+  const rows = await db('follows')
+    .join('users', 'follows.following_id', 'users.id')
+    .where({ 'follows.follower_id': userId, 'follows.status': 'pending' })
+    .select(
+      'users.id',
+      'users.username',
+      'users.display_name',
+      'users.avatar_url',
+      'users.base_color',
+      'users.accent_color',
+    );
+
+  return rows.map(formatFollowUser);
+}
+
 // ─── Status ───
 
-export async function getFollowStatus(followerId: string, targetId: string) {
-  const [followRow, isFriend] = await Promise.all([
+export async function getFollowStatus(viewerId: string, targetId: string): Promise<FollowStatus> {
+  const [outgoing, incoming] = await Promise.all([
     db('follows')
-      .where({ follower_id: followerId, following_id: targetId })
+      .where({ follower_id: viewerId, following_id: targetId })
       .first(),
-    areFriends(followerId, targetId),
+    db('follows')
+      .where({ follower_id: targetId, following_id: viewerId })
+      .first(),
   ]);
 
   return {
-    isFollowing: !!followRow || isFriend,
-    isFriend,
+    isFollowing: outgoing?.status === 'accepted',
+    isFollowedBy: incoming?.status === 'accepted',
+    followRequestPending: outgoing?.status === 'pending',
+    incomingRequestPending: incoming?.status === 'pending',
   };
+}
+
+export async function isFollowing(followerId: string, targetId: string): Promise<boolean> {
+  const row = await db('follows')
+    .where({ follower_id: followerId, following_id: targetId, status: 'accepted' })
+    .first();
+  return !!row;
 }
 
 // ─── Counts ───
 
 export async function getFollowCounts(userId: string): Promise<FollowCounts> {
-  // Following: explicit follows + accepted friendships (deduplicated)
-  const [explicitFollowing, explicitFollowers, friendCount] = await Promise.all([
-    db('follows').where('follower_id', userId).count('* as count').first(),
-    db('follows').where('following_id', userId).count('* as count').first(),
-    db('friendships')
-      .where(function () {
-        this.where({ user_id: userId, status: 'accepted' })
-          .orWhere({ friend_id: userId, status: 'accepted' });
-      })
+  const [following, followers] = await Promise.all([
+    db('follows')
+      .where({ follower_id: userId, status: 'accepted' })
+      .count('* as count')
+      .first(),
+    db('follows')
+      .where({ following_id: userId, status: 'accepted' })
       .count('* as count')
       .first(),
   ]);
 
-  // Overlap: people who are both explicitly followed AND friends
-  const followingOverlap = await db('follows')
-    .where('follower_id', userId)
-    .whereExists(function () {
-      this.select(db.raw(1))
-        .from('friendships')
-        .where('status', 'accepted')
-        .where(function () {
-          this.where(function () {
-            this.whereRaw('friendships.user_id = follows.following_id')
-              .where('friendships.friend_id', userId);
-          }).orWhere(function () {
-            this.whereRaw('friendships.friend_id = follows.following_id')
-              .where('friendships.user_id', userId);
-          });
-        });
-    })
-    .count('* as count')
-    .first();
-
-  const followerOverlap = await db('follows')
-    .where('following_id', userId)
-    .whereExists(function () {
-      this.select(db.raw(1))
-        .from('friendships')
-        .where('status', 'accepted')
-        .where(function () {
-          this.where(function () {
-            this.whereRaw('friendships.user_id = follows.follower_id')
-              .where('friendships.friend_id', userId);
-          }).orWhere(function () {
-            this.whereRaw('friendships.friend_id = follows.follower_id')
-              .where('friendships.user_id', userId);
-          });
-        });
-    })
-    .count('* as count')
-    .first();
-
-  const fc = Number(friendCount?.count || 0);
-
   return {
-    followingCount: Number(explicitFollowing?.count || 0) + fc - Number(followingOverlap?.count || 0),
-    followerCount: Number(explicitFollowers?.count || 0) + fc - Number(followerOverlap?.count || 0),
+    followingCount: Number(following?.count || 0),
+    followerCount: Number(followers?.count || 0),
   };
 }
 
 // ─── Lists ───
 
 export async function getFollowers(userId: string): Promise<FollowUser[]> {
-  // Explicit followers
-  const explicitFollowers = await db('follows')
+  const rows = await db('follows')
     .join('users', 'follows.follower_id', 'users.id')
-    .where('follows.following_id', userId)
+    .where({ 'follows.following_id': userId, 'follows.status': 'accepted' })
     .select(
       'users.id',
       'users.username',
@@ -139,50 +189,13 @@ export async function getFollowers(userId: string): Promise<FollowUser[]> {
       'users.accent_color',
     );
 
-  // Friends (accepted)
-  const friendRows = await db('friendships')
-    .where(function () {
-      this.where({ user_id: userId, status: 'accepted' })
-        .orWhere({ friend_id: userId, status: 'accepted' });
-    });
-
-  const friendUserIds = friendRows.map((r: any) =>
-    String(r.user_id) === userId ? String(r.friend_id) : String(r.user_id),
-  );
-
-  let friendUsers: any[] = [];
-  if (friendUserIds.length > 0) {
-    friendUsers = await db('users')
-      .whereIn('id', friendUserIds)
-      .select('id', 'username', 'display_name', 'avatar_url', 'base_color', 'accent_color');
-  }
-
-  // Deduplicate
-  const seen = new Set<string>();
-  const result: FollowUser[] = [];
-
-  for (const row of [...explicitFollowers, ...friendUsers]) {
-    const id = String(row.id);
-    if (seen.has(id)) continue;
-    seen.add(id);
-    result.push({
-      id,
-      username: row.username,
-      displayName: row.display_name,
-      avatarUrl: row.avatar_url,
-      baseColor: row.base_color || null,
-      accentColor: row.accent_color || null,
-    });
-  }
-
-  return result;
+  return rows.map(formatFollowUser);
 }
 
 export async function getFollowing(userId: string): Promise<FollowUser[]> {
-  // Explicit following
-  const explicitFollowing = await db('follows')
+  const rows = await db('follows')
     .join('users', 'follows.following_id', 'users.id')
-    .where('follows.follower_id', userId)
+    .where({ 'follows.follower_id': userId, 'follows.status': 'accepted' })
     .select(
       'users.id',
       'users.username',
@@ -192,43 +205,7 @@ export async function getFollowing(userId: string): Promise<FollowUser[]> {
       'users.accent_color',
     );
 
-  // Friends (accepted)
-  const friendRows = await db('friendships')
-    .where(function () {
-      this.where({ user_id: userId, status: 'accepted' })
-        .orWhere({ friend_id: userId, status: 'accepted' });
-    });
-
-  const friendUserIds = friendRows.map((r: any) =>
-    String(r.user_id) === userId ? String(r.friend_id) : String(r.user_id),
-  );
-
-  let friendUsers: any[] = [];
-  if (friendUserIds.length > 0) {
-    friendUsers = await db('users')
-      .whereIn('id', friendUserIds)
-      .select('id', 'username', 'display_name', 'avatar_url', 'base_color', 'accent_color');
-  }
-
-  // Deduplicate
-  const seen = new Set<string>();
-  const result: FollowUser[] = [];
-
-  for (const row of [...explicitFollowing, ...friendUsers]) {
-    const id = String(row.id);
-    if (seen.has(id)) continue;
-    seen.add(id);
-    result.push({
-      id,
-      username: row.username,
-      displayName: row.display_name,
-      avatarUrl: row.avatar_url,
-      baseColor: row.base_color || null,
-      accentColor: row.accent_color || null,
-    });
-  }
-
-  return result;
+  return rows.map(formatFollowUser);
 }
 
 // ─── Feed ───
@@ -237,26 +214,22 @@ export async function getFeed(
   userId: string,
   options: { before?: string; limit: number },
 ) {
-  // Get IDs of people to include in feed
-  const [explicitFollowRows, friendRows] = await Promise.all([
-    db('follows').where('follower_id', userId).select('following_id'),
-    db('friendships')
-      .where(function () {
-        this.where({ user_id: userId, status: 'accepted' })
-          .orWhere({ friend_id: userId, status: 'accepted' });
-      })
-      .select('user_id', 'friend_id'),
-  ]);
+  // Get users I follow (accepted)
+  const followingRows = await db('follows')
+    .where({ follower_id: userId, status: 'accepted' })
+    .select('following_id');
 
-  const explicitFollowIds = explicitFollowRows.map((r: any) => String(r.following_id));
-  const friendIds = friendRows.map((r: any) =>
-    String(r.user_id) === userId ? String(r.friend_id) : String(r.user_id),
-  );
-  const friendIdSet = new Set(friendIds);
+  const followingIds = followingRows.map((r: any) => String(r.following_id));
 
-  // All user IDs whose posts we want (deduped), plus self
-  const allIds = new Set([userId, ...explicitFollowIds, ...friendIds]);
-  const allIdsArr = [...allIds];
+  // Get which of those follow me back (mutual)
+  let mutualIds: Set<string> = new Set();
+  if (followingIds.length > 0) {
+    const mutualRows = await db('follows')
+      .where({ following_id: userId, status: 'accepted' })
+      .whereIn('follower_id', followingIds)
+      .select('follower_id');
+    mutualIds = new Set(mutualRows.map((r: any) => String(r.follower_id)));
+  }
 
   // Get spaces with social_enabled where user is a member
   const memberSpaces = await db('space_members')
@@ -266,13 +239,16 @@ export async function getFeed(
     .select('space_members.space_id');
   const memberSpaceIds = memberSpaces.map((r: any) => String(r.space_id));
 
+  const allIds = new Set([userId, ...followingIds]);
+  const allIdsArr = [...allIds];
+
   if (allIdsArr.length === 0 && memberSpaceIds.length === 0) return [];
 
   // Build query with visibility filtering per user relationship
   // Own posts: all visibilities
-  // Friends' posts: public + friends
-  // Followed (non-friend) posts: public only
-  // Space posts: always included (public)
+  // Mutual follow posts: public + followers
+  // One-way follow posts (I follow them, they don't follow me): public only
+  // Space posts: always included
   let query = db('user_posts as up')
     .join('users', 'up.user_id', 'users.id')
     .leftJoin('spaces', 'up.space_id', 'spaces.id')
@@ -286,20 +262,21 @@ export async function getFeed(
             this.where(function () {
               this.where('up.user_id', userId);
             })
-              // Friends' posts: public + friends
+              // Mutual follows' posts: public + followers
               .orWhere(function () {
-                if (friendIds.length > 0) {
-                  this.whereIn('up.user_id', friendIds)
-                    .whereIn('up.visibility', ['public', 'friends']);
+                const mutualArr = [...mutualIds];
+                if (mutualArr.length > 0) {
+                  this.whereIn('up.user_id', mutualArr)
+                    .whereIn('up.visibility', ['public', 'followers']);
                 } else {
                   this.whereRaw('1=0');
                 }
               })
-              // Followed non-friends: public only
+              // One-way follows (I follow them, they don't follow me): public only
               .orWhere(function () {
-                const followOnlyIds = explicitFollowIds.filter((id) => !friendIdSet.has(id));
-                if (followOnlyIds.length > 0) {
-                  this.whereIn('up.user_id', followOnlyIds)
+                const oneWayIds = followingIds.filter((id) => !mutualIds.has(id));
+                if (oneWayIds.length > 0) {
+                  this.whereIn('up.user_id', oneWayIds)
                     .where('up.visibility', 'public');
                 } else {
                   this.whereRaw('1=0');
@@ -610,4 +587,15 @@ function aggregateReactions(rows: any[]) {
     }
   }
   return Array.from(byEmoji.values());
+}
+
+function formatFollowUser(row: any): FollowUser {
+  return {
+    id: String(row.id),
+    username: row.username,
+    displayName: row.display_name,
+    avatarUrl: row.avatar_url,
+    baseColor: row.base_color || null,
+    accentColor: row.accent_color || null,
+  };
 }

@@ -2,7 +2,7 @@ import { db } from '../../database/connection.js';
 import { snowflake } from '../_shared.js';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../../lib/errors.js';
 import { eventBus } from '../../lib/event-bus.js';
-import { areFriends } from '../friends/friends.service.js';
+import { getPreferences } from '../users/preferences.service.js';
 import * as searchService from '../search/search.service.js';
 import { processDMEmbeds, reprocessDMEmbeds, getDMEmbedsForMessages } from '../messages/embeds.service.js';
 
@@ -23,20 +23,26 @@ export async function findOrCreateConversation(userId: string, targetUserId: str
     return getConversation(existing.conversation_id, userId);
   }
 
-  // Check friendship status
-  const friends = await areFriends(userId, targetUserId);
+  // Resolve messaging privacy
+  const policy = await resolveMessagingPolicy(userId, targetUserId, 'dm');
+
+  if (policy === 'dont_allow') {
+    throw new BadRequestError('This user does not accept messages from you');
+  }
+
+  const recipientStatus = policy === 'accept_all' ? 'accepted' : 'pending';
 
   // Create new conversation
   const id = snowflake.generate();
   await db('conversations').insert({ id, type: 'dm' });
   await db('conversation_members').insert([
     { conversation_id: id, user_id: userId, status: 'accepted' },
-    { conversation_id: id, user_id: targetUserId, status: friends ? 'accepted' : 'pending' },
+    { conversation_id: id, user_id: targetUserId, status: recipientStatus },
   ]);
 
   const conversation = await getConversation(id, userId);
 
-  if (!friends) {
+  if (recipientStatus === 'pending') {
     // Emit event for message request notification
     const sender = await db('users').where('id', userId).first();
     eventBus.emit('dm.request_created', {
@@ -121,17 +127,26 @@ export async function declineMessageRequest(conversationId: string, userId: stri
 }
 
 export async function createGroupDM(creatorId: string, participantIds: string[], name?: string) {
-  // Verify all participants are friends with creator
-  for (const pid of participantIds) {
-    const friends = await areFriends(creatorId, pid);
-    if (!friends) {
-      throw new BadRequestError('All group members must be your friends');
-    }
-  }
-
   // Max 10 total members (creator + 9 participants)
   if (participantIds.length > 9) {
     throw new BadRequestError('Group DMs can have at most 10 members');
+  }
+
+  // Resolve messaging privacy for each participant
+  const memberStatuses: { userId: string; status: 'accepted' | 'pending' }[] = [
+    { userId: creatorId, status: 'accepted' },
+  ];
+
+  for (const pid of participantIds) {
+    const policy = await resolveMessagingPolicy(creatorId, pid, 'group_dm');
+    if (policy === 'dont_allow') {
+      const user = await db('users').where('id', pid).select('username').first();
+      throw new BadRequestError(`${user?.username || 'This user'} does not accept group messages from you`);
+    }
+    memberStatuses.push({
+      userId: pid,
+      status: policy === 'accept_all' ? 'accepted' : 'pending',
+    });
   }
 
   // Auto-generate name if not provided
@@ -151,10 +166,10 @@ export async function createGroupDM(creatorId: string, participantIds: string[],
     owner_id: creatorId,
   });
 
-  const members = [creatorId, ...participantIds].map((uid) => ({
+  const members = memberStatuses.map((m) => ({
     conversation_id: id,
-    user_id: uid,
-    status: 'accepted',
+    user_id: m.userId,
+    status: m.status,
   }));
   await db('conversation_members').insert(members);
 
@@ -192,20 +207,24 @@ export async function addGroupDMMembers(conversationId: string, userId: string, 
     throw new BadRequestError('Group DMs can have at most 10 members');
   }
 
-  // Verify all new members are friends with the person adding them
+  // Resolve messaging privacy for each new member
+  const newMembers: { user_id: string; status: string }[] = [];
   for (const mid of toAdd) {
-    const friends = await areFriends(userId, mid);
-    if (!friends) {
+    const policy = await resolveMessagingPolicy(userId, mid, 'group_dm');
+    if (policy === 'dont_allow') {
       const user = await db('users').where('id', mid).select('username').first();
-      throw new BadRequestError(`You must be friends with ${user?.username || 'this user'} to add them`);
+      throw new BadRequestError(`${user?.username || 'This user'} does not accept group messages from you`);
     }
+    newMembers.push({
+      user_id: mid,
+      status: policy === 'accept_all' ? 'accepted' : 'pending',
+    });
   }
 
   await db('conversation_members').insert(
-    toAdd.map((uid) => ({
+    newMembers.map((m) => ({
       conversation_id: conversationId,
-      user_id: uid,
-      status: 'accepted',
+      ...m,
     })),
   );
 
@@ -737,4 +756,42 @@ async function getDMAttachmentsForMessages(messageIds: string[]): Promise<Map<st
     result.set(key, list);
   }
   return result;
+}
+
+/**
+ * Resolves the applicable messaging privacy policy for a sender → recipient.
+ * Checks: does recipient follow the sender? share a space? falls back to msg_privacy_all.
+ */
+async function resolveMessagingPolicy(
+  senderId: string,
+  recipientId: string,
+  category: 'dm' | 'group_dm',
+): Promise<'accept_all' | 'require_approval' | 'dont_allow'> {
+  const prefs = await getPreferences(recipientId);
+
+  if (category === 'group_dm') {
+    return prefs.msgPrivacyGroupDm;
+  }
+
+  // Check if recipient follows the sender
+  const followRow = await db('follows')
+    .where({ follower_id: recipientId, following_id: senderId, status: 'accepted' })
+    .first();
+
+  if (followRow) {
+    return prefs.msgPrivacyFollowed;
+  }
+
+  // Check shared space
+  const sharedSpace = await db('space_members as sm1')
+    .join('space_members as sm2', 'sm1.space_id', 'sm2.space_id')
+    .where('sm1.user_id', senderId)
+    .where('sm2.user_id', recipientId)
+    .first();
+
+  if (sharedSpace) {
+    return prefs.msgPrivacySpaces;
+  }
+
+  return prefs.msgPrivacyAll;
 }

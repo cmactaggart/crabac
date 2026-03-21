@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
-import { useFriendsStore } from '../../stores/friends.js';
+import { useFollowsStore } from '../../stores/follows.js';
+import { useAuthStore } from '../../stores/auth.js';
 import { Avatar } from './Avatar.js';
 
 interface Props {
@@ -9,14 +10,15 @@ interface Props {
   onClose: () => void;
 }
 
-export function FriendTagPicker({ selectedIds, onChange, onClose }: Props) {
-  const { friends, fetchFriends } = useFriendsStore();
+export function FollowingTagPicker({ selectedIds, onChange, onClose }: Props) {
+  const { following, fetchFollowing } = useFollowsStore();
+  const userId = useAuthStore((s) => s.user?.id);
   const [search, setSearch] = useState('');
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (friends.length === 0) fetchFriends();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (following.length === 0 && userId) fetchFollowing(userId);
+  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -31,53 +33,53 @@ export function FriendTagPicker({ selectedIds, onChange, onClose }: Props) {
     };
   }, [onClose]);
 
-  const filtered = friends.filter((f) => {
+  const filtered = following.filter((f) => {
     const q = search.toLowerCase();
-    return f.user.username.toLowerCase().includes(q) || f.user.displayName.toLowerCase().includes(q);
+    return f.username.toLowerCase().includes(q) || f.displayName.toLowerCase().includes(q);
   });
 
-  const toggle = (userId: string) => {
-    if (selectedIds.includes(userId)) {
-      onChange(selectedIds.filter((i) => i !== userId));
+  const toggle = (id: string) => {
+    if (selectedIds.includes(id)) {
+      onChange(selectedIds.filter((i) => i !== id));
     } else {
-      onChange([...selectedIds, userId]);
+      onChange([...selectedIds, id]);
     }
   };
 
   return (
     <div ref={ref} style={styles.container}>
       <div style={styles.header}>
-        <span style={{ fontWeight: 700, fontSize: '0.8rem' }}>Tag Friends</span>
+        <span style={{ fontWeight: 700, fontSize: '0.8rem' }}>Tag People</span>
         <button onClick={onClose} style={styles.closeBtn}><X size={14} /></button>
       </div>
       <input
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search friends..."
+        placeholder="Search following..."
         style={styles.search}
         autoFocus
       />
       <div style={styles.list}>
         {filtered.length === 0 && (
           <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-            {friends.length === 0 ? 'No friends yet' : 'No matches'}
+            {following.length === 0 ? 'Not following anyone yet' : 'No matches'}
           </div>
         )}
         {filtered.map((f) => (
           <button
-            key={f.user.id}
-            onClick={() => toggle(f.user.id)}
+            key={f.id}
+            onClick={() => toggle(f.id)}
             style={{
               ...styles.item,
-              background: selectedIds.includes(f.user.id) ? 'rgba(88, 101, 242, 0.15)' : 'transparent',
+              background: selectedIds.includes(f.id) ? 'rgba(88, 101, 242, 0.15)' : 'transparent',
             }}
           >
-            <Avatar src={f.user.avatarUrl ?? null} name={f.user.displayName} size={28} />
+            <Avatar src={f.avatarUrl} name={f.displayName} size={28} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{f.user.displayName}</div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>@{f.user.username}</div>
+              <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{f.displayName}</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>@{f.username}</div>
             </div>
-            {selectedIds.includes(f.user.id) && (
+            {selectedIds.includes(f.id) && (
               <div style={{ width: 16, height: 16, borderRadius: 4, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ color: '#fff', fontSize: '0.7rem', fontWeight: 700 }}>✓</span>
               </div>

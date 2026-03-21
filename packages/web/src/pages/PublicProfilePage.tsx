@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Image, Map, CalendarDays, FileText, UserPlus, UserMinus, Check, Clock, MessageSquare, Lock, ArrowLeft, UserCheck, Newspaper, Activity, Bike, Footprints, Mountain } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
-import { useFriendsStore } from '../stores/friends.js';
+
 import { useDMStore } from '../stores/dm.js';
 import { usePersonalCollectionsStore } from '../stores/personalCollections.js';
 import { useNotificationsStore } from '../stores/notifications.js';
@@ -20,7 +20,7 @@ import { api } from '../lib/api.js';
 import { usePreferencesStore } from '../stores/preferences.js';
 import { formatDistance, formatElevation } from '../lib/units.js';
 import { MiniMap } from '../components/common/MiniMap.js';
-import type { PersonalGalleryItem, PersonalRouteItem, PersonalEvent, PersonalActivityItem, PersonalActivityStats, UserPost, UserPostComment, UserCollectionsSummary, FriendshipStatus, PersonalVisibility, FollowCounts } from '@crabac/shared';
+import type { PersonalGalleryItem, PersonalRouteItem, PersonalEvent, PersonalActivityItem, PersonalActivityStats, UserPost, UserPostComment, UserCollectionsSummary, FollowStatus, PersonalVisibility, FollowCounts } from '@crabac/shared';
 
 const LazyGpxMapModal = React.lazy(() => import('../components/messages/GpxMapModal.js'));
 
@@ -59,14 +59,14 @@ type ActivitiesSubTab = 'stats' | 'activities' | 'routes';
 const VISIBILITY_LABELS: Record<PersonalVisibility, string> = {
   public: 'Public',
   private: 'Private',
-  friends: 'Friends',
+  followers: 'Followers',
   spaces: 'Spaces',
 };
 
 const VISIBILITY_COLORS: Record<PersonalVisibility, string> = {
   public: '#43b581',
   private: '#747f8d',
-  friends: '#faa61a',
+  followers: '#faa61a',
   spaces: '#5865f2',
 };
 
@@ -97,20 +97,16 @@ export function PublicProfilePage() {
   const [events, setEvents] = useState<PersonalEvent[]>([]);
   const [tabLoading, setTabLoading] = useState(false);
 
-  // Friends
-  const [friendStatus, setFriendStatus] = useState<FriendshipStatus | null | undefined>(undefined);
-  const [friendLoading, setFriendLoading] = useState(false);
-
   // Follows
-  const [followStatus, setFollowStatus] = useState<{ isFollowing: boolean; isFriend: boolean } | null>(null);
+  const [followStatus, setFollowStatus] = useState<FollowStatus | null>(null);
   const [followLoading, setFollowLoading] = useState(false);
   const [followCounts, setFollowCounts] = useState<FollowCounts>({ followingCount: 0, followerCount: 0 });
   const { followUser: doFollow, unfollowUser: doUnfollow, getFollowStatus, fetchCounts, counts: currentUserFollowCounts } = useFollowsStore();
   const { fetchComments, addComment, deleteComment, toggleCommentReaction } = usePersonalCollectionsStore();
   const activeSpaceId = useIdentityStore((s) => s.activeSpaceId);
-  const sendFriendRequest = useFriendsStore((s) => s.sendFriendRequest);
-  const acceptFriendRequest = useFriendsStore((s) => s.acceptFriendRequest);
-  const removeFriend = useFriendsStore((s) => s.removeFriend);
+  const followUser = useFollowsStore((s) => s.followUser);
+  const acceptFollowRequest = useFollowsStore((s) => s.acceptFollowRequest);
+  const unfollowUser = useFollowsStore((s) => s.unfollowUser);
   const createConversation = useDMStore((s) => s.createConversation);
 
   // Redirect to /you if viewing own profile (preserve query params)
@@ -147,12 +143,11 @@ export function PublicProfilePage() {
           // User profile (type === 'user' or no type field from by-username)
           const userData = data as ProfileUser;
           setProfile(userData);
-          // Fetch friend status + follow status if not self
+          // Fetch follow status if not self
           if (currentUser && userData.id !== currentUser.id) {
-            api<FriendshipStatus | null>(`/friends/status/${userData.id}`)
-              .then(setFriendStatus)
-              .catch(() => setFriendStatus(null));
-            getFollowStatus(userData.id).then(setFollowStatus);
+            api<FollowStatus>(`/follows/status/${userData.id}`)
+              .then(setFollowStatus)
+              .catch(() => setFollowStatus(null));
           }
           // Fetch follow counts
           api<FollowCounts>(`/follows/counts/${userData.id}`)
@@ -204,24 +199,24 @@ export function PublicProfilePage() {
     }
   }, [profile, activeTab]);
 
-  const handleFriendAction = async () => {
+  const handleFollowAction = async () => {
     if (!profile) return;
-    setFriendLoading(true);
+    setFollowLoading(true);
     try {
-      if (!friendStatus) {
-        await sendFriendRequest(profile.id);
-        setFriendStatus({ id: '', status: 'pending', direction: 'sent' });
-      } else if (friendStatus.status === 'pending' && friendStatus.direction === 'received') {
-        await acceptFriendRequest(friendStatus.id);
-        setFriendStatus({ ...friendStatus, status: 'accepted' });
-      } else if (friendStatus.status === 'accepted') {
-        if (confirm('Remove this friend?')) {
-          await removeFriend(friendStatus.id);
-          setFriendStatus(null);
+      if (!followStatus || (!followStatus.isFollowing && !followStatus.followRequestPending)) {
+        await followUser(profile.id);
+        setFollowStatus({ ...followStatus!, isFollowing: true, followRequestPending: false });
+      } else if (followStatus.incomingRequestPending) {
+        await acceptFollowRequest(profile.id);
+        setFollowStatus({ ...followStatus, incomingRequestPending: false, isFollowedBy: true });
+      } else if (followStatus.isFollowing) {
+        if (confirm('Unfollow this user?')) {
+          await unfollowUser(profile.id);
+          setFollowStatus({ ...followStatus, isFollowing: false });
         }
       }
     } catch {}
-    setFriendLoading(false);
+    setFollowLoading(false);
   };
 
   const handleMessage = async () => {
@@ -349,79 +344,33 @@ export function PublicProfilePage() {
 
   const isOwnProfile = currentUser?.id === profile.id;
 
-  const renderFriendButton = () => {
-    if (isOwnProfile || friendStatus === undefined) return null;
+  const renderFollowButton = () => {
+    if (isOwnProfile || !followStatus) return null;
 
-    if (!friendStatus) {
+    if (followStatus.incomingRequestPending) {
       return (
-        <button onClick={handleFriendAction} disabled={friendLoading} style={styles.actionBtn}>
-          <UserPlus size={14} /> Add Friend
+        <button onClick={handleFollowAction} disabled={followLoading} style={{ ...styles.actionBtn, background: 'var(--success)' }}>
+          <Check size={14} /> Accept Follow Request
         </button>
       );
     }
-    if (friendStatus.status === 'pending' && friendStatus.direction === 'sent') {
+    if (followStatus.followRequestPending) {
       return (
         <button disabled style={{ ...styles.actionBtn, opacity: 0.6, cursor: 'default' }}>
           <Clock size={14} /> Request Sent
         </button>
       );
     }
-    if (friendStatus.status === 'pending' && friendStatus.direction === 'received') {
-      return (
-        <button onClick={handleFriendAction} disabled={friendLoading} style={{ ...styles.actionBtn, background: 'var(--success)' }}>
-          <Check size={14} /> Accept Request
-        </button>
-      );
-    }
-    if (friendStatus.status === 'accepted') {
-      return (
-        <button onClick={handleFriendAction} disabled={friendLoading} style={{ ...styles.actionBtn, background: 'var(--danger)' }}>
-          <UserMinus size={14} /> Remove Friend
-        </button>
-      );
-    }
-    return null;
-  };
-
-  const renderFollowButton = () => {
-    if (isOwnProfile || !followStatus) return null;
-    // If friends, no follow button needed (implicit)
-    if (followStatus.isFriend) return null;
-
     if (followStatus.isFollowing) {
       return (
-        <button
-          onClick={async () => {
-            setFollowLoading(true);
-            try {
-              await doUnfollow(profile!.id);
-              setFollowStatus({ ...followStatus, isFollowing: false });
-              setFollowCounts((c) => ({ ...c, followerCount: Math.max(0, c.followerCount - 1) }));
-            } catch {}
-            setFollowLoading(false);
-          }}
-          disabled={followLoading}
-          style={{ ...styles.actionBtn, background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
-        >
-          <UserCheck size={14} /> Following
+        <button onClick={handleFollowAction} disabled={followLoading} style={{ ...styles.actionBtn, background: 'var(--danger)' }}>
+          <UserMinus size={14} /> Unfollow
         </button>
       );
     }
 
     return (
-      <button
-        onClick={async () => {
-          setFollowLoading(true);
-          try {
-            await doFollow(profile!.id);
-            setFollowStatus({ ...followStatus, isFollowing: true });
-            setFollowCounts((c) => ({ ...c, followerCount: c.followerCount + 1 }));
-          } catch {}
-          setFollowLoading(false);
-        }}
-        disabled={followLoading}
-        style={{ ...styles.actionBtn, background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
-      >
+      <button onClick={handleFollowAction} disabled={followLoading} style={styles.actionBtn}>
         <UserPlus size={14} /> Follow
       </button>
     );
@@ -449,7 +398,7 @@ export function PublicProfilePage() {
           <Lock size={16} /> This account is private
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-          {renderFriendButton()}
+          {renderFollowButton()}
           {!isOwnProfile && (
             <button onClick={handleMessage} style={{ ...styles.actionBtn, background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}>
               <MessageSquare size={14} /> Message
@@ -520,7 +469,6 @@ export function PublicProfilePage() {
       {/* Action Buttons */}
       {!isOwnProfile && (
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          {renderFriendButton()}
           {renderFollowButton()}
           <button onClick={handleMessage} style={{ ...styles.actionBtn, background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}>
             <MessageSquare size={14} /> Message
@@ -550,9 +498,9 @@ export function PublicProfilePage() {
             posts={posts}
             setPosts={setPosts}
             profileUserId={profile.id}
-            friendStatus={friendStatus}
-            handleFriendAction={handleFriendAction}
-            friendLoading={friendLoading}
+            followStatus={followStatus}
+            handleFollowAction={handleFollowAction}
+            followLoading={followLoading}
             displayName={profile.displayName}
             highlightPostId={highlightPostId}
             highlightCommentId={highlightCommentId}
@@ -653,13 +601,13 @@ function SummaryBadge({ icon, label, count, active, onClick }: {
 
 // ─── Read-Only Feed Tab ───
 
-function ReadOnlyFeedTab({ posts, setPosts, profileUserId, friendStatus, handleFriendAction, friendLoading, displayName, highlightPostId, highlightCommentId }: {
+function ReadOnlyFeedTab({ posts, setPosts, profileUserId, followStatus, handleFollowAction, followLoading, displayName, highlightPostId, highlightCommentId }: {
   posts: UserPost[];
   setPosts: (posts: UserPost[]) => void;
   profileUserId: string;
-  friendStatus: FriendshipStatus | null | undefined;
-  handleFriendAction: () => void;
-  friendLoading: boolean;
+  followStatus: FollowStatus | null;
+  handleFollowAction: () => void;
+  followLoading: boolean;
   displayName: string;
   highlightPostId?: string | null;
   highlightCommentId?: string | null;
@@ -709,28 +657,28 @@ function ReadOnlyFeedTab({ posts, setPosts, profileUserId, friendStatus, handleF
 
   return (
     <div>
-      {/* Friend Banner */}
-      {friendStatus === null && (
+      {/* Follow Banner */}
+      {followStatus && !followStatus.isFollowing && !followStatus.followRequestPending && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.75rem 1rem', background: 'rgba(88, 101, 242, 0.08)', borderRadius: 'var(--radius)', marginBottom: 12, fontSize: '0.85rem' }}>
           <UserPlus size={16} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-          <span style={{ flex: 1 }}>Add <strong>{displayName}</strong> as a friend to see more content</span>
-          <button onClick={handleFriendAction} disabled={friendLoading} style={styles.actionBtn}>
-            <UserPlus size={14} /> Add Friend
+          <span style={{ flex: 1 }}>Follow <strong>{displayName}</strong> to see more content</span>
+          <button onClick={handleFollowAction} disabled={followLoading} style={styles.actionBtn}>
+            <UserPlus size={14} /> Follow
           </button>
         </div>
       )}
-      {friendStatus?.status === 'pending' && friendStatus.direction === 'sent' && (
+      {followStatus?.followRequestPending && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.75rem 1rem', background: 'rgba(250, 166, 26, 0.08)', borderRadius: 'var(--radius)', marginBottom: 12, fontSize: '0.85rem' }}>
           <Clock size={16} style={{ color: '#faa61a', flexShrink: 0 }} />
-          <span>Friend request sent to <strong>{displayName}</strong></span>
+          <span>Follow request sent to <strong>{displayName}</strong></span>
         </div>
       )}
-      {friendStatus?.status === 'pending' && friendStatus.direction === 'received' && (
+      {followStatus?.incomingRequestPending && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.75rem 1rem', background: 'rgba(67, 181, 129, 0.08)', borderRadius: 'var(--radius)', marginBottom: 12, fontSize: '0.85rem' }}>
           <Check size={16} style={{ color: '#43b581', flexShrink: 0 }} />
-          <span style={{ flex: 1 }}><strong>{displayName}</strong> wants to be friends</span>
-          <button onClick={handleFriendAction} disabled={friendLoading} style={{ ...styles.actionBtn, background: 'var(--success, #43b581)' }}>
-            <Check size={14} /> Accept
+          <span style={{ flex: 1 }}><strong>{displayName}</strong> wants to follow you</span>
+          <button onClick={handleFollowAction} disabled={followLoading} style={{ ...styles.actionBtn, background: 'var(--success, #43b581)' }}>
+            <Check size={14} /> Accept Follow Request
           </button>
         </div>
       )}

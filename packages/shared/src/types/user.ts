@@ -79,18 +79,14 @@ export interface TotpSetupResponse {
   backupCodes: string[];
 }
 
-export interface FriendListItem {
-  id: string;           // friendship ID
-  user: PublicUser;
-  status: 'pending' | 'accepted';
-  direction: 'sent' | 'received';
-  createdAt: string;
-}
+export type FollowRequestPolicy = 'accept_all' | 'accept_mutual_spaces' | 'require_approval';
+export type MessagingPrivacy = 'accept_all' | 'require_approval' | 'dont_allow';
 
-export interface FriendshipStatus {
-  id: string;
-  status: 'pending' | 'accepted';
-  direction: 'sent' | 'received';
+export interface FollowStatus {
+  isFollowing: boolean;
+  isFollowedBy: boolean;
+  followRequestPending: boolean;
+  incomingRequestPending: boolean;
 }
 
 export interface FollowUser {
@@ -116,4 +112,9 @@ export interface UserPreferences {
   activitiesVisibility: import('./personal-collection.js').PersonalVisibility | null;
   onboardingCompleted: boolean;
   newsletterEnabled: boolean;
+  followRequestPolicy: FollowRequestPolicy;
+  msgPrivacyAll: MessagingPrivacy;
+  msgPrivacyFollowed: MessagingPrivacy;
+  msgPrivacySpaces: MessagingPrivacy;
+  msgPrivacyGroupDm: MessagingPrivacy;
 }

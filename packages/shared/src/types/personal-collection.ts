@@ -1,4 +1,4 @@
-export type PersonalVisibility = 'public' | 'private' | 'friends' | 'spaces';
+export type PersonalVisibility = 'public' | 'private' | 'followers' | 'spaces';
 
 export type ActivityType = 'run' | 'bike' | 'walk' | 'hike';
 

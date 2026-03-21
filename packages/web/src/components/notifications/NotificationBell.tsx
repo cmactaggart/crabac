@@ -48,9 +48,10 @@ export function NotificationBell() {
           fireNotification('New message request', d.fromDisplayName);
           break;
         }
-        case 'friend_request': {
+        case 'friend_request':
+        case 'follow_request': {
           const d = notification.data as FriendRequestNotificationData;
-          fireNotification('Friend Request', `${d.fromDisplayName} wants to be friends`);
+          fireNotification('Follow Request', `${d.fromDisplayName} wants to follow you`);
           break;
         }
         case 'post_comment': {

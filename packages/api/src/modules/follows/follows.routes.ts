@@ -10,7 +10,7 @@ export const followsRoutes = Router();
 
 followsRoutes.use(authenticate);
 
-// Feed: aggregated posts from followed users + friends + self
+// Feed: aggregated posts from followed users + self
 // Must be before /:userId routes
 followsRoutes.get(
   '/feed',
@@ -47,7 +47,7 @@ followsRoutes.get(
         hashtag,
         before,
         limit: limit * 2, // fetch extra to account for post-filtering
-        visibilityLevels: ['public', 'friends', 'spaces'],
+        visibilityLevels: ['public', 'followers', 'spaces'],
       });
       if (hits.length === 0) {
         res.json([]);
@@ -137,6 +137,75 @@ followsRoutes.get(
   },
 );
 
+// ─── Follow Request Management ───
+
+// List pending follow requests (incoming)
+followsRoutes.get(
+  '/requests/pending',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const requests = await followsService.listPendingFollowRequests(req.user!.userId);
+      res.json(requests);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// List sent follow requests
+followsRoutes.get(
+  '/requests/sent',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const requests = await followsService.listSentFollowRequests(req.user!.userId);
+      res.json(requests);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Accept a follow request
+followsRoutes.post(
+  '/requests/:followerId/accept',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await followsService.acceptFollowRequest(req.user!.userId, req.params.followerId);
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Decline a follow request
+followsRoutes.post(
+  '/requests/:followerId/decline',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await followsService.declineFollowRequest(req.user!.userId, req.params.followerId);
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Remove a follower
+followsRoutes.delete(
+  '/followers/:followerId',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await followsService.removeFollower(req.user!.userId, req.params.followerId);
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ─── Follow Status & Counts ───
+
 // Get follow status with a user
 followsRoutes.get(
   '/status/:userId',
@@ -194,8 +263,8 @@ followsRoutes.post(
   '/:userId',
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      await followsService.followUser(req.user!.userId, req.params.userId);
-      res.status(204).end();
+      const result = await followsService.followUser(req.user!.userId, req.params.userId);
+      res.json(result);
     } catch (err) {
       next(err);
     }

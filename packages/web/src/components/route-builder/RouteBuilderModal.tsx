@@ -430,7 +430,7 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
                     style={{ ...styles.input, ...(isMobile ? mobileStyles.input : {}) }}
                   >
                     <option value="private">Private</option>
-                    <option value="friends">Friends</option>
+                    <option value="followers">Followers</option>
                     <option value="spaces">Shared Spaces</option>
                     <option value="public">Public</option>
                   </select>

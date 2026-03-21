@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.12.0
+## API Version 0.13.0
 
 Base URL: `https://app.crab.ac/api`
 
@@ -246,21 +246,28 @@ Upload user avatar. Requires auth. Multipart form data with `avatar` field.
 
 Get user preferences. Requires auth.
 
-**Response:** `{ distanceUnits, defaultVisibility, profileVisibility, onboardingCompleted, newsletterEnabled, activitiesVisibility }`
+**Response:** `{ distanceUnits, defaultVisibility, profileVisibility, onboardingCompleted, newsletterEnabled, activitiesVisibility, followRequestPolicy, msgPrivacyAll, msgPrivacyFollowed, msgPrivacySpaces, msgPrivacyGroupDm }`
 
 ### PUT /users/preferences
 
 Update user preferences. Requires auth.
 
 **Body:**
-| Field | Type | Required |
-|-------|------|----------|
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
 | `distanceUnits` | string | no | `metric` or `us_customary` |
-| `defaultVisibility` | string | no | `public`, `private`, `friends`, or `spaces` |
-| `profileVisibility` | string | no | `public`, `private`, `friends`, or `spaces` |
+| `defaultVisibility` | string | no | `public`, `private`, `followers`, or `spaces` |
+| `profileVisibility` | string | no | `public`, `private`, `followers`, or `spaces` |
 | `onboardingCompleted` | boolean | no | |
 | `newsletterEnabled` | boolean | no | Opt in to personal newsletter emails |
-| `activitiesVisibility` | string \| null | no | `public`, `private`, `friends`, or `spaces` — controls whether other users can see your activities |
+| `activitiesVisibility` | string \| null | no | `public`, `private`, `followers`, or `spaces` — controls whether other users can see your activities |
+| `followRequestPolicy` | string | no | `accept_all`, `accept_mutual_spaces`, or `require_approval` |
+| `msgPrivacyAll` | string | no | `accept_all`, `require_approval`, or `dont_allow` — default messaging policy for unknown users |
+| `msgPrivacyFollowed` | string | no | `accept_all`, `require_approval`, or `dont_allow` — messaging policy for users you follow |
+| `msgPrivacySpaces` | string | no | `accept_all`, `require_approval`, or `dont_allow` — messaging policy for shared-space members |
+| `msgPrivacyGroupDm` | string | no | `accept_all`, `require_approval`, or `dont_allow` — messaging policy for group DM invitations |
+
+Sub-settings (`msgPrivacyFollowed`, `msgPrivacySpaces`, `msgPrivacyGroupDm`) cannot be less restrictive than `msgPrivacyAll`. Returns `400` if violated.
 
 ### GET /users/mutes
 
@@ -394,7 +401,7 @@ List blocked users (both directions).
 
 ### PUT /users/blocks/:userId
 
-Block a user. Also removes any friendship and declines pending DM requests between the two users. Idempotent.
+Block a user. Also removes follow relationships in both directions and declines pending DM requests between the two users. Idempotent.
 
 ### DELETE /users/blocks/:userId
 
@@ -1467,11 +1474,15 @@ Get DM unread counts. Requires auth.
 
 ### POST /conversations/with/:userId
 
-Create or get a 1:1 conversation. Requires auth. Returns `403` if either user has blocked the other.
+Create or get a 1:1 conversation. Requires auth. Returns `403` if either user has blocked the other. The recipient's messaging privacy preferences determine whether the conversation starts as `accepted` or `pending`:
+- If the recipient follows the sender, `msg_privacy_followed` applies
+- Else if they share a space, `msg_privacy_spaces` applies
+- Otherwise `msg_privacy_all` applies
+- `dont_allow` returns `400`; `require_approval` creates a pending message request; `accept_all` creates an accepted conversation
 
 ### POST /conversations/groups
 
-Create a group DM. Requires auth.
+Create a group DM. Requires auth. Each participant's `msgPrivacyGroupDm` preference is checked: `dont_allow` returns `400`, `require_approval` adds them as pending, `accept_all` adds them as accepted.
 
 **Body:** `{ name?: string, participantIds: string[] }` (1-9 participants)
 
@@ -1548,51 +1559,18 @@ Remove your reaction from a DM message. Requires auth.
 
 ---
 
-## Friends
-
-### GET /friends
-
-List accepted friends. Requires auth.
-
-### GET /friends/requests/pending
-
-List received pending friend requests.
-
-### GET /friends/requests/sent
-
-List sent pending friend requests.
-
-### POST /friends/requests
-
-Send a friend request.
-
-**Body:** `{ userId: string }`
-
-### POST /friends/requests/:friendshipId/accept
-
-Accept a friend request.
-
-### POST /friends/requests/:friendshipId/decline
-
-Decline a friend request.
-
-### DELETE /friends/:friendshipId
-
-Remove a friend.
-
-### GET /friends/status/:userId
-
-Get friendship status with a user.
-
----
-
 ## Follows
 
-One-way follows for public profiles. Friends count as implicit bidirectional follows — they appear in follower/following lists and counts automatically. All endpoints require auth.
+Follow-based social system with configurable follow-request approval. All endpoints require auth.
+
+Follows have a `status` field: `pending` (awaiting approval) or `accepted`. The target user's `followRequestPolicy` preference determines which status is used when someone follows them:
+- `accept_all` (default): follow is immediately accepted
+- `accept_mutual_spaces`: accepted if they share a space, otherwise pending
+- `require_approval`: always pending until manually accepted
 
 ### GET /follows/feed
 
-Get an aggregated feed of posts from followed users, friends, self, and member spaces with social enabled.
+Get an aggregated feed of posts from followed users, self, and member spaces with social enabled.
 
 **Query:**
 | Param | Type | Default | Description |
@@ -1602,9 +1580,9 @@ Get an aggregated feed of posts from followed users, friends, self, and member s
 
 **Visibility rules:**
 - Own posts: all visibilities
-- Friends' posts: `public` and `friends`
-- Followed (non-friend) posts: `public` only
-- Space posts: always `public`, included for all space members
+- Mutual follows' posts: `public` and `followers`
+- One-way follows (I follow them, they don't follow me): `public` only
+- Space posts: always included for space members
 
 **Response:** Array of UserPost objects with author info, attachments, tags, reactions, comment counts, repost data, and optional `spaceAuthor` for space-authored posts.
 
@@ -1640,39 +1618,63 @@ List social posts authored by a specific space. Public. Requires the space to ha
 
 **Response:** Array of UserPost objects with `spaceAuthor` populated.
 
+### GET /follows/requests/pending
+
+List incoming pending follow requests (people who want to follow you).
+
+**Response:** Array of `{ id, username, displayName, avatarUrl, baseColor, accentColor }`
+
+### GET /follows/requests/sent
+
+List outgoing pending follow requests (people you've requested to follow).
+
+**Response:** Array of `{ id, username, displayName, avatarUrl, baseColor, accentColor }`
+
+### POST /follows/requests/:followerId/accept
+
+Accept a pending follow request. Returns `400` if no pending request exists.
+
+### POST /follows/requests/:followerId/decline
+
+Decline a pending follow request. Deletes the pending follow row. Returns `400` if no pending request exists.
+
+### DELETE /follows/followers/:followerId
+
+Remove an accepted follower.
+
 ### GET /follows/status/:userId
 
 Get follow status with a user.
 
-**Response:** `{ isFollowing: boolean, isFriend: boolean }`
+**Response:** `{ isFollowing: boolean, isFollowedBy: boolean, followRequestPending: boolean, incomingRequestPending: boolean }`
 
 ### GET /follows/counts/:userId
 
-Get follower/following counts for a user. Counts include both explicit follows and accepted friendships (deduplicated).
+Get follower/following counts for a user (accepted follows only).
 
 **Response:** `{ followingCount: number, followerCount: number }`
 
 ### GET /follows/:userId/followers
 
-List a user's followers (explicit follows + friends). Deduplicated by user ID.
+List a user's accepted followers.
 
 **Response:** Array of `{ id, username, displayName, avatarUrl, baseColor, accentColor }`
 
 ### GET /follows/:userId/following
 
-List who a user is following (explicit follows + friends). Deduplicated by user ID.
+List who a user is following (accepted only).
 
 **Response:** Array of `{ id, username, displayName, avatarUrl, baseColor, accentColor }`
 
 ### POST /follows/:userId
 
-Follow a user. Returns `400` if attempting to follow yourself. Silently skips if already following or already friends (friendship implies follow).
+Follow a user. Returns `400` if attempting to follow yourself or if a follow request is already pending.
 
-**Response:** `204 No Content`
+**Response:** `{ status: 'accepted' | 'pending' }` — `pending` means the target requires approval.
 
 ### DELETE /follows/:userId
 
-Unfollow a user. Returns `400` if the target is a friend (must unfriend instead).
+Unfollow a user. Removes the follow row regardless of status (accepted or pending).
 
 **Response:** `204 No Content`
 
@@ -1680,11 +1682,19 @@ Unfollow a user. Returns `400` if the target is a friend (must unfriend instead)
 
 ## Personal Collections
 
-Users have personal collections for photos, routes, activities, and events that live on their profile (independent of any space). Items have a `visibility` field: `public`, `friends`, `spaces`, or `private`. All endpoints require auth.
+Users have personal collections for photos, routes, activities, and events that live on their profile (independent of any space). Items have a `visibility` field: `public`, `followers`, `spaces`, or `private`. All endpoints require auth.
+
+### Visibility Rules
+
+Content visibility is resolved based on the viewer's relationship to the owner:
+- **Owner**: sees all levels (`public`, `private`, `followers`, `spaces`)
+- **Follower** (viewer follows the owner): sees `public`, `followers`, `spaces`
+- **Shared space member** (not a follower): sees `public`, `spaces`
+- **No relationship**: sees `public` only
 
 ### Profile Visibility Gate
 
-When accessing another user's collections (`/users/:userId/collections/*`), the API checks profile visibility. If the viewer cannot see the profile (based on the owner's `profileVisibility` setting and friendship status), the response is `{ profilePrivate: true }`.
+When accessing another user's collections (`/users/:userId/collections/*`), the API checks profile visibility. If the viewer cannot see the profile (based on the owner's `profileVisibility` setting and follow status), the response is `{ profilePrivate: true }`.
 
 ### Bulk Visibility
 
@@ -1692,7 +1702,7 @@ When accessing another user's collections (`/users/:userId/collections/*`), the 
 
 Update the default visibility for all collection items at once.
 
-**Body:** `{ visibility: 'public' | 'friends' | 'spaces' | 'private' }`
+**Body:** `{ visibility: 'public' | 'followers' | 'spaces' | 'private' }`
 
 ### Personal Gallery
 
@@ -1968,7 +1978,7 @@ Get summary for another user's collections. Filtered by visibility.
 
 ## User Posts
 
-Social posts that live on a user's or space's profile. Posts support text, file attachments, tagged friends, visibility controls, reactions, comments, and reposts. Posts can optionally be authored on behalf of a space (requires `MANAGE_SOCIAL` permission and `socialEnabled` on the space). Space-authored posts are always `public` visibility. All endpoints require auth.
+Social posts that live on a user's or space's profile. Posts support text, file attachments, tagged users (must follow the tagged user), visibility controls, reactions, comments, and reposts. Posts can optionally be authored on behalf of a space (requires `MANAGE_SOCIAL` permission and `socialEnabled` on the space). Space-authored posts are always `public` visibility. All endpoints require auth.
 
 ### Own Posts
 
@@ -1992,7 +2002,7 @@ Create a post. Multipart form data with optional `files` field (max 20).
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `body` | string | no | Post text (required if no attachments) |
-| `visibility` | string | no | `public`, `friends`, or `private` (forced to `public` for space posts) |
+| `visibility` | string | no | `public`, `followers`, or `private` (forced to `public` for space posts) |
 | `taggedUserIds` | string | no | JSON array of user IDs to tag |
 | `existingGalleryItemIds` | string | no | JSON array of gallery item IDs to attach |
 | `existingRouteItemIds` | string | no | JSON array of route item IDs to attach |
@@ -2147,7 +2157,7 @@ Remove a reaction from a comment.
 
 List notifications (paginated). Requires auth.
 
-Notification types: `mention`, `reply`, `reaction`, `dm`, `dm_request`, `friend_request`, `portal_invite`, `event_cancelled`, `event_rsvp`, `new_event`, `new_blog_post`, `post_tag`, `post_comment`.
+Notification types: `mention`, `reply`, `reaction`, `dm`, `dm_request`, `follow_request`, `portal_invite`, `event_cancelled`, `event_rsvp`, `new_event`, `new_blog_post`, `post_tag`, `post_comment`.
 
 The `new_event` notification is sent to all space members when a calendar event is created. It includes `spaceName`, `eventName`, `eventDate`, `eventTime`, `spaceId`, and `eventId` in the notification data. It also triggers a push notification and deep links to the event in the space calendar.
 
@@ -2967,13 +2977,13 @@ The API uses Socket.io for real-time communication at `/socket.io/`. Clients aut
 | `route:item_created` | RouteItem object | New route added to library |
 | `route:item_deleted` | `{ itemId, channelId }` | Route deleted from library |
 
-#### Friends
+#### Follows
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `friend:request_received` | `{ friendshipId, user }` | Friend request received |
-| `friend:accepted` | `{ friendshipId, user }` | Friend request accepted |
-| `friend:removed` | `{ userId }` | Friend removed |
+| `follow:request_received` | `{ user }` | Follow request received (pending approval) |
+| `follow:accepted` | `{ user }` | Follow request accepted |
+| `follow:new_follower` | `{ user }` | New follower (auto-accepted) |
 
 #### Notifications & Workflows
 

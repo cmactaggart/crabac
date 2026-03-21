@@ -84,7 +84,7 @@ export function ActivityPostCard({ post, currentUserId, isOwn, onReaction, onFet
 
   // Follow state
   const [isFollowing, setIsFollowing] = useState<boolean | null>(null);
-  const [isFriend, setIsFriend] = useState(false);
+  const [isFollowedBy, setIsFollowedBy] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const { followUser, unfollowUser, getFollowStatus } = useFollowsStore();
 
@@ -92,7 +92,7 @@ export function ActivityPostCard({ post, currentUserId, isOwn, onReaction, onFet
     if (!isOwn && post.userId && currentUserId) {
       getFollowStatus(post.userId).then((s) => {
         setIsFollowing(s.isFollowing);
-        setIsFriend(s.isFriend);
+        setIsFollowedBy(s.isFollowedBy);
       }).catch(() => {});
     }
   }, [post.userId, isOwn, currentUserId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -253,9 +253,9 @@ export function ActivityPostCard({ post, currentUserId, isOwn, onReaction, onFet
             </div>
           </div>
           {!isOwn && isFollowing !== null && (
-            isFriend ? (
+            isFollowedBy ? (
               <span style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '3px 8px', borderRadius: 12, fontSize: '0.68rem', fontWeight: 600, border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
-                Friends
+                Following
               </span>
             ) : (
               <button
@@ -300,7 +300,7 @@ export function ActivityPostCard({ post, currentUserId, isOwn, onReaction, onFet
             />
             <select value={editVisibility} onChange={(e) => setEditVisibility(e.target.value as PersonalVisibility)} style={{ ...inputStyle, width: 'auto' }}>
               <option value="private">Private</option>
-              <option value="friends">Friends</option>
+              <option value="followers">Followers</option>
               <option value="spaces">Shared Spaces</option>
               <option value="public">Public</option>
             </select>
@@ -465,7 +465,7 @@ export function ActivityPostCard({ post, currentUserId, isOwn, onReaction, onFet
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <select value={repostVisibility} onChange={(e) => setRepostVisibility(e.target.value as PersonalVisibility)} style={{ ...inputStyle, width: 'auto', padding: '0.25rem 0.4rem', fontSize: '0.75rem' }}>
                 <option value="public">Public</option>
-                <option value="friends">Friends</option>
+                <option value="followers">Followers</option>
                 <option value="spaces">Spaces</option>
                 <option value="private">Private</option>
               </select>

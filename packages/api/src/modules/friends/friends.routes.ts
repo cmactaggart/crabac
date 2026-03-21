@@ -50,7 +50,6 @@ friendsRoutes.get(
 // Send friend request
 friendsRoutes.post(
   '/requests',
-  validate(validation.sendFriendRequestSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const result = await friendsService.sendFriendRequest(req.user!.userId, req.body.userId);

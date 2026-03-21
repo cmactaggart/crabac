@@ -155,11 +155,6 @@ export const submitPortalInviteSchema = z.object({
   targetSpaceId: z.string().min(1),
 });
 
-// Friends
-export const sendFriendRequestSchema = z.object({
-  userId: z.string().min(1),
-});
-
 // Group DMs
 export const createGroupDMSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -225,16 +220,21 @@ export const totpDisableSchema = z.object({
 // User Preferences
 export const updateUserPreferencesSchema = z.object({
   distanceUnits: z.enum(['metric', 'us_customary']).optional(),
-  defaultVisibility: z.enum(['public', 'private', 'friends', 'spaces']).optional(),
-  profileVisibility: z.enum(['public', 'private', 'friends', 'spaces']).optional(),
-  activitiesVisibility: z.enum(['public', 'private', 'friends', 'spaces']).nullable().optional(),
+  defaultVisibility: z.enum(['public', 'private', 'followers', 'spaces']).optional(),
+  profileVisibility: z.enum(['public', 'private', 'followers', 'spaces']).optional(),
+  activitiesVisibility: z.enum(['public', 'private', 'followers', 'spaces']).nullable().optional(),
   onboardingCompleted: z.boolean().optional(),
   newsletterEnabled: z.boolean().optional(),
+  followRequestPolicy: z.enum(['accept_all', 'accept_mutual_spaces', 'require_approval']).optional(),
+  msgPrivacyAll: z.enum(['accept_all', 'require_approval', 'dont_allow']).optional(),
+  msgPrivacyFollowed: z.enum(['accept_all', 'require_approval', 'dont_allow']).optional(),
+  msgPrivacySpaces: z.enum(['accept_all', 'require_approval', 'dont_allow']).optional(),
+  msgPrivacyGroupDm: z.enum(['accept_all', 'require_approval', 'dont_allow']).optional(),
 });
 
 // Bulk Visibility
 export const bulkUpdateVisibilitySchema = z.object({
-  visibility: z.enum(['public', 'private', 'friends', 'spaces']),
+  visibility: z.enum(['public', 'private', 'followers', 'spaces']),
 });
 
 // Forum Threads
@@ -650,7 +650,7 @@ export const workflowExecutionsQuerySchema = z.object({
 
 // ─── Personal Collections ───
 
-export const personalVisibilityEnum = z.enum(['public', 'private', 'friends', 'spaces']);
+export const personalVisibilityEnum = z.enum(['public', 'private', 'followers', 'spaces']);
 
 export const createPersonalGalleryItemSchema = z.object({
   caption: z.string().max(2000).nullable().optional(),

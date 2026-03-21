@@ -1,4 +1,4 @@
-export type NotificationType = 'mention' | 'reply' | 'reaction' | 'portal_invite' | 'friend_request' | 'dm_request' | 'event_cancelled' | 'event_rsvp' | 'post_tag' | 'post_comment' | 'new_event' | 'new_blog_post';
+export type NotificationType = 'mention' | 'reply' | 'reaction' | 'portal_invite' | 'friend_request' | 'follow_request' | 'dm_request' | 'event_cancelled' | 'event_rsvp' | 'post_tag' | 'post_comment' | 'new_event' | 'new_blog_post';
 
 export interface MentionNotificationData {
   messageId: string;
@@ -35,6 +35,13 @@ export interface PortalInviteNotificationData {
 
 export interface FriendRequestNotificationData {
   friendshipId: string;
+  fromUsername: string;
+  fromDisplayName: string;
+  fromUserId: string;
+}
+
+export interface FollowRequestNotificationData {
+  followerId: string;
   fromUsername: string;
   fromDisplayName: string;
   fromUserId: string;
@@ -125,6 +132,7 @@ export type NotificationData =
   | ReactionNotificationData
   | PortalInviteNotificationData
   | FriendRequestNotificationData
+  | FollowRequestNotificationData
   | DMRequestNotificationData
   | EventCancelledNotificationData
   | EventRsvpNotificationData

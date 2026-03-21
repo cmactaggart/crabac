@@ -2,7 +2,7 @@ import { db } from '../../database/connection.js';
 import { snowflake } from '../_shared.js';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../../lib/errors.js';
 import { resolveVisibleLevels } from './privacy.service.js';
-import { areFriends } from '../friends/friends.service.js';
+import { isFollowing } from '../follows/follows.service.js';
 import { createNotification } from '../notifications/notifications.service.js';
 import { parseGpxFile } from '../messages/gpx.service.js';
 import * as collectionsService from './personal-collections.service.js';
@@ -168,13 +168,13 @@ export async function createPost(
     }
   }
 
-  // Process friend tags
+  // Process tags (tagger must follow the tagged user)
   if (data.taggedUserIds?.length) {
     const author = await db('users').where('id', userId).select('username', 'display_name', 'avatar_url').first();
     for (const taggedId of data.taggedUserIds) {
       if (taggedId === userId) continue;
-      const isFriend = await areFriends(userId, taggedId);
-      if (!isFriend) continue;
+      const follows = await isFollowing(userId, taggedId);
+      if (!follows) continue;
 
       await db('user_post_tags').insert({
         post_id: String(postId),

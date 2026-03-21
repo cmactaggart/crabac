@@ -15,6 +15,11 @@ const DEFAULTS: UserPreferences = {
   activitiesVisibility: null,
   onboardingCompleted: false,
   newsletterEnabled: false,
+  followRequestPolicy: 'accept_all',
+  msgPrivacyAll: 'require_approval',
+  msgPrivacyFollowed: 'accept_all',
+  msgPrivacySpaces: 'accept_all',
+  msgPrivacyGroupDm: 'accept_all',
 };
 
 export const usePreferencesStore = create<PreferencesState>((set, get) => ({

@@ -4,13 +4,13 @@ import { LogOut, Copy, Link2, Pencil, Trash2, PanelLeftClose, PanelLeft, UserPlu
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { useDMStore } from '../stores/dm.js';
-import { useFriendsStore } from '../stores/friends.js';
+import { useFollowsStore } from '../stores/follows.js';
 import { useBlocksStore } from '../stores/blocks.js';
 import { useLayoutStore } from '../stores/layout.js';
 import { ReportModal } from '../components/moderation/ReportModal.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 import { useDMSocket, useDMTypingEmit } from '../hooks/useDMSocket.js';
-import { useFriendsSocket } from '../hooks/useFriendsSocket.js';
+import { useFollowsSocket } from '../hooks/useFollowsSocket.js';
 import { SpaceSidebar } from '../components/layout/SpaceSidebar.js';
 import { Avatar } from '../components/common/Avatar.js';
 import { ContextMenu, useLongPress, type ContextMenuItem } from '../components/common/ContextMenu.js';
@@ -21,7 +21,7 @@ import { ReactionBar } from '../components/messages/ReactionBar.js';
 import { api } from '../lib/api.js';
 import { SearchPanel } from '../components/search/SearchPanel.js';
 import { ShareToSpacePicker } from '../components/common/ShareToSpacePicker.js';
-import type { DirectMessage, Conversation, FriendshipStatus } from '@crabac/shared';
+import type { DirectMessage, Conversation, FollowStatus } from '@crabac/shared';
 
 export function DMView() {
   const { conversationId } = useParams();
@@ -52,7 +52,7 @@ export function DMView() {
   } = useDMStore();
 
   useDMSocket(conversationId || null);
-  useFriendsSocket();
+  useFollowsSocket();
 
   useEffect(() => {
     fetchSpaces();
@@ -222,28 +222,33 @@ export function DMView() {
 
 function DMHeaderContent({ otherParticipant, currentUserId }: { otherParticipant: any; currentUserId: string }) {
   const navigate = useNavigate();
-  const [friendStatus, setFriendStatus] = useState<FriendshipStatus | null | undefined>(undefined);
-  const [friendLoading, setFriendLoading] = useState(false);
-  const sendFriendRequest = useFriendsStore((s) => s.sendFriendRequest);
+  const [followStatus, setFollowStatus] = useState<FollowStatus | null>(null);
+  const [followLoading, setFollowLoading] = useState(false);
+  const followUser = useFollowsStore((s) => s.followUser);
 
   useEffect(() => {
     if (otherParticipant && otherParticipant.id !== currentUserId) {
-      api<FriendshipStatus | null>(`/friends/status/${otherParticipant.id}`)
-        .then(setFriendStatus)
-        .catch(() => setFriendStatus(null));
+      api<FollowStatus>(`/follows/status/${otherParticipant.id}`)
+        .then(setFollowStatus)
+        .catch(() => setFollowStatus(null));
     }
   }, [otherParticipant?.id, currentUserId]);
 
-  const handleSendRequest = async () => {
+  const handleFollow = async () => {
     if (!otherParticipant) return;
-    setFriendLoading(true);
+    setFollowLoading(true);
     try {
-      await sendFriendRequest(otherParticipant.id);
-      setFriendStatus({ id: '', status: 'pending', direction: 'sent' });
+      const result = await followUser(otherParticipant.id);
+      setFollowStatus({
+        isFollowing: result.status === 'accepted',
+        isFollowedBy: followStatus?.isFollowedBy ?? false,
+        followRequestPending: result.status === 'pending',
+        incomingRequestPending: followStatus?.incomingRequestPending ?? false,
+      });
     } catch {
       // ignore
     }
-    setFriendLoading(false);
+    setFollowLoading(false);
   };
 
   return (
@@ -269,17 +274,17 @@ function DMHeaderContent({ otherParticipant, currentUserId }: { otherParticipant
         {otherParticipant?.status}
       </span>
       <div style={{ flex: 1 }} />
-      {friendStatus !== undefined && !friendStatus && (
+      {followStatus && !followStatus.isFollowing && !followStatus.followRequestPending && (
         <button
-          onClick={handleSendRequest}
-          disabled={friendLoading}
+          onClick={handleFollow}
+          disabled={followLoading}
           style={styles.headerFriendBtn}
-          title="Send Friend Request"
+          title="Follow"
         >
           <UserPlus size={16} />
         </button>
       )}
-      {friendStatus?.status === 'pending' && friendStatus.direction === 'sent' && (
+      {followStatus?.followRequestPending && (
         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
           <Clock size={14} /> Request Sent
         </span>
@@ -382,7 +387,7 @@ function DMSidebar({
   const navigate = useNavigate();
   const logout = useAuthStore((s) => s.logout);
   const toggleChannelSidebar = useLayoutStore((s) => s.toggleChannelSidebar);
-  const [tab, setTab] = useState<'messages' | 'friends'>('messages');
+  const [tab, setTab] = useState<'messages' | 'following'>('messages');
   const [showGroupModal, setShowGroupModal] = useState(false);
 
   return (
@@ -400,14 +405,14 @@ function DMSidebar({
             Messages
           </button>
           <button
-            onClick={() => setTab('friends')}
+            onClick={() => setTab('following')}
             style={{
               ...styles.tabBtn,
-              color: tab === 'friends' ? 'var(--text-primary)' : 'var(--text-muted)',
-              borderBottom: tab === 'friends' ? '2px solid var(--accent)' : '2px solid transparent',
+              color: tab === 'following' ? 'var(--text-primary)' : 'var(--text-muted)',
+              borderBottom: tab === 'following' ? '2px solid var(--accent)' : '2px solid transparent',
             }}
           >
-            Friends
+            Following
           </button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -541,7 +546,7 @@ function DMSidebar({
           })}
         </div>
       ) : (
-        <FriendsTab currentUserId={currentUserId} />
+        <FollowingTab currentUserId={currentUserId} />
       )}
 
       {/* User bar */}
@@ -600,25 +605,25 @@ function MessageRequestItem({ conversation, currentUserId }: { conversation: Con
   );
 }
 
-// ─── Friends Tab ───
+// ─── Following Tab ───
 
-function FriendsTab({ currentUserId }: { currentUserId: string }) {
+function FollowingTab({ currentUserId }: { currentUserId: string }) {
   const navigate = useNavigate();
   const {
-    friends,
+    following,
     pendingRequests,
-    fetchFriends,
+    fetchFollowing,
     fetchPendingRequests,
-    acceptFriendRequest,
-    declineFriendRequest,
-    removeFriend,
-  } = useFriendsStore();
+    acceptFollowRequest,
+    declineFollowRequest,
+    unfollowUser,
+  } = useFollowsStore();
   const createConversation = useDMStore((s) => s.createConversation);
 
   useEffect(() => {
-    fetchFriends();
+    fetchFollowing(currentUserId);
     fetchPendingRequests();
-  }, [fetchFriends, fetchPendingRequests]);
+  }, [fetchFollowing, fetchPendingRequests, currentUserId]);
 
   const handleMessage = async (userId: string) => {
     try {
@@ -636,16 +641,16 @@ function FriendsTab({ currentUserId }: { currentUserId: string }) {
           <div style={styles.sidebarSectionLabel}>Pending Requests — {pendingRequests.length}</div>
           {pendingRequests.map((req) => (
             <div key={req.id} style={styles.requestItem}>
-              <Avatar src={req.user?.avatarUrl || null} name={req.user?.displayName || '?'} size={28} baseColor={req.user?.baseColor} accentColor={req.user?.accentColor} />
+              <Avatar src={req.avatarUrl || null} name={req.displayName || '?'} size={28} baseColor={req.baseColor} accentColor={req.accentColor} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {req.user?.displayName}
+                  {req.displayName}
                 </div>
               </div>
-              <button onClick={() => acceptFriendRequest(req.id)} style={styles.acceptBtn} title="Accept">
+              <button onClick={() => acceptFollowRequest(req.id)} style={styles.acceptBtn} title="Accept">
                 <Check size={14} />
               </button>
-              <button onClick={() => declineFriendRequest(req.id)} style={styles.declineBtn} title="Decline">
+              <button onClick={() => declineFollowRequest(req.id)} style={styles.declineBtn} title="Decline">
                 <X size={14} />
               </button>
             </div>
@@ -654,25 +659,24 @@ function FriendsTab({ currentUserId }: { currentUserId: string }) {
         </>
       )}
 
-      {friends.length === 0 && pendingRequests.length === 0 && (
+      {following.length === 0 && pendingRequests.length === 0 && (
         <div style={{ padding: '1rem', color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center' }}>
-          No friends yet
+          Not following anyone yet
         </div>
       )}
 
-      {friends.map((friend) => (
-        <div key={friend.id} style={styles.friendItem}>
-          <Avatar src={friend.user?.avatarUrl || null} name={friend.user?.displayName || '?'} size={32} baseColor={friend.user?.baseColor} accentColor={friend.user?.accentColor} />
+      {following.map((f) => (
+        <div key={f.id} style={styles.friendItem}>
+          <Avatar src={f.avatarUrl || null} name={f.displayName || '?'} size={32} baseColor={f.baseColor} accentColor={f.accentColor} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {friend.user?.displayName}
+              {f.displayName}
             </div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{friend.user?.status}</div>
           </div>
-          <button onClick={() => friend.user && handleMessage(friend.user.id)} style={styles.friendMsgBtn} title="Message">
+          <button onClick={() => handleMessage(f.id)} style={styles.friendMsgBtn} title="Message">
             Message
           </button>
-          <button onClick={() => { if (confirm('Remove this friend?')) removeFriend(friend.id); }} style={styles.friendRemoveBtn} title="Remove">
+          <button onClick={() => { if (confirm('Unfollow this user?')) unfollowUser(f.id); }} style={styles.friendRemoveBtn} title="Unfollow">
             <UserMinus size={14} />
           </button>
         </div>
@@ -685,15 +689,16 @@ function FriendsTab({ currentUserId }: { currentUserId: string }) {
 
 function CreateGroupDMModal({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
-  const { friends, fetchFriends } = useFriendsStore();
+  const user = useAuthStore((s) => s.user);
+  const { following, fetchFollowing } = useFollowsStore();
   const createGroupDM = useDMStore((s) => s.createGroupDM);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [groupName, setGroupName] = useState('');
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
-    fetchFriends();
-  }, [fetchFriends]);
+    if (user?.id) fetchFollowing(user.id);
+  }, [fetchFollowing, user?.id]);
 
   const toggleFriend = (userId: string) => {
     setSelected((prev) => {
@@ -733,17 +738,17 @@ function CreateGroupDMModal({ onClose }: { onClose: () => void }) {
         />
 
         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '8px 0 4px' }}>
-          Select friends ({selected.size}/9)
+          Select users ({selected.size}/9)
         </div>
 
         <div style={styles.friendPickerList}>
-          {friends.length === 0 && (
+          {following.length === 0 && (
             <div style={{ padding: '1rem', color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center' }}>
-              Add friends first to create a group
+              Follow users first to create a group
             </div>
           )}
-          {friends.map((f) => {
-            const uid = f.user?.id;
+          {following.map((f) => {
+            const uid = f.id;
             if (!uid) return null;
             const isSelected = selected.has(uid);
             return (
@@ -755,9 +760,9 @@ function CreateGroupDMModal({ onClose }: { onClose: () => void }) {
                   background: isSelected ? 'var(--hover)' : 'transparent',
                 }}
               >
-                <Avatar src={f.user?.avatarUrl || null} name={f.user?.displayName || '?'} size={28} baseColor={f.user?.baseColor} accentColor={f.user?.accentColor} />
+                <Avatar src={f.avatarUrl || null} name={f.displayName || '?'} size={28} baseColor={f.baseColor} accentColor={f.accentColor} />
                 <span style={{ flex: 1, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
-                  {f.user?.displayName}
+                  {f.displayName}
                 </span>
                 <div style={{
                   width: 18, height: 18, borderRadius: 4,

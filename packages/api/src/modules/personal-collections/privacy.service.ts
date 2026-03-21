@@ -5,7 +5,7 @@ import { getPreferences } from '../users/preferences.service.js';
 /**
  * Resolves which visibility levels a viewer can see for a given owner's content.
  * Owner sees all 4 levels. Non-owner always gets 'public'.
- * Friends get 'friends'. Users sharing a space get 'spaces'.
+ * Followers get 'followers' + 'spaces'. Users sharing a space get 'spaces' only.
  */
 export async function resolveVisibleLevels(
   ownerId: string,
@@ -13,24 +13,22 @@ export async function resolveVisibleLevels(
 ): Promise<Set<PersonalVisibility>> {
   // Owner sees everything
   if (viewerId && ownerId === viewerId) {
-    return new Set(['public', 'private', 'friends', 'spaces']);
+    return new Set(['public', 'private', 'followers', 'spaces']);
   }
 
   const levels = new Set<PersonalVisibility>(['public']);
 
   if (!viewerId) return levels;
 
-  // Check friendship
-  const friendship = await db('friendships')
-    .where(function () {
-      this.where({ user_id: ownerId, friend_id: viewerId })
-        .orWhere({ user_id: viewerId, friend_id: ownerId });
-    })
-    .where('status', 'accepted')
+  // Check if viewer follows owner (accepted)
+  const followRow = await db('follows')
+    .where({ follower_id: viewerId, following_id: ownerId, status: 'accepted' })
     .first();
 
-  if (friendship) {
-    levels.add('friends');
+  if (followRow) {
+    levels.add('followers');
+    levels.add('spaces');
+    return levels;
   }
 
   // Check shared space membership
@@ -42,7 +40,6 @@ export async function resolveVisibleLevels(
 
   if (sharedSpace) {
     levels.add('spaces');
-    levels.add('friends');
   }
 
   return levels;
@@ -64,17 +61,13 @@ export async function canViewProfile(
   if (visibility === 'public') return true;
   if (visibility === 'private') return false;
 
-  if (visibility === 'friends' || visibility === 'spaces') {
-    // Check friendship
-    const friendship = await db('friendships')
-      .where(function () {
-        this.where({ user_id: ownerId, friend_id: viewerId })
-          .orWhere({ user_id: viewerId, friend_id: ownerId });
-      })
-      .where('status', 'accepted')
+  if (visibility === 'followers' || visibility === 'spaces') {
+    // Check if viewer follows owner
+    const followRow = await db('follows')
+      .where({ follower_id: viewerId, following_id: ownerId, status: 'accepted' })
       .first();
 
-    if (friendship) return true;
+    if (followRow) return true;
   }
 
   if (visibility === 'spaces') {

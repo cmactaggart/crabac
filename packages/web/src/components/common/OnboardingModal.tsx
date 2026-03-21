@@ -10,14 +10,14 @@ interface Props {
 const PROFILE_OPTIONS: { value: PersonalVisibility; label: string; desc: string }[] = [
   { value: 'public', label: 'Public', desc: 'Anyone can see your profile and public content' },
   { value: 'spaces', label: 'Spaces', desc: 'People in your spaces and friends can see your profile' },
-  { value: 'friends', label: 'Friends', desc: 'Only your friends can see your profile' },
+  { value: 'followers', label: 'Followers', desc: 'Only your followers can see your profile' },
   { value: 'private', label: 'Private', desc: 'Nobody can see your profile — it\'s completely hidden' },
 ];
 
 const CONTENT_OPTIONS: { value: PersonalVisibility; label: string; desc: string }[] = [
   { value: 'public', label: 'Public', desc: 'New posts, photos, routes, and events visible to everyone' },
   { value: 'spaces', label: 'Spaces', desc: 'Visible to people in your spaces and friends' },
-  { value: 'friends', label: 'Friends', desc: 'Visible only to your friends' },
+  { value: 'followers', label: 'Followers', desc: 'Visible only to your followers' },
   { value: 'private', label: 'Private', desc: 'Only you can see new content' },
 ];
 

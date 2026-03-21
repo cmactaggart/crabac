@@ -5,10 +5,10 @@ import { api } from '../../lib/api.js';
 import { Avatar } from './Avatar.js';
 import { useMutesStore } from '../../stores/mutes.js';
 import { useBlocksStore } from '../../stores/blocks.js';
-import { useFriendsStore } from '../../stores/friends.js';
+import { useFollowsStore } from '../../stores/follows.js';
 import { useHasSpacePermission } from '../settings/SpaceSettingsModal.js';
 import { Permissions } from '@crabac/shared';
-import type { FriendshipStatus } from '@crabac/shared';
+import type { FollowStatus } from '@crabac/shared';
 
 interface UserProfile {
   id: string;
@@ -43,8 +43,8 @@ export function UserProfilePopover({ userId, anchorRect, onClose, onMessage, cur
   const navigate = useNavigate();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [roles, setRoles] = useState<MemberRole[]>([]);
-  const [friendStatus, setFriendStatus] = useState<FriendshipStatus | null | undefined>(undefined);
-  const [friendLoading, setFriendLoading] = useState(false);
+  const [followStatus, setFollowStatus] = useState<FollowStatus | null>(null);
+  const [followLoading, setFollowLoading] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
   const isMuted = useMutesStore((s) => s.isMuted(userId));
   const muteUser = useMutesStore((s) => s.muteUser);
@@ -52,17 +52,17 @@ export function UserProfilePopover({ userId, anchorRect, onClose, onMessage, cur
   const isBlockedByMe = useBlocksStore((s) => s.isBlockedByMe(userId));
   const blockUser = useBlocksStore((s) => s.blockUser);
   const unblockUser = useBlocksStore((s) => s.unblockUser);
-  const sendFriendRequest = useFriendsStore((s) => s.sendFriendRequest);
-  const acceptFriendRequest = useFriendsStore((s) => s.acceptFriendRequest);
-  const removeFriend = useFriendsStore((s) => s.removeFriend);
+  const followUserAction = useFollowsStore((s) => s.followUser);
+  const unfollowUserAction = useFollowsStore((s) => s.unfollowUser);
+  const acceptFollowRequest = useFollowsStore((s) => s.acceptFollowRequest);
   const canManageMembers = useHasSpacePermission(spaceId || '', Permissions.MANAGE_MEMBERS);
 
   useEffect(() => {
     api<UserProfile>(`/users/${userId}`).then(setProfile).catch(() => {});
     if (userId !== currentUserId) {
-      api<FriendshipStatus | null>(`/friends/status/${userId}`)
-        .then(setFriendStatus)
-        .catch(() => setFriendStatus(null));
+      api<FollowStatus>(`/follows/status/${userId}`)
+        .then(setFollowStatus)
+        .catch(() => setFollowStatus(null));
     }
     if (spaceId) {
       api<{ roles: MemberRole[] }>(`/spaces/${spaceId}/members/${userId}/roles`)
@@ -117,67 +117,75 @@ export function UserProfilePopover({ userId, anchorRect, onClose, onMessage, cur
     year: 'numeric', month: 'long', day: 'numeric',
   });
 
-  const handleFriendAction = async () => {
-    setFriendLoading(true);
+  const handleFollowAction = async () => {
+    if (!followStatus) return;
+    setFollowLoading(true);
     try {
-      if (!friendStatus) {
-        await sendFriendRequest(userId);
-        setFriendStatus({ id: '', status: 'pending', direction: 'sent' });
-      } else if (friendStatus.status === 'pending' && friendStatus.direction === 'received') {
-        await acceptFriendRequest(friendStatus.id);
-        setFriendStatus({ ...friendStatus, status: 'accepted' });
-      } else if (friendStatus.status === 'accepted') {
-        if (confirm('Remove this friend?')) {
-          await removeFriend(friendStatus.id);
-          setFriendStatus(null);
+      if (followStatus.isFollowing) {
+        // Unfollow
+        if (confirm('Unfollow this user?')) {
+          await unfollowUserAction(userId);
+          setFollowStatus({ ...followStatus, isFollowing: false });
+        }
+      } else if (followStatus.followRequestPending) {
+        // Cancel pending - unfollow removes pending too
+        await unfollowUserAction(userId);
+        setFollowStatus({ ...followStatus, followRequestPending: false });
+      } else if (followStatus.incomingRequestPending) {
+        // Accept incoming request
+        await acceptFollowRequest(userId);
+        setFollowStatus({ ...followStatus, incomingRequestPending: false, isFollowedBy: true });
+      } else {
+        // Follow
+        const result = await followUserAction(userId);
+        if (result.status === 'pending') {
+          setFollowStatus({ ...followStatus, followRequestPending: true });
+        } else {
+          setFollowStatus({ ...followStatus, isFollowing: true });
         }
       }
     } catch {
       // ignore
     }
-    setFriendLoading(false);
+    setFollowLoading(false);
   };
 
-  const renderFriendButton = () => {
-    if (userId === currentUserId || friendStatus === undefined) return null;
+  const renderFollowButton = () => {
+    if (userId === currentUserId || !followStatus) return null;
 
-    if (!friendStatus) {
+    if (followStatus.isFollowing) {
       return (
-        <button onClick={handleFriendAction} disabled={friendLoading} style={styles.friendBtn}>
-          <UserPlus size={14} /> Send Friend Request
+        <button
+          onClick={handleFollowAction}
+          disabled={followLoading}
+          style={{ ...styles.friendBtn, background: 'var(--danger)' }}
+        >
+          <UserMinus size={14} /> Unfollow
         </button>
       );
     }
 
-    if (friendStatus.status === 'pending' && friendStatus.direction === 'sent') {
+    if (followStatus.followRequestPending) {
       return (
-        <button disabled style={{ ...styles.friendBtn, opacity: 0.6, cursor: 'default' }}>
+        <button onClick={handleFollowAction} disabled={followLoading} style={{ ...styles.friendBtn, opacity: 0.6 }}>
           <Clock size={14} /> Request Sent
         </button>
       );
     }
 
-    if (friendStatus.status === 'pending' && friendStatus.direction === 'received') {
+    if (followStatus.incomingRequestPending) {
       return (
-        <button onClick={handleFriendAction} disabled={friendLoading} style={{ ...styles.friendBtn, background: 'var(--success)' }}>
-          <Check size={14} /> Accept Friend Request
+        <button onClick={handleFollowAction} disabled={followLoading} style={{ ...styles.friendBtn, background: 'var(--success)' }}>
+          <Check size={14} /> Accept Follow Request
         </button>
       );
     }
 
-    if (friendStatus.status === 'accepted') {
-      return (
-        <button
-          onClick={handleFriendAction}
-          disabled={friendLoading}
-          style={{ ...styles.friendBtn, background: 'var(--danger)' }}
-        >
-          <UserMinus size={14} /> Remove Friend
-        </button>
-      );
-    }
-
-    return null;
+    return (
+      <button onClick={handleFollowAction} disabled={followLoading} style={styles.friendBtn}>
+        <UserPlus size={14} /> Follow
+      </button>
+    );
   };
 
   return (
@@ -263,7 +271,7 @@ export function UserProfilePopover({ userId, anchorRect, onClose, onMessage, cur
 
         {userId !== currentUserId && (
           <>
-            {renderFriendButton()}
+            {renderFollowButton()}
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
               <button
                 onClick={() => { onMessage(userId); onClose(); }}

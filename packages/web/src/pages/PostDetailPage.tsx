@@ -11,7 +11,7 @@ import { SpaceSidebar } from '../components/layout/SpaceSidebar.js';
 import { PostCard } from '../components/posts/PostCard.js';
 import { ShareToSpacePicker } from '../components/common/ShareToSpacePicker.js';
 import { api } from '../lib/api.js';
-import type { UserPost, UserPostComment } from '@crabac/shared';
+import type { UserPost, UserPostComment, FollowStatus } from '@crabac/shared';
 
 function PostDetailContent() {
   const { username, postId } = useParams();
@@ -23,7 +23,7 @@ function PostDetailContent() {
   const [post, setPost] = useState<UserPost | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [followStatus, setFollowStatus] = useState<{ isFollowing: boolean; isFriend: boolean }>({ isFollowing: false, isFriend: false });
+  const [followStatus, setFollowStatus] = useState<FollowStatus>({ isFollowing: false, isFollowedBy: false, followRequestPending: false, incomingRequestPending: false });
   const [followLoading, setFollowLoading] = useState(false);
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const [sharePickerOpen, setSharePickerOpen] = useState(false);
@@ -152,7 +152,7 @@ function PostDetailContent() {
         <div style={{ flex: 1 }} />
 
         {/* Follow/Unfollow button */}
-        {!isOwn && !followStatus.isFriend && (
+        {!isOwn && !followStatus.isFollowedBy && (
           <button
             onClick={handleFollow}
             disabled={followLoading}

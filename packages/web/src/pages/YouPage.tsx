@@ -5,14 +5,13 @@ import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { usePersonalCollectionsStore } from '../stores/personalCollections.js';
 import { useNotificationsStore } from '../stores/notifications.js';
-import { useFriendsStore } from '../stores/friends.js';
 import { useLayoutStore } from '../stores/layout.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 import { Avatar } from '../components/common/Avatar.js';
 import { FollowListModal } from '../components/common/FollowListModal.js';
 import { UserSettingsModal } from '../components/settings/user/UserSettingsModal.js';
 import { ShareToSpacePicker } from '../components/common/ShareToSpacePicker.js';
-import { FriendTagPicker } from '../components/common/FriendTagPicker.js';
+import { FollowingTagPicker } from '../components/common/FollowingTagPicker.js';
 import { FriendMentionAutocomplete } from '../components/common/FriendMentionAutocomplete.js';
 import { PostCard as SharedPostCard, VisibilityBadge } from '../components/posts/PostCard.js';
 import { useFollowsStore } from '../stores/follows.js';
@@ -36,14 +35,14 @@ type ActivitiesSubTab = 'stats' | 'activities' | 'routes';
 const VISIBILITY_LABELS: Record<PersonalVisibility, string> = {
   public: 'Public',
   private: 'Private',
-  friends: 'Friends',
+  followers: 'Followers',
   spaces: 'Spaces',
 };
 
 const VISIBILITY_COLORS: Record<PersonalVisibility, string> = {
   public: '#43b581',
   private: '#747f8d',
-  friends: '#faa61a',
+  followers: '#faa61a',
   spaces: '#5865f2',
 };
 
@@ -547,7 +546,7 @@ function PhotosTab({ items, loading, defaultVisibility = 'private', onUpload, on
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <select value={visibility} onChange={(e) => setVisibility(e.target.value as PersonalVisibility)} style={{ ...styles.formInput, width: 'auto', padding: '0.3rem 0.5rem', fontSize: '0.75rem' }}>
             <option value="private">Private</option>
-            <option value="friends">Friends</option>
+            <option value="followers">Followers</option>
             <option value="spaces">Shared Spaces</option>
             <option value="public">Public</option>
           </select>
@@ -825,7 +824,7 @@ function ActivityFeedView({ items, loading, onUpdate, onDelete, onSaveAsRoute }:
               <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} style={{ ...styles.formInput, minHeight: 40, resize: 'vertical', fontFamily: 'inherit' }} placeholder="Description (optional)" />
               <select value={editVisibility} onChange={(e) => setEditVisibility(e.target.value as PersonalVisibility)} style={styles.formInput}>
                 <option value="private">Private</option>
-                <option value="friends">Friends</option>
+                <option value="followers">Followers</option>
                 <option value="spaces">Shared Spaces</option>
                 <option value="public">Public</option>
               </select>
@@ -976,7 +975,7 @@ function RoutesTab({ items, loading, defaultVisibility = 'private', onUpload, on
           <label style={styles.formLabel}>Visibility</label>
           <select value={visibility} onChange={(e) => setVisibility(e.target.value as PersonalVisibility)} style={styles.formInput}>
             <option value="private">Private</option>
-            <option value="friends">Friends</option>
+            <option value="followers">Followers</option>
             <option value="spaces">Shared Spaces</option>
             <option value="public">Public</option>
           </select>
@@ -1276,7 +1275,7 @@ function EventsTab({ items, loading, categories, routes, defaultVisibility = 'pr
           <label style={styles.formLabel}>Visibility</label>
           <select value={visibility} onChange={(e) => setVisibility(e.target.value as PersonalVisibility)} style={styles.formInput}>
             <option value="private">Private</option>
-            <option value="friends">Friends</option>
+            <option value="followers">Followers</option>
             <option value="spaces">Shared Spaces</option>
             <option value="public">Public</option>
           </select>
@@ -1410,7 +1409,7 @@ function FeedTab({ posts, loading, hasMore, defaultVisibility = 'private', onCre
   const fileRef = useRef<HTMLInputElement>(null);
   const gpxRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const friends = useFriendsStore((s) => s.friends);
+  const following = useFollowsStore((s) => s.following);
 
   const handleAddFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newFiles = e.target.files;
@@ -1491,9 +1490,9 @@ function FeedTab({ posts, loading, hasMore, defaultVisibility = 'private', onCre
       const allTaggedIds = [...taggedIds];
       const mentionMatches = body.matchAll(/@([a-zA-Z0-9_-]+)/g);
       for (const m of mentionMatches) {
-        const friend = friends.find((f) => f.user.username.toLowerCase() === m[1].toLowerCase());
-        if (friend && !allTaggedIds.includes(friend.user.id)) {
-          allTaggedIds.push(friend.user.id);
+        const followedUser = following.find((f) => f.username.toLowerCase() === m[1].toLowerCase());
+        if (followedUser && !allTaggedIds.includes(followedUser.id)) {
+          allTaggedIds.push(followedUser.id);
         }
       }
 
@@ -1587,7 +1586,7 @@ function FeedTab({ posts, loading, hasMore, defaultVisibility = 'private', onCre
               <Users size={14} /> Tag
             </button>
             {showTagPicker && (
-              <FriendTagPicker
+              <FollowingTagPicker
                 selectedIds={taggedIds}
                 onChange={setTaggedIds}
                 onClose={() => setShowTagPicker(false)}
@@ -1597,7 +1596,7 @@ function FeedTab({ posts, loading, hasMore, defaultVisibility = 'private', onCre
 
           <select value={visibility} onChange={(e) => setVisibility(e.target.value as PersonalVisibility)} style={{ ...styles.formInput, width: 'auto', padding: '0.3rem 0.5rem', fontSize: '0.75rem' }}>
             <option value="private">Private</option>
-            <option value="friends">Friends</option>
+            <option value="followers">Followers</option>
             <option value="spaces">Shared Spaces</option>
             <option value="public">Public</option>
           </select>

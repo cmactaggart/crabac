@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useFriendsStore } from '../../stores/friends.js';
+import { useFollowsStore } from '../../stores/follows.js';
+import { useAuthStore } from '../../stores/auth.js';
 import { useSpacesStore } from '../../stores/spaces.js';
 import { Avatar } from './Avatar.js';
 import { LetterIcon } from '../icons/LetterIcon.js';
@@ -15,31 +16,32 @@ type Entry =
   | { kind: 'space'; id: string; name: string; slug: string; iconUrl: string | null; baseColor: string | null; accentColor: string | null };
 
 export function FriendMentionAutocomplete({ query, onSelect, onClose }: Props) {
-  const { friends, fetchFriends } = useFriendsStore();
+  const { following, fetchFollowing } = useFollowsStore();
+  const userId = useAuthStore((s) => s.user?.id);
   const spaces = useSpacesStore((s) => s.spaces);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   useEffect(() => {
-    if (friends.length === 0) fetchFriends();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (following.length === 0 && userId) fetchFollowing(userId);
+  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const lowerQuery = query.toLowerCase();
 
-  const friendEntries: Entry[] = friends
+  const followingEntries: Entry[] = following
     .filter((f) => {
-      const uname = f.user.username.toLowerCase();
-      const dname = f.user.displayName.toLowerCase();
+      const uname = f.username.toLowerCase();
+      const dname = f.displayName.toLowerCase();
       return uname.includes(lowerQuery) || dname.includes(lowerQuery);
     })
     .slice(0, 6)
     .map((f) => ({
       kind: 'user',
-      id: f.user.id,
-      username: f.user.username,
-      displayName: f.user.displayName,
-      avatarUrl: f.user.avatarUrl ?? null,
-      baseColor: f.user.baseColor ?? null,
-      accentColor: f.user.accentColor ?? null,
+      id: f.id,
+      username: f.username,
+      displayName: f.displayName,
+      avatarUrl: f.avatarUrl ?? null,
+      baseColor: f.baseColor ?? null,
+      accentColor: f.accentColor ?? null,
     }));
 
   const spaceEntries: Entry[] = spaces
@@ -60,7 +62,7 @@ export function FriendMentionAutocomplete({ query, onSelect, onClose }: Props) {
       accentColor: s.accentColor ?? null,
     }));
 
-  const entries = [...friendEntries, ...spaceEntries];
+  const entries = [...followingEntries, ...spaceEntries];
 
   useEffect(() => {
     setSelectedIndex(0);
