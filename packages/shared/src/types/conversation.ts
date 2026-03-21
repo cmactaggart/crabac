@@ -5,6 +5,7 @@ export interface Conversation {
   ownerId: string | null;
   participants: ConversationParticipant[];
   lastMessage: DirectMessage | null;
+  muted?: boolean;
   createdAt: string;
   updatedAt: string;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LogOut, Copy, Link2, Pencil, Trash2, PanelLeftClose, PanelLeft, UserPlus, Users, LogOut as LeaveIcon, Check, X, Clock, UserMinus, ArrowLeft, Flag, Ban, SmilePlus, Paperclip, Search, Forward } from 'lucide-react';
+import { LogOut, Copy, Link2, Pencil, Trash2, PanelLeftClose, PanelLeft, UserPlus, Users, LogOut as LeaveIcon, Check, X, Clock, UserMinus, ArrowLeft, Flag, Ban, SmilePlus, Paperclip, Search, Forward, BellOff, Bell } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { useDMStore } from '../stores/dm.js';
@@ -49,7 +49,12 @@ export function DMView() {
     clearMessages,
     toggleDMSearch,
     clearDMSearch,
+    muteConversation,
+    unmuteConversation,
+    deleteConversation,
   } = useDMStore();
+
+  const [showGroupMembers, setShowGroupMembers] = useState(false);
 
   useDMSocket(conversationId || null);
   useFollowsSocket();
@@ -101,6 +106,28 @@ export function DMView() {
           <DMHeaderContent otherParticipant={otherParticipant} currentUserId={user?.id || ''} />
         )}
         <button
+          onClick={async () => {
+            if (activeConv.muted) {
+              await unmuteConversation(conversationId);
+            } else {
+              await muteConversation(conversationId);
+            }
+          }}
+          style={{ background: 'none', border: 'none', color: activeConv.muted ? 'var(--danger)' : 'var(--text-secondary)', cursor: 'pointer', padding: '4px 8px', borderRadius: 4, flexShrink: 0 }}
+          title={activeConv.muted ? 'Unmute' : 'Mute'}
+        >
+          {activeConv.muted ? <BellOff size={18} /> : <Bell size={18} />}
+        </button>
+        {isGroup && (
+          <button
+            onClick={() => setShowGroupMembers((v) => !v)}
+            style={{ background: 'none', border: 'none', color: showGroupMembers ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', padding: '4px 8px', borderRadius: 4, flexShrink: 0 }}
+            title="Members"
+          >
+            <Users size={18} />
+          </button>
+        )}
+        <button
           onClick={() => toggleDMSearch(conversationId)}
           style={{ background: 'none', border: 'none', color: showDMSearch ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', padding: '4px 8px', borderRadius: 4, flexShrink: 0 }}
           title="Search"
@@ -138,9 +165,21 @@ export function DMView() {
     </div>
   ) : null;
 
-  const chatWithSearch = chatContent ? (
+  const chatWithPanels = chatContent ? (
     <div style={{ display: 'flex', flex: 1, minWidth: 0, minHeight: 0 }}>
       {chatContent}
+      {showGroupMembers && isGroup && activeConv && (
+        <GroupMembersPanel
+          conversation={activeConv}
+          currentUserId={user?.id || ''}
+          onMessage={(userId) => {
+            api<any>(`/conversations/with/${userId}`, { method: 'POST' })
+              .then((conv) => navigate(`/dm/${conv.id}`))
+              .catch(() => {});
+          }}
+          onClose={() => setShowGroupMembers(false)}
+        />
+      )}
       {showDMSearch && (
         <SearchPanel
           mode="dm"
@@ -206,7 +245,7 @@ export function DMView() {
             </button>
           </div>
         )}
-        {chatWithSearch || (
+        {chatWithPanels || (
           <div style={styles.placeholder}>
             <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>
               Select a conversation to start messaging
@@ -367,6 +406,230 @@ function GroupDMHeaderContent({ conversation, currentUserId }: { conversation: C
   );
 }
 
+// ─── Group Members Panel ───
+
+function GroupMembersPanel({
+  conversation,
+  currentUserId,
+  onMessage,
+  onClose,
+}: {
+  conversation: Conversation;
+  currentUserId: string;
+  onMessage: (userId: string) => void;
+  onClose: () => void;
+}) {
+  const navigate = useNavigate();
+  const owner = conversation.ownerId;
+  const sorted = [...conversation.participants].sort((a, b) => {
+    // Owner first, then online status, then alphabetical
+    if (a.id === owner) return -1;
+    if (b.id === owner) return 1;
+    const statusOrder = { online: 0, idle: 1, dnd: 2, offline: 3 };
+    const aOrder = statusOrder[a.status as keyof typeof statusOrder] ?? 3;
+    const bOrder = statusOrder[b.status as keyof typeof statusOrder] ?? 3;
+    if (aOrder !== bOrder) return aOrder - bOrder;
+    return a.displayName.localeCompare(b.displayName);
+  });
+
+  return (
+    <div style={groupMembersPanelStyles.container}>
+      <div style={groupMembersPanelStyles.header}>
+        <span style={{ fontWeight: 700, fontSize: '0.8rem' }}>Members — {conversation.participants.length}</span>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, display: 'flex' }}>
+          <X size={14} />
+        </button>
+      </div>
+      <div style={groupMembersPanelStyles.list}>
+        {sorted.map((p) => (
+          <div
+            key={p.id}
+            style={groupMembersPanelStyles.member}
+            onClick={() => {
+              if (p.id !== currentUserId) navigate(`/p/${p.username}`);
+            }}
+          >
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <Avatar src={p.avatarUrl} name={p.displayName} size={32} baseColor={p.baseColor} accentColor={p.accentColor} />
+              <span style={{
+                position: 'absolute', bottom: -1, right: -1,
+                width: 10, height: 10, borderRadius: '50%',
+                border: '2px solid var(--bg-secondary)',
+                background: p.status === 'online' ? 'var(--success, #3ba55d)' :
+                           p.status === 'idle' ? '#faa61a' :
+                           p.status === 'dnd' ? 'var(--danger, #ed4245)' : 'var(--text-muted)',
+              }} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '0.82rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
+                {p.displayName}
+                {p.id === owner && (
+                  <span style={{ fontSize: '0.65rem', color: 'var(--accent)', fontWeight: 700 }}>OWNER</span>
+                )}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                @{p.username}
+              </div>
+            </div>
+            {p.id !== currentUserId && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onMessage(p.id); }}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4, display: 'flex', flexShrink: 0 }}
+                title="Message"
+              >
+                <Forward size={14} />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const groupMembersPanelStyles: Record<string, React.CSSProperties> = {
+  container: {
+    width: 240,
+    flexShrink: 0,
+    background: 'var(--bg-secondary)',
+    borderLeft: '1px solid var(--border)',
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '12px 12px 8px',
+    borderBottom: '1px solid var(--border)',
+  },
+  list: {
+    flex: 1,
+    overflowY: 'auto',
+    padding: '4px 0',
+  },
+  member: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '6px 12px',
+    cursor: 'pointer',
+    color: 'var(--text-primary)',
+  },
+};
+
+// ─── Conversation List Item (with context menu) ───
+
+function ConversationListItem({
+  conversation: conv,
+  isActive,
+  hasUnread,
+  unreadCount,
+  currentUserId,
+}: {
+  conversation: Conversation;
+  isActive: boolean;
+  hasUnread: boolean;
+  unreadCount: number;
+  currentUserId: string;
+}) {
+  const navigate = useNavigate();
+  const { muteConversation, unmuteConversation, deleteConversation, leaveGroup } = useDMStore();
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+
+  const isGroup = conv.type === 'group';
+  const other = !isGroup ? conv.participants.find((p) => p.id !== currentUserId) : null;
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setCtxMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  const contextItems: ContextMenuItem[] = [
+    {
+      label: conv.muted ? 'Unmute' : 'Mute',
+      icon: conv.muted ? <Bell size={14} /> : <BellOff size={14} />,
+      onClick: () => conv.muted ? unmuteConversation(conv.id) : muteConversation(conv.id),
+    },
+    ...(isGroup ? [{
+      label: 'Leave Group',
+      icon: <LeaveIcon size={14} />,
+      danger: true,
+      onClick: async () => {
+        if (confirm('Leave this group?')) {
+          await leaveGroup(conv.id);
+          navigate('/dm');
+        }
+      },
+    }] : [{
+      label: 'Delete Conversation',
+      icon: <Trash2 size={14} />,
+      danger: true,
+      onClick: async () => {
+        if (confirm('Delete this conversation? All messages will be permanently removed.')) {
+          await deleteConversation(conv.id);
+          navigate('/dm');
+        }
+      },
+    }]),
+  ];
+
+  return (
+    <>
+      <button
+        onClick={() => navigate(`/dm/${conv.id}`)}
+        onContextMenu={handleContextMenu}
+        style={{
+          ...styles.convItem,
+          background: isActive ? 'var(--hover)' : 'transparent',
+        }}
+      >
+        {isGroup ? (
+          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Users size={16} style={{ color: 'var(--text-muted)' }} />
+          </div>
+        ) : (
+          <Avatar src={other?.avatarUrl ?? null} name={other?.displayName || '?'} size={32} dimmed={other?.status === 'offline'} baseColor={other?.baseColor} accentColor={other?.accentColor} />
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: '0.9rem',
+            fontWeight: (isActive || hasUnread) ? 700 : 600,
+            color: (isActive || hasUnread) ? 'var(--text-primary)' : 'var(--text-secondary)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            display: 'flex', alignItems: 'center', gap: 4,
+          }}>
+            {isGroup ? conv.name : other?.displayName}
+            {conv.muted && <BellOff size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
+          </div>
+          {conv.lastMessage ? (
+            <div style={{
+              fontSize: '0.75rem',
+              color: hasUnread ? 'var(--text-secondary)' : 'var(--text-muted)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {conv.lastMessage.content}
+            </div>
+          ) : isGroup ? (
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+              {conv.participants.length} members
+            </div>
+          ) : null}
+        </div>
+        {hasUnread && !conv.muted && (
+          <span style={styles.unreadBadge}>
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
+        )}
+      </button>
+      {ctxMenu && (
+        <ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={contextItems} onClose={() => setCtxMenu(null)} />
+      )}
+    </>
+  );
+}
+
 // ─── DM Sidebar ───
 
 function DMSidebar({
@@ -450,98 +713,15 @@ function DMSidebar({
             const unreadCount = dmUnreads[conv.id] || 0;
             const hasUnread = unreadCount > 0;
 
-            if (conv.type === 'group') {
-              return (
-                <button
-                  key={conv.id}
-                  onClick={() => navigate(`/dm/${conv.id}`)}
-                  style={{
-                    ...styles.convItem,
-                    background: conv.id === activeConversationId ? 'var(--hover)' : 'transparent',
-                  }}
-                >
-                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Users size={16} style={{ color: 'var(--text-muted)' }} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                      fontSize: '0.9rem',
-                      fontWeight: hasUnread ? 700 : 600,
-                      color: (conv.id === activeConversationId || hasUnread) ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {conv.name}
-                    </div>
-                    {conv.lastMessage ? (
-                      <div style={{
-                        fontSize: '0.75rem',
-                        color: hasUnread ? 'var(--text-secondary)' : 'var(--text-muted)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}>
-                        {conv.lastMessage.content}
-                      </div>
-                    ) : (
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                        {conv.participants.length} members
-                      </div>
-                    )}
-                  </div>
-                  {hasUnread && (
-                    <span style={styles.unreadBadge}>
-                      {unreadCount > 99 ? '99+' : unreadCount}
-                    </span>
-                  )}
-                </button>
-              );
-            }
-
-            const other = conv.participants.find((p: any) => p.id !== currentUserId);
-            if (!other) return null;
-            const isActive = conv.id === activeConversationId;
-
             return (
-              <button
+              <ConversationListItem
                 key={conv.id}
-                onClick={() => navigate(`/dm/${conv.id}`)}
-                style={{
-                  ...styles.convItem,
-                  background: isActive ? 'var(--hover)' : 'transparent',
-                }}
-              >
-                <Avatar src={other.avatarUrl} name={other.displayName} size={32} dimmed={other.status === 'offline'} baseColor={other.baseColor} accentColor={other.accentColor} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{
-                    fontSize: '0.9rem',
-                    fontWeight: (isActive || hasUnread) ? 700 : 600,
-                    color: (isActive || hasUnread) ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {other.displayName}
-                  </div>
-                  {conv.lastMessage && (
-                    <div style={{
-                      fontSize: '0.75rem',
-                      color: hasUnread ? 'var(--text-secondary)' : 'var(--text-muted)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {conv.lastMessage.content}
-                    </div>
-                  )}
-                </div>
-                {hasUnread && (
-                  <span style={styles.unreadBadge}>
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </span>
-                )}
-              </button>
+                conversation={conv}
+                isActive={conv.id === activeConversationId}
+                hasUnread={hasUnread}
+                unreadCount={unreadCount}
+                currentUserId={currentUserId}
+              />
             );
           })}
         </div>

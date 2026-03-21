@@ -13,7 +13,7 @@ export function registerDMGateway() {
     // Send push notifications to participants not connected to this conversation room
     try {
       const members = await db('conversation_members')
-        .where({ conversation_id: conversationId, status: 'accepted' })
+        .where({ conversation_id: conversationId, status: 'accepted', muted: false })
         .whereNot('user_id', message.authorId)
         .select('user_id');
 

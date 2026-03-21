@@ -3,6 +3,7 @@ import { api } from '../../lib/api.js';
 
 export interface Waypoint {
   lngLat: [number, number]; // [lng, lat]
+  snapped: boolean; // whether the segment TO this point uses road snapping
 }
 
 export type RoutingProfile = 'bike' | 'foot';
@@ -33,9 +34,9 @@ export function useRouteBuilder() {
 
   const { waypoints, undoStack, redoStack } = state;
 
-  const addWaypoint = useCallback((lngLat: [number, number]) => {
+  const addWaypoint = useCallback((lngLat: [number, number], snapped: boolean = true) => {
     setState((s) => ({
-      waypoints: [...s.waypoints, { lngLat }],
+      waypoints: [...s.waypoints, { lngLat, snapped }],
       undoStack: [...s.undoStack.slice(-49), s.waypoints],
       redoStack: [],
     }));
@@ -43,7 +44,7 @@ export function useRouteBuilder() {
 
   const moveWaypoint = useCallback((index: number, lngLat: [number, number]) => {
     setState((s) => ({
-      waypoints: s.waypoints.map((wp, i) => (i === index ? { lngLat } : wp)),
+      waypoints: s.waypoints.map((wp, i) => (i === index ? { ...wp, lngLat } : wp)),
       undoStack: [...s.undoStack.slice(-49), s.waypoints],
       redoStack: [],
     }));
@@ -52,6 +53,14 @@ export function useRouteBuilder() {
   const removeWaypoint = useCallback((index: number) => {
     setState((s) => ({
       waypoints: s.waypoints.filter((_, i) => i !== index),
+      undoStack: [...s.undoStack.slice(-49), s.waypoints],
+      redoStack: [],
+    }));
+  }, []);
+
+  const unsnapWaypoint = useCallback((index: number) => {
+    setState((s) => ({
+      waypoints: s.waypoints.map((wp, i) => (i === index ? { ...wp, snapped: false } : wp)),
       undoStack: [...s.undoStack.slice(-49), s.waypoints],
       redoStack: [],
     }));
@@ -91,7 +100,7 @@ export function useRouteBuilder() {
   }, []);
 
   // Waypoint fingerprint for effect dependencies
-  const waypointKey = waypoints.map((w) => `${w.lngLat[0]},${w.lngLat[1]}`).join('|');
+  const waypointKey = waypoints.map((w) => `${w.lngLat[0]},${w.lngLat[1]},${w.snapped}`).join('|');
 
   // Fetch road-snapped route when waypoints or profile change
   useEffect(() => {
@@ -105,17 +114,10 @@ export function useRouteBuilder() {
     routeTimer.current = setTimeout(async () => {
       setRouting(true);
       try {
-        const wps = waypoints.map((wp) => wp.lngLat as [number, number]);
-        const result = await api<{ coordinates: [number, number][]; distanceKm: number }>(
-          '/users/me/collections/routes/route',
-          { method: 'POST', body: JSON.stringify({ waypoints: wps, profile }) },
-        );
+        const result = await routeSegmented(waypoints, profile);
         setSnappedPath({ coordinates: result.coordinates, distanceKm: result.distanceKm, elevations: null });
-
-        // Fetch elevations for the snapped path (sample if too many points)
         fetchPathElevations(result.coordinates);
       } catch {
-        // Fallback to straight lines
         const coords = waypoints.map((wp) => wp.lngLat as [number, number]);
         setSnappedPath({ coordinates: coords, distanceKm: 0, elevations: null });
       }
@@ -226,6 +228,7 @@ export function useRouteBuilder() {
     addWaypoint,
     moveWaypoint,
     removeWaypoint,
+    unsnapWaypoint,
     undo,
     redo,
     canUndo: undoStack.length > 0,
@@ -241,4 +244,85 @@ export function useRouteBuilder() {
     geojson,
     snappedWaypoints,
   };
+}
+
+/**
+ * Routes through waypoints segment-by-segment.
+ * Snapped segments go through Valhalla; unsnapped segments are straight lines.
+ */
+async function routeSegmented(
+  waypoints: Waypoint[],
+  profile: RoutingProfile,
+): Promise<{ coordinates: [number, number][]; distanceKm: number }> {
+  const allCoords: [number, number][] = [];
+  let totalDistance = 0;
+
+  // Group consecutive snapped waypoints for batch routing
+  let i = 0;
+  while (i < waypoints.length - 1) {
+    const segStart = i;
+
+    if (waypoints[i + 1].snapped) {
+      // Find the run of consecutive snapped segments
+      let segEnd = i + 1;
+      while (segEnd < waypoints.length - 1 && waypoints[segEnd + 1].snapped) {
+        segEnd++;
+      }
+
+      // Route this group through Valhalla
+      const groupWps = waypoints.slice(segStart, segEnd + 1).map((wp) => wp.lngLat as [number, number]);
+      try {
+        const result = await api<{ coordinates: [number, number][]; distanceKm: number }>(
+          '/users/me/collections/routes/route',
+          { method: 'POST', body: JSON.stringify({ waypoints: groupWps, profile }) },
+        );
+        // Append, skipping first point if we already have coords (avoid duplicate)
+        const startIdx = allCoords.length > 0 ? 1 : 0;
+        for (let j = startIdx; j < result.coordinates.length; j++) {
+          allCoords.push(result.coordinates[j]);
+        }
+        totalDistance += result.distanceKm;
+      } catch {
+        // Fallback to straight lines for this group
+        const startIdx = allCoords.length > 0 ? 1 : 0;
+        for (let j = startIdx; j < groupWps.length; j++) {
+          allCoords.push(groupWps[j]);
+        }
+        totalDistance += straightLineDistance(groupWps);
+      }
+
+      i = segEnd;
+    } else {
+      // Unsnapped segment: straight line
+      if (allCoords.length === 0) {
+        allCoords.push(waypoints[i].lngLat);
+      }
+      allCoords.push(waypoints[i + 1].lngLat);
+      totalDistance += haversineKm(
+        waypoints[i].lngLat[1], waypoints[i].lngLat[0],
+        waypoints[i + 1].lngLat[1], waypoints[i + 1].lngLat[0],
+      );
+      i++;
+    }
+  }
+
+  return { coordinates: allCoords, distanceKm: totalDistance };
+}
+
+function straightLineDistance(points: [number, number][]): number {
+  let dist = 0;
+  for (let i = 1; i < points.length; i++) {
+    dist += haversineKm(points[i - 1][1], points[i - 1][0], points[i][1], points[i][0]);
+  }
+  return dist;
+}
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }

@@ -253,6 +253,45 @@ dmRoutes.put(
   },
 );
 
+// Mute a conversation
+dmRoutes.put(
+  '/:conversationId/mute',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await dmService.muteConversation(req.params.conversationId, req.user!.userId);
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Unmute a conversation
+dmRoutes.delete(
+  '/:conversationId/mute',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await dmService.unmuteConversation(req.params.conversationId, req.user!.userId);
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Delete a 1:1 conversation
+dmRoutes.delete(
+  '/:conversationId',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await dmService.deleteConversation(req.params.conversationId, req.user!.userId);
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // Get messages in a conversation
 dmRoutes.get(
   '/:conversationId/messages',

@@ -68,8 +68,8 @@ export async function listConversations(userId: string) {
 
   const conversations = [];
   for (const convId of convIds) {
-    const conv = await getConversation(convId, userId);
-    if (conv) conversations.push(conv);
+    const conv = await db('conversations').where('id', convId).first();
+    if (conv) conversations.push(await buildConversationResponse(conv, userId));
   }
 
   // Sort by most recent activity (updatedAt)
@@ -305,7 +305,54 @@ export async function getConversation(conversationId: string, userId: string) {
     .first();
   if (!membership) return null;
 
-  return buildConversationResponse(conv);
+  return buildConversationResponse(conv, userId);
+}
+
+// ─── Mute / Delete ───
+
+export async function muteConversation(conversationId: string, userId: string) {
+  const membership = await db('conversation_members')
+    .where({ conversation_id: conversationId, user_id: userId })
+    .first();
+  if (!membership) throw new NotFoundError('Conversation');
+
+  await db('conversation_members')
+    .where({ conversation_id: conversationId, user_id: userId })
+    .update({ muted: true });
+}
+
+export async function unmuteConversation(conversationId: string, userId: string) {
+  const membership = await db('conversation_members')
+    .where({ conversation_id: conversationId, user_id: userId })
+    .first();
+  if (!membership) throw new NotFoundError('Conversation');
+
+  await db('conversation_members')
+    .where({ conversation_id: conversationId, user_id: userId })
+    .update({ muted: false });
+}
+
+export async function isConversationMuted(conversationId: string, userId: string): Promise<boolean> {
+  const row = await db('conversation_members')
+    .where({ conversation_id: conversationId, user_id: userId })
+    .first();
+  return !!row?.muted;
+}
+
+export async function deleteConversation(conversationId: string, userId: string) {
+  const conv = await db('conversations').where('id', conversationId).first();
+  if (!conv) throw new NotFoundError('Conversation');
+  if (conv.type !== 'dm') throw new BadRequestError('Use leave for group conversations');
+
+  const membership = await db('conversation_members')
+    .where({ conversation_id: conversationId, user_id: userId })
+    .first();
+  if (!membership) throw new ForbiddenError('Not a member of this conversation');
+
+  await db('direct_messages').where('conversation_id', conversationId).delete();
+  await db('dm_reads').where('conversation_id', conversationId).delete();
+  await db('conversation_members').where('conversation_id', conversationId).delete();
+  await db('conversations').where('id', conversationId).delete();
 }
 
 export async function isConversationMember(conversationId: string, userId: string): Promise<boolean> {
@@ -540,9 +587,9 @@ export async function markDMRead(conversationId: string, userId: string, message
 }
 
 export async function getDMUnreadCounts(userId: string): Promise<Record<string, number>> {
-  // Get all conversations the user is a member of (accepted)
+  // Get all conversations the user is a member of (accepted, not muted)
   const memberships = await db('conversation_members')
-    .where({ user_id: userId, status: 'accepted' })
+    .where({ user_id: userId, status: 'accepted', muted: false })
     .select('conversation_id');
 
   const convIds = memberships.map((m: any) => String(m.conversation_id));
@@ -588,14 +635,14 @@ async function getConversationRaw(conversationId: string) {
   return buildConversationResponse(conv);
 }
 
-async function buildConversationResponse(conv: any) {
+async function buildConversationResponse(conv: any, forUserId?: string) {
   const conversationId = conv.id;
 
   // Get participants
   const participants = await db('conversation_members')
     .join('users', 'conversation_members.user_id', 'users.id')
     .where('conversation_members.conversation_id', conversationId)
-    .select('users.id', 'users.username', 'users.display_name', 'users.avatar_url', 'users.base_color', 'users.accent_color', 'users.status');
+    .select('users.id', 'users.username', 'users.display_name', 'users.avatar_url', 'users.base_color', 'users.accent_color', 'users.status', 'conversation_members.muted');
 
   // Get last message
   const lastMsg = await db('direct_messages')
@@ -612,6 +659,13 @@ async function buildConversationResponse(conv: any) {
     )
     .first();
 
+  // Determine muted state for requesting user
+  let muted: boolean | undefined;
+  if (forUserId) {
+    const userParticipant = participants.find((p: any) => String(p.id) === forUserId);
+    muted = !!userParticipant?.muted;
+  }
+
   return {
     id: conv.id.toString(),
     type: conv.type || 'dm',
@@ -627,6 +681,7 @@ async function buildConversationResponse(conv: any) {
       status: p.status,
     })),
     lastMessage: lastMsg ? formatDM(lastMsg) : null,
+    ...(muted !== undefined && { muted }),
     createdAt: conv.created_at,
     updatedAt: conv.updated_at,
   };

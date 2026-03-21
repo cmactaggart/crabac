@@ -42,12 +42,15 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
   const isMobile = useIsMobile();
 
   const {
-    waypoints, addWaypoint, moveWaypoint, removeWaypoint,
+    waypoints, addWaypoint, moveWaypoint, removeWaypoint, unsnapWaypoint,
     undo, redo, canUndo, canRedo, clear,
     profile, setProfile,
     totalDistanceKm, elevationGainM, elevationLossM,
     elevationsLoading, routing, geojson, snappedWaypoints,
   } = useRouteBuilder();
+
+  // Context menu state for waypoint right-click
+  const [wpContextMenu, setWpContextMenu] = useState<{ x: number; y: number; index: number } | null>(null);
 
   // Save form state
   const [showSavePanel, setShowSavePanel] = useState(false);
@@ -142,9 +145,38 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
       });
     });
 
-    // Click to add waypoint
+    // Left-click / tap to add snapped waypoint
     map.on('click', (e) => {
-      addWaypoint([e.lngLat.lng, e.lngLat.lat]);
+      addWaypoint([e.lngLat.lng, e.lngLat.lat], true);
+    });
+
+    // Right-click on map to add unsnapped waypoint (straight line)
+    map.on('contextmenu', (e) => {
+      addWaypoint([e.lngLat.lng, e.lngLat.lat], false);
+    });
+
+    // Mobile: long-press on map to add unsnapped waypoint
+    let mapLpTimer: ReturnType<typeof setTimeout> | null = null;
+    let mapLpCoord: [number, number] | null = null;
+    const canvas = map.getCanvas();
+    canvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) return;
+      const touch = e.touches[0];
+      const lngLat = map.unproject([touch.clientX - canvas.getBoundingClientRect().left, touch.clientY - canvas.getBoundingClientRect().top]);
+      mapLpCoord = [lngLat.lng, lngLat.lat];
+      mapLpTimer = setTimeout(() => {
+        if (mapLpCoord) {
+          navigator.vibrate?.(30);
+          addWaypoint(mapLpCoord, false);
+          mapLpCoord = null;
+        }
+      }, 500);
+    }, { passive: true });
+    canvas.addEventListener('touchmove', () => {
+      if (mapLpTimer) { clearTimeout(mapLpTimer); mapLpTimer = null; mapLpCoord = null; }
+    }, { passive: true });
+    canvas.addEventListener('touchend', () => {
+      if (mapLpTimer) { clearTimeout(mapLpTimer); mapLpTimer = null; mapLpCoord = null; }
     });
 
     mapRef.current = map;
@@ -182,24 +214,27 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
       el.style.background = isFirst ? '#22c55e' : isLast ? '#ef4444' : '#5865F2';
       el.style.transition = 'transform 0.15s';
 
-      // Desktop: right-click to delete
+      // Dashed border for unsnapped waypoints (not first — first has no incoming segment)
+      if (!wp.snapped && i > 0) {
+        el.style.border = isMobile ? '3px dashed white' : '2.5px dashed white';
+      }
+
+      // Desktop: right-click to show context menu
       el.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        removeWaypoint(i);
+        setWpContextMenu({ x: e.clientX, y: e.clientY, index: i });
       });
 
-      // Mobile: long-press to delete
+      // Mobile: long-press to show context menu
       if (isMobile) {
         let lpTimer: ReturnType<typeof setTimeout> | null = null;
-        let didLongPress = false;
         el.addEventListener('touchstart', (e) => {
-          didLongPress = false;
+          const touch = e.touches[0];
           lpTimer = setTimeout(() => {
-            didLongPress = true;
             el.style.transform = 'scale(1.4)';
             navigator.vibrate?.(30);
-            removeWaypoint(i);
+            setWpContextMenu({ x: touch.clientX, y: touch.clientY, index: i });
           }, 500);
         }, { passive: true });
         el.addEventListener('touchmove', () => {
@@ -292,7 +327,7 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
   const hintText = waypoints.length === 0
     ? (isMobile ? 'Tap the map to place your starting point' : 'Click on the map to place your starting point')
     : waypoints.length === 1
-      ? (isMobile ? 'Tap to add your next waypoint — route snaps to roads' : 'Click to add your next waypoint — the route will snap to roads')
+      ? (isMobile ? 'Tap to add waypoints — long press to add without road snapping' : 'Left-click to snap to roads — right-click for straight lines')
       : null;
 
   return (
@@ -334,6 +369,43 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
 
         {/* Map */}
         <div ref={mapContainerRef} style={styles.mapContainer} />
+
+        {/* Waypoint context menu */}
+        {wpContextMenu && (
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 200 }}
+            onClick={() => setWpContextMenu(null)}
+            onContextMenu={(e) => { e.preventDefault(); setWpContextMenu(null); }}
+          >
+            <div style={{
+              position: 'absolute',
+              top: wpContextMenu.y,
+              left: wpContextMenu.x,
+              background: 'var(--bg-primary)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius, 6px)',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+              padding: '4px 0',
+              minWidth: 160,
+              zIndex: 201,
+            }}>
+              {wpContextMenu.index > 0 && waypoints[wpContextMenu.index]?.snapped && (
+                <button
+                  onClick={() => { unsnapWaypoint(wpContextMenu.index); setWpContextMenu(null); }}
+                  style={ctxMenuBtnStyle}
+                >
+                  Unsnap segment
+                </button>
+              )}
+              <button
+                onClick={() => { removeWaypoint(wpContextMenu.index); setWpContextMenu(null); }}
+                style={{ ...ctxMenuBtnStyle, color: 'var(--danger, #ed4245)' }}
+              >
+                Delete waypoint
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Mobile: floating stats pill at top of map */}
         {isMobile && waypoints.length > 0 && (
@@ -485,6 +557,18 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
     </div>
   );
 }
+
+const ctxMenuBtnStyle: React.CSSProperties = {
+  display: 'block',
+  width: '100%',
+  padding: '6px 12px',
+  background: 'none',
+  border: 'none',
+  color: 'var(--text-primary)',
+  fontSize: '0.82rem',
+  textAlign: 'left',
+  cursor: 'pointer',
+};
 
 const styles: Record<string, React.CSSProperties> = {
   overlay: {

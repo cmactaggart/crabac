@@ -25,6 +25,9 @@ interface DMState {
   incrementUnread: (conversationId: string) => void;
   acceptMessageRequest: (conversationId: string) => Promise<void>;
   declineMessageRequest: (conversationId: string) => Promise<void>;
+  muteConversation: (conversationId: string) => Promise<void>;
+  unmuteConversation: (conversationId: string) => Promise<void>;
+  deleteConversation: (conversationId: string) => Promise<void>;
   openConversation: (conversationId: string) => Promise<void>;
   createConversation: (userId: string) => Promise<Conversation>;
   createGroupDM: (participantIds: string[], name?: string) => Promise<Conversation>;
@@ -137,6 +140,31 @@ export const useDMStore = create<DMState>((set, get) => ({
     await api(`/conversations/${conversationId}/decline`, { method: 'POST' });
     set((s) => ({
       messageRequests: s.messageRequests.filter((r) => r.id !== conversationId),
+    }));
+  },
+
+  muteConversation: async (conversationId) => {
+    await api(`/conversations/${conversationId}/mute`, { method: 'PUT' });
+    set((s) => ({
+      conversations: s.conversations.map((c) =>
+        c.id === conversationId ? { ...c, muted: true } : c,
+      ),
+    }));
+  },
+
+  unmuteConversation: async (conversationId) => {
+    await api(`/conversations/${conversationId}/mute`, { method: 'DELETE' });
+    set((s) => ({
+      conversations: s.conversations.map((c) =>
+        c.id === conversationId ? { ...c, muted: false } : c,
+      ),
+    }));
+  },
+
+  deleteConversation: async (conversationId) => {
+    await api(`/conversations/${conversationId}`, { method: 'DELETE' });
+    set((s) => ({
+      conversations: s.conversations.filter((c) => c.id !== conversationId),
     }));
   },
 

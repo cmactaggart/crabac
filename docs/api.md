@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.13.0
+## API Version 0.13.1
 
 Base URL: `https://app.crab.ac/api`
 
@@ -1462,7 +1462,7 @@ List spaces eligible for portaling a channel (all spaces the user belongs to exc
 
 ### GET /conversations
 
-List all conversations. Requires auth.
+List all conversations. Requires auth. Each conversation includes a `muted` boolean indicating whether the current user has muted it.
 
 ### GET /conversations/requests
 
@@ -1470,7 +1470,7 @@ List pending message requests. Requires auth.
 
 ### GET /conversations/unreads
 
-Get DM unread counts. Requires auth.
+Get DM unread counts. Requires auth. Muted conversations are excluded from unread counts.
 
 ### POST /conversations/with/:userId
 
@@ -1515,6 +1515,18 @@ Rename a group DM.
 ### PUT /conversations/:conversationId/read
 
 Mark conversation as read.
+
+### PUT /conversations/:conversationId/mute
+
+Mute a conversation. Muted conversations do not generate push notifications or count toward unread totals. The conversation's `muted` field will be `true` in list responses.
+
+### DELETE /conversations/:conversationId/mute
+
+Unmute a conversation.
+
+### DELETE /conversations/:conversationId
+
+Delete a 1:1 DM conversation. Permanently removes all messages, read tracking, and membership. Returns `400` for group conversations (use leave instead). Requires membership.
 
 ### GET /conversations/:conversationId/messages
 
