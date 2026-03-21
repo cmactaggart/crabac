@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.13.1
+## API Version 0.14.0
 
 Base URL: `https://app.crab.ac/api`
 
@@ -1985,6 +1985,47 @@ Get counts across all own collections.
 Get summary for another user's collections. Filtered by visibility.
 
 **Response:** Same shape as own summary.
+
+### Aggregated Upcoming Events
+
+#### GET /users/me/events/upcoming
+
+List upcoming calendar events across all spaces the user belongs to (where `calendar_enabled` is true). Events where the user has RSVP'd `not_going` are excluded. Includes space metadata for display.
+
+**Query:**
+| Param | Type | Default |
+|-------|------|---------|
+| `limit` | number (1–50) | 20 |
+
+**Response:** `CalendarEvent[]` — each item includes the standard CalendarEvent fields plus:
+| Field | Type | Description |
+|-------|------|-------------|
+| `spaceName` | string \| null | Name of the space the event belongs to |
+| `spaceSlug` | string \| null | Slug of the space |
+| `spaceIconUrl` | string \| null | Icon URL of the space |
+| `spaceBaseColor` | string \| null | Space base color |
+| `spaceAccentColor` | string \| null | Space accent color |
+
+Events include `rsvpCounts` and `myRsvp` fields. Sorted by `eventDate` ascending, then `eventTime` ascending.
+
+### Aggregated Recent Blog & Newsletter Posts
+
+#### GET /users/me/posts/recent
+
+List recent published blog posts and newsletters across all spaces the user belongs to (where the respective feature is enabled). Results are merged and sorted by recency.
+
+**Query:**
+| Param | Type | Default |
+|-------|------|---------|
+| `limit` | number (1–30) | 10 |
+
+**Response:** Array of items, each with an `itemType` field (`'blog'` or `'newsletter'`) plus the respective type's fields:
+
+**Blog items** include: `id`, `spaceId`, `authorId`, `title`, `summary`, `content`, `status`, `isPublic`, `publishedAt`, `createdAt`, `updatedAt`, `author`, `spaceName`, `spaceSlug`, `spaceIconUrl`.
+
+**Newsletter items** include: `id`, `spaceId`, `authorId`, `subject`, `summary`, `headerImageUrl`, `status`, `isPublic`, `publishedAt`, `createdAt`, `updatedAt`, `author`, `spaceName`, `spaceSlug`, `spaceIconUrl`. Note: `blocks` are omitted from list responses for brevity.
+
+Sorted by ID descending (most recent first).
 
 ---
 
