@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Bell, Mail, User, Newspaper } from 'lucide-react';
+import { Bell, Mail, Newspaper } from 'lucide-react';
 import { CrabIcon } from '../icons/CrabIcon.js';
 import { useNotificationsStore } from '../../stores/notifications.js';
 import { useDMStore } from '../../stores/dm.js';
@@ -16,7 +16,6 @@ export function BottomTabBar() {
     { icon: Newspaper, label: 'Feed', path: '/feed' },
     { icon: Mail, label: 'Messages', path: '/dm', badgeKey: 'messages' },
     { icon: Bell, label: 'Notifications', path: '/notifications', badgeKey: 'notifications' },
-    { icon: User, label: 'You', path: '/you' },
   ];
 
   const activeTab = tabs.find((t) => location.pathname === t.path || (t.path === '/dm' && location.pathname.startsWith('/dm')))?.path

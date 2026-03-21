@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Search, X } from 'lucide-react';
+import { Search, X, ImagePlus, MapPin, Users } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { useFeedStore } from '../stores/feed.js';
@@ -15,8 +15,227 @@ import { ProfileSidebar } from '../components/layout/ProfileSidebar.js';
 import { PostCard } from '../components/posts/PostCard.js';
 import { ReportModal } from '../components/moderation/ReportModal.js';
 import { IdentitySwitcher } from '../components/common/IdentitySwitcher.js';
+import { FriendMentionAutocomplete } from '../components/common/FriendMentionAutocomplete.js';
+import { FollowingTagPicker } from '../components/common/FollowingTagPicker.js';
 import { api } from '../lib/api.js';
-import type { UserPost } from '@crabac/shared';
+import type { UserPost, PersonalVisibility } from '@crabac/shared';
+
+function ComposeArea({ onPostCreated }: { onPostCreated: () => void }) {
+  const currentUser = useAuthStore((s) => s.user);
+  const { createPost } = usePersonalCollectionsStore();
+  const activeSpaceId = useIdentityStore((s) => s.activeSpaceId);
+  const { following, fetchFollowing } = useFollowsStore();
+  const defaultVisibility: PersonalVisibility = 'followers';
+
+  const [body, setBody] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
+  const [visibility, setVisibility] = useState<PersonalVisibility>(defaultVisibility as PersonalVisibility);
+  const [posting, setPosting] = useState(false);
+  const [taggedIds, setTaggedIds] = useState<string[]>([]);
+  const [showTagPicker, setShowTagPicker] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const gpxRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (currentUser?.id && following.length === 0) fetchFollowing(currentUser.id);
+  }, [currentUser?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleBodyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setBody(val);
+    const cursorPos = e.target.selectionStart ?? val.length;
+    const textBeforeCursor = val.slice(0, cursorPos);
+    const match = textBeforeCursor.match(/@([a-zA-Z0-9_-]*)$/);
+    setMentionQuery(match ? match[1] : null);
+  };
+
+  const handleMentionSelect = useCallback((name: string, id: string, type?: 'user' | 'space') => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const cursorPos = ta.selectionStart ?? body.length;
+    const textBeforeCursor = body.slice(0, cursorPos);
+    const matchIdx = textBeforeCursor.lastIndexOf('@');
+    if (matchIdx === -1) return;
+
+    if (type === 'space') {
+      const insertion = `[${name}](/space/${id}) `;
+      const newBody = body.slice(0, matchIdx) + insertion + body.slice(cursorPos);
+      setBody(newBody);
+      setMentionQuery(null);
+      requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(matchIdx + insertion.length, matchIdx + insertion.length); });
+    } else {
+      const newBody = body.slice(0, matchIdx) + `@${name} ` + body.slice(cursorPos);
+      setBody(newBody);
+      setMentionQuery(null);
+      if (!taggedIds.includes(id)) setTaggedIds((prev) => [...prev, id]);
+      requestAnimationFrame(() => { const p = matchIdx + name.length + 2; ta.focus(); ta.setSelectionRange(p, p); });
+    }
+  }, [body, taggedIds]);
+
+  const handlePost = async () => {
+    if (!body.trim() && files.length === 0) return;
+    setPosting(true);
+    try {
+      const allTaggedIds = [...taggedIds];
+      for (const m of body.matchAll(/@([a-zA-Z0-9_-]+)/g)) {
+        const followedUser = following.find((f: any) => f.username?.toLowerCase() === m[1].toLowerCase());
+        if (followedUser && !allTaggedIds.includes(followedUser.id)) allTaggedIds.push(followedUser.id);
+      }
+      const formData = new FormData();
+      if (body.trim()) formData.append('body', body.trim());
+      formData.append('visibility', activeSpaceId ? 'public' : visibility);
+      files.forEach((f) => formData.append('files', f));
+      if (allTaggedIds.length > 0) formData.append('taggedUserIds', JSON.stringify(allTaggedIds));
+      if (activeSpaceId) formData.append('spaceId', activeSpaceId);
+      await createPost(formData);
+      setBody(''); setFiles([]); setTaggedIds([]); setVisibility(defaultVisibility as PersonalVisibility);
+      onPostCreated();
+    } catch {}
+    setPosting(false);
+  };
+
+  return (
+    <div style={composeStyles.container}>
+      <div style={{ position: 'relative' }}>
+        {mentionQuery !== null && (
+          <FriendMentionAutocomplete query={mentionQuery} onSelect={handleMentionSelect} onClose={() => setMentionQuery(null)} />
+        )}
+        <textarea
+          ref={textareaRef}
+          value={body}
+          onChange={handleBodyChange}
+          placeholder={activeSpaceId ? 'Post as your space...' : "What's on your mind?"}
+          style={composeStyles.textarea}
+          maxLength={10000}
+        />
+      </div>
+
+      {files.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {files.map((f, i) => (
+            <div key={i} style={composeStyles.fileBadge}>
+              <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+              <button onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, display: 'flex' }}>
+                <X size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {taggedIds.length > 0 && (
+        <div style={{ fontSize: '0.72rem', color: 'var(--accent)' }}>
+          <Users size={11} style={{ verticalAlign: 'middle', marginRight: 3 }} />
+          {taggedIds.length} friend{taggedIds.length > 1 ? 's' : ''} tagged
+        </div>
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <button onClick={() => fileRef.current?.click()} style={composeStyles.actionBtn} title="Add media">
+          <ImagePlus size={13} /> Media
+        </button>
+        <input ref={fileRef} type="file" accept="image/*,video/*" multiple onChange={(e) => { if (e.target.files) setFiles((p) => [...p, ...Array.from(e.target.files!)]); if (fileRef.current) fileRef.current.value = ''; }} style={{ display: 'none' }} />
+
+        <button onClick={() => gpxRef.current?.click()} style={composeStyles.actionBtn} title="Add GPX">
+          <MapPin size={13} /> GPX
+        </button>
+        <input ref={gpxRef} type="file" accept=".gpx" multiple onChange={(e) => { if (e.target.files) setFiles((p) => [...p, ...Array.from(e.target.files!)]); if (gpxRef.current) gpxRef.current.value = ''; }} style={{ display: 'none' }} />
+
+        <div style={{ position: 'relative' }}>
+          <button onClick={() => setShowTagPicker(!showTagPicker)} style={composeStyles.actionBtn} title="Tag friends">
+            <Users size={13} /> Tag
+          </button>
+          {showTagPicker && (
+            <FollowingTagPicker selectedIds={taggedIds} onChange={setTaggedIds} onClose={() => setShowTagPicker(false)} />
+          )}
+        </div>
+
+        <select value={visibility} onChange={(e) => setVisibility(e.target.value as PersonalVisibility)} style={composeStyles.visSelect}>
+          <option value="private">Private</option>
+          <option value="followers">Followers</option>
+          <option value="spaces">Shared Spaces</option>
+          <option value="public">Public</option>
+        </select>
+
+        <button onClick={handlePost} disabled={posting || (!body.trim() && files.length === 0)} style={{ ...composeStyles.postBtn, opacity: posting || (!body.trim() && files.length === 0) ? 0.5 : 1 }}>
+          {posting ? 'Posting...' : 'Post'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const composeStyles: Record<string, React.CSSProperties> = {
+  container: {
+    background: 'var(--bg-secondary)',
+    borderRadius: 'var(--radius)',
+    padding: '12px 14px',
+    marginBottom: 16,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    border: '1px solid var(--border)',
+  },
+  textarea: {
+    width: '100%',
+    minHeight: 50,
+    resize: 'vertical',
+    padding: '0.5rem 0.7rem',
+    borderRadius: 'var(--radius)',
+    border: 'none',
+    background: 'var(--bg-input)',
+    color: 'var(--text-primary)',
+    fontSize: '0.88rem',
+    fontFamily: 'inherit',
+    outline: 'none',
+    boxSizing: 'border-box',
+  },
+  fileBadge: {
+    position: 'relative',
+    padding: '3px 8px',
+    background: 'var(--bg-tertiary)',
+    borderRadius: 'var(--radius)',
+    fontSize: '0.72rem',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+  },
+  actionBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    padding: '4px 8px',
+    borderRadius: 'var(--radius)',
+    border: '1px solid var(--border)',
+    background: 'transparent',
+    color: 'var(--text-secondary)',
+    fontSize: '0.75rem',
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  visSelect: {
+    padding: '3px 6px',
+    borderRadius: 'var(--radius)',
+    border: 'none',
+    background: 'var(--bg-input)',
+    color: 'var(--text-primary)',
+    fontSize: '0.72rem',
+    outline: 'none',
+  },
+  postBtn: {
+    marginLeft: 'auto',
+    padding: '5px 14px',
+    borderRadius: 'var(--radius)',
+    border: 'none',
+    background: 'var(--accent)',
+    color: 'white',
+    fontSize: '0.82rem',
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+};
 
 /**
  * FeedView — shared feed rendering component.
@@ -129,8 +348,16 @@ export function FeedView() {
     return deleteComment(postId, commentId, post.userId);
   };
 
+  const refreshFeed = () => {
+    clearSearch();
+    fetchFeed();
+  };
+
   return (
     <div>
+      {/* Compose area */}
+      <ComposeArea onPostCreated={refreshFeed} />
+
       {/* Search bar */}
       <form onSubmit={handleSearch} style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         <div style={{ flex: 1, position: 'relative' }}>

@@ -168,6 +168,39 @@ export async function getPublicPost(postId: string) {
   return formatPost(row);
 }
 
+/**
+ * List recent published blog posts across all spaces the user belongs to.
+ */
+export async function listRecentPostsForUser(userId: string, limit: number) {
+  const memberSpaces = await db('space_members')
+    .join('space_settings', 'space_members.space_id', 'space_settings.space_id')
+    .where('space_members.user_id', userId)
+    .where('space_settings.blog_enabled', true)
+    .select('space_members.space_id');
+  const spaceIds = memberSpaces.map((r: any) => String(r.space_id));
+
+  if (spaceIds.length === 0) return [];
+
+  const rows = await postBaseQuery()
+    .join('spaces', 'blog_posts.space_id', 'spaces.id')
+    .whereIn('blog_posts.space_id', spaceIds)
+    .where('blog_posts.status', 'published')
+    .orderBy('blog_posts.id', 'desc')
+    .limit(limit)
+    .select(
+      'spaces.name as space_name',
+      'spaces.slug as space_slug',
+      'spaces.icon_url as space_icon_url',
+    );
+
+  return rows.map((row: any) => ({
+    ...formatPost(row),
+    spaceName: row.space_name || null,
+    spaceSlug: row.space_slug || null,
+    spaceIconUrl: row.space_icon_url || null,
+  }));
+}
+
 function formatPost(row: any) {
   return {
     id: String(row.id),

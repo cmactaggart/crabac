@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { X, Undo2, Redo2, Trash2, Ruler, TrendingUp, TrendingDown, MapPin, Save, Bike, Footprints, Loader2 } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { useRouteBuilder, type RoutingProfile } from './use-route-builder.js';
+import { useRouteBuilder, type RoutingProfile, type Waypoint } from './use-route-builder.js';
 import { generateGpxXml } from './gpx-generator.js';
 import { usePreferencesStore } from '../../stores/preferences.js';
 import { formatDistance, formatElevation } from '../../lib/units.js';
@@ -43,6 +43,7 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
 
   const {
     waypoints, addWaypoint, moveWaypoint, removeWaypoint, unsnapWaypoint,
+    insertWaypoint, startDragWaypoint, previewMoveWaypoint, commitDragWaypoint,
     undo, redo, canUndo, canRedo, clear,
     profile, setProfile,
     totalDistanceKm, elevationGainM, elevationLossM,
@@ -51,6 +52,16 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
 
   // Context menu state for waypoint right-click
   const [wpContextMenu, setWpContextMenu] = useState<{ x: number; y: number; index: number } | null>(null);
+
+  // Context menu state for clicking on an existing path segment
+  const [pathContextMenu, setPathContextMenu] = useState<{ x: number; y: number; lngLat: [number, number]; insertIndex: number } | null>(null);
+
+  // Track dragging state to prevent marker rebuilds mid-drag
+  const draggingRef = useRef<number | null>(null);
+
+  // Ref for waypoints so map event handlers can access current value
+  const waypointsRef = useRef(waypoints);
+  waypointsRef.current = waypoints;
 
   // Save form state
   const [showSavePanel, setShowSavePanel] = useState(false);
@@ -145,13 +156,51 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
       });
     });
 
+    // Click on existing route line to show path context menu
+    let routeLineClicked = false;
+    map.on('click', 'route-line-casing', (e) => {
+      routeLineClicked = true;
+      const lngLat: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+      const insertIndex = findClosestSegmentIndex(lngLat, waypointsRef.current);
+      setPathContextMenu({
+        x: e.originalEvent.clientX,
+        y: e.originalEvent.clientY,
+        lngLat,
+        insertIndex,
+      });
+    });
+
+    // Right-click on route line also shows path context menu
+    map.on('contextmenu', 'route-line-casing', (e) => {
+      e.preventDefault();
+      routeLineClicked = true;
+      const lngLat: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+      const insertIndex = findClosestSegmentIndex(lngLat, waypointsRef.current);
+      setPathContextMenu({
+        x: e.originalEvent.clientX,
+        y: e.originalEvent.clientY,
+        lngLat,
+        insertIndex,
+      });
+    });
+
+    // Cursor change on route line hover
+    map.on('mouseenter', 'route-line-casing', () => {
+      map.getCanvas().style.cursor = 'pointer';
+    });
+    map.on('mouseleave', 'route-line-casing', () => {
+      map.getCanvas().style.cursor = '';
+    });
+
     // Left-click / tap to add snapped waypoint
     map.on('click', (e) => {
+      if (routeLineClicked) { routeLineClicked = false; return; }
       addWaypoint([e.lngLat.lng, e.lngLat.lat], true);
     });
 
     // Right-click on map to add unsnapped waypoint (straight line)
     map.on('contextmenu', (e) => {
+      if (routeLineClicked) { routeLineClicked = false; return; }
       addWaypoint([e.lngLat.lng, e.lngLat.lat], false);
     });
 
@@ -183,18 +232,21 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
     return () => { map.remove(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync markers and line with state
+  // Sync route line GeoJSON (always runs, even during drag)
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-
-    // Update line source
     const source = map.getSource('route-line') as maplibregl.GeoJSONSource | undefined;
     if (source) {
       source.setData(geojson || { type: 'FeatureCollection', features: [] });
     }
+  }, [geojson]);
 
-    // Sync markers
+  // Sync markers with state (skipped during drag to avoid disrupting active drag)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || draggingRef.current !== null) return;
+
     for (const m of markersRef.current) m.remove();
     markersRef.current = [];
 
@@ -250,15 +302,25 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
         .setLngLat(wp.lngLat)
         .addTo(map);
 
+      // Live route preview during drag
+      marker.on('dragstart', () => {
+        draggingRef.current = i;
+        startDragWaypoint();
+      });
+      marker.on('drag', () => {
+        const pos = marker.getLngLat();
+        previewMoveWaypoint(i, [pos.lng, pos.lat]);
+      });
       marker.on('dragend', () => {
         const pos = marker.getLngLat();
-        moveWaypoint(i, [pos.lng, pos.lat]);
+        draggingRef.current = null;
+        commitDragWaypoint(i, [pos.lng, pos.lat]);
       });
 
       el.addEventListener('click', (e) => e.stopPropagation());
       markersRef.current.push(marker);
     });
-  }, [waypoints, geojson, isMobile]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [waypoints, isMobile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSave = async () => {
     if (!routeName.trim() || snappedWaypoints.length < 2) return;
@@ -402,6 +464,47 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
                 style={{ ...ctxMenuBtnStyle, color: 'var(--danger, #ed4245)' }}
               >
                 Delete waypoint
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Path context menu (click on existing route line) */}
+        {pathContextMenu && (
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 200 }}
+            onClick={() => setPathContextMenu(null)}
+            onContextMenu={(e) => { e.preventDefault(); setPathContextMenu(null); }}
+          >
+            <div style={{
+              position: 'absolute',
+              top: pathContextMenu.y,
+              left: pathContextMenu.x,
+              background: 'var(--bg-primary)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius, 6px)',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+              padding: '4px 0',
+              minWidth: 160,
+              zIndex: 201,
+            }}>
+              <button
+                onClick={() => {
+                  insertWaypoint(pathContextMenu.insertIndex, pathContextMenu.lngLat, true);
+                  setPathContextMenu(null);
+                }}
+                style={ctxMenuBtnStyle}
+              >
+                Insert waypoint
+              </button>
+              <button
+                onClick={() => {
+                  addWaypoint(pathContextMenu.lngLat, true);
+                  setPathContextMenu(null);
+                }}
+                style={ctxMenuBtnStyle}
+              >
+                Route to here
               </button>
             </div>
           </div>
@@ -834,5 +937,30 @@ const mobileStyles: Record<string, React.CSSProperties> = {
     fontSize: '16px', // Prevents iOS auto-zoom
   },
 };
+
+/** Find which segment (between consecutive waypoints) a point is closest to. Returns the insert index. */
+function findClosestSegmentIndex(point: [number, number], waypoints: { lngLat: [number, number] }[]): number {
+  if (waypoints.length < 2) return waypoints.length;
+  let minDist = Infinity;
+  let bestIndex = 1;
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    const dist = pointToSegmentDistance(point, waypoints[i].lngLat, waypoints[i + 1].lngLat);
+    if (dist < minDist) {
+      minDist = dist;
+      bestIndex = i + 1;
+    }
+  }
+  return bestIndex;
+}
+
+function pointToSegmentDistance(p: [number, number], a: [number, number], b: [number, number]): number {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  if (dx === 0 && dy === 0) return Math.sqrt((p[0] - a[0]) ** 2 + (p[1] - a[1]) ** 2);
+  const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy)));
+  const px = a[0] + t * dx;
+  const py = a[1] + t * dy;
+  return Math.sqrt((p[0] - px) ** 2 + (p[1] - py) ** 2);
+}
 
 export default RouteBuilderModal;

@@ -218,6 +218,44 @@ export async function getNewsletterStats(spaceId: string) {
   };
 }
 
+/**
+ * List recent published newsletters across all spaces the user belongs to,
+ * plus personal newsletters from users the user follows.
+ */
+export async function listRecentNewslettersForUser(userId: string, limit: number) {
+  const memberSpaces = await db('space_members')
+    .join('space_settings', 'space_members.space_id', 'space_settings.space_id')
+    .where('space_members.user_id', userId)
+    .where('space_settings.newsletter_enabled', true)
+    .select('space_members.space_id');
+  const spaceIds = memberSpaces.map((r: any) => String(r.space_id));
+
+  if (spaceIds.length === 0) return [];
+
+  const rows = await newsletterBaseQuery()
+    .join('spaces', 'newsletters.space_id', 'spaces.id')
+    .whereIn('newsletters.space_id', spaceIds)
+    .where('newsletters.status', 'published')
+    .orderBy('newsletters.id', 'desc')
+    .limit(limit)
+    .select(
+      'spaces.name as space_name',
+      'spaces.slug as space_slug',
+      'spaces.icon_url as space_icon_url',
+    );
+
+  return rows.map((row: any) => {
+    const nl = formatNewsletter(row);
+    return {
+      ...nl,
+      blocks: undefined, // Don't send full blocks in the list
+      spaceName: row.space_name || null,
+      spaceSlug: row.space_slug || null,
+      spaceIconUrl: row.space_icon_url || null,
+    };
+  });
+}
+
 function formatNewsletter(row: any) {
   let blocks: any[] = [];
   try {

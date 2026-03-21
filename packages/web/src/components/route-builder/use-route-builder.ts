@@ -66,6 +66,41 @@ export function useRouteBuilder() {
     }));
   }, []);
 
+  const insertWaypoint = useCallback((index: number, lngLat: [number, number], snapped: boolean = true) => {
+    setState((s) => ({
+      waypoints: [...s.waypoints.slice(0, index), { lngLat, snapped }, ...s.waypoints.slice(index)],
+      undoStack: [...s.undoStack.slice(-49), s.waypoints],
+      redoStack: [],
+    }));
+  }, []);
+
+  // Drag preview: update waypoint position without pushing to undo stack
+  const dragOriginRef = useRef<Waypoint[] | null>(null);
+
+  const startDragWaypoint = useCallback(() => {
+    setState((s) => {
+      dragOriginRef.current = s.waypoints;
+      return s;
+    });
+  }, []);
+
+  const previewMoveWaypoint = useCallback((index: number, lngLat: [number, number]) => {
+    setState((s) => ({
+      ...s,
+      waypoints: s.waypoints.map((wp, i) => (i === index ? { ...wp, lngLat } : wp)),
+    }));
+  }, []);
+
+  const commitDragWaypoint = useCallback((index: number, lngLat: [number, number]) => {
+    const origin = dragOriginRef.current;
+    dragOriginRef.current = null;
+    setState((s) => ({
+      waypoints: s.waypoints.map((wp, i) => (i === index ? { ...wp, lngLat } : wp)),
+      undoStack: [...s.undoStack.slice(-49), origin || s.waypoints],
+      redoStack: [],
+    }));
+  }, []);
+
   const undo = useCallback(() => {
     setState((s) => {
       if (s.undoStack.length === 0) return s;
@@ -229,6 +264,10 @@ export function useRouteBuilder() {
     moveWaypoint,
     removeWaypoint,
     unsnapWaypoint,
+    insertWaypoint,
+    startDragWaypoint,
+    previewMoveWaypoint,
+    commitDragWaypoint,
     undo,
     redo,
     canUndo: undoStack.length > 0,

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronDown, Image, Map, CalendarDays, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Image, Map, CalendarDays, ChevronRight, X, Compass } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
@@ -11,8 +11,11 @@ import { Avatar } from '../components/common/Avatar.js';
 import { CrabIcon } from '../components/icons/CrabIcon.js';
 import { NewSpaceOnboardingModal } from '../components/common/NewSpaceOnboardingModal.js';
 import { SpaceSidebar } from '../components/layout/SpaceSidebar.js';
+import { EventsCarousel } from '../components/home/EventsCarousel.js';
+import { RecentPostsCard } from '../components/home/RecentPostsCard.js';
+import { EventDetailModal } from '../components/calendar/EventDetailModal.js';
 import { api } from '../lib/api.js';
-import type { UserCollectionsSummary } from '@crabac/shared';
+import type { CalendarEvent, UserCollectionsSummary } from '@crabac/shared';
 
 interface Announcement {
   id: string;
@@ -31,7 +34,9 @@ export function Home() {
 
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
+  const [showDiscover, setShowDiscover] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [collectionsSummary, setCollectionsSummary] = useState<UserCollectionsSummary | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [unseenAnnouncements, setUnseenAnnouncements] = useState<Announcement[]>([]);
@@ -139,6 +144,9 @@ export function Home() {
             <button onClick={() => setShowJoin(true)} style={styles.secondaryBtn}>
               Join with Invite
             </button>
+            <button onClick={() => setShowDiscover(true)} style={styles.secondaryBtn}>
+              <Compass size={14} /> Discover
+            </button>
           </div>
         </section>
 
@@ -178,18 +186,33 @@ export function Home() {
         )}
       </div>
 
-      {/* Right Card — Discover Spaces */}
+      {/* Right Card — Events */}
       <div style={{
         ...styles.rightCard,
         maxWidth: isMobile ? '100%' : '460px',
+        padding: '1.5rem 0 1.5rem 0',
       }}>
-        <h2 style={{ ...styles.sectionTitle, color: '#5a3a3a' }}>Discover Spaces</h2>
-        <PublicSpaceDirectory lightTheme />
-        <a href="https://crab.ac/privacy" target="_blank" rel="noopener noreferrer" style={{ color: '#7a5a5a', fontSize: '0.8rem', textAlign: 'center', display: 'block', marginTop: '0.5rem' }}>Privacy Policy</a>
+        <EventsCarousel
+          onEventClick={(event) => setSelectedEvent(event)}
+          onShowMore={() => navigate('/events')}
+        />
+        <div style={{ borderTop: '1px solid rgba(0,0,0,0.08)', margin: '4px 0' }} />
+        <RecentPostsCard onShowMore={() => navigate('/recent-posts')} />
+        <a href="https://crab.ac/privacy" target="_blank" rel="noopener noreferrer" style={{ color: '#7a5a5a', fontSize: '0.8rem', textAlign: 'center', display: 'block', padding: '0 1.5rem' }}>Privacy Policy</a>
       </div>
 
       {showCreate && <NewSpaceOnboardingModal onClose={() => setShowCreate(false)} />}
       {showJoin && <JoinSpaceModal onClose={() => setShowJoin(false)} />}
+      {showDiscover && <DiscoverSpacesModal onClose={() => setShowDiscover(false)} />}
+      {selectedEvent && (
+        <EventDetailModal
+          event={selectedEvent}
+          spaceId={selectedEvent.spaceId}
+          canManage={false}
+          onClose={() => setSelectedEvent(null)}
+          onEdit={() => {}}
+        />
+      )}
       {showAbout && (
         <div style={styles.overlay} onClick={() => setShowAbout(false)}>
           <div onClick={(e) => e.stopPropagation()} style={{ ...styles.modal, alignItems: 'center', textAlign: 'center' as const }}>
@@ -419,6 +442,36 @@ function JoinSpaceModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+function DiscoverSpacesModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div style={styles.overlay} onClick={onClose}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          ...styles.modal,
+          maxWidth: 560,
+          maxHeight: '80vh',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          background: '#f5f0ef',
+          color: '#2e1a1a',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+          <h2 style={{ margin: 0, fontSize: '1.1rem', color: '#5a3a3a' }}>Discover Spaces</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#7a5a5a', cursor: 'pointer', padding: 4 }}>
+            <X size={18} />
+          </button>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <PublicSpaceDirectory lightTheme />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const styles: Record<string, React.CSSProperties> = {
   layout: {
     display: 'flex',
@@ -522,6 +575,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     gap: '0.5rem',
     marginTop: '0.75rem',
+    flexWrap: 'wrap',
   },
   settingsRow: {
     display: 'flex',
@@ -562,6 +616,10 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--text-primary)',
     fontWeight: 600,
     cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '0.3rem',
   },
   overlay: {
     position: 'fixed',

@@ -215,6 +215,70 @@ export async function listUpcomingEvents(spaceId: string, limit: number, userId?
   return rows.map((row: any) => formatEvent(row, rsvpCountsMap.get(String(row.id)), myRsvpMap.get(String(row.id))));
 }
 
+/**
+ * Aggregate upcoming calendar events across all spaces the user belongs to.
+ * Filters out events the user has RSVP'd "not_going" to.
+ * Includes space name/icon for display.
+ */
+export async function listUpcomingEventsForUser(userId: string, limit: number) {
+  const today = formatDateStr(new Date());
+
+  // Get all spaces user is a member of that have calendar enabled
+  const memberSpaces = await db('space_members')
+    .join('space_settings', 'space_members.space_id', 'space_settings.space_id')
+    .where('space_members.user_id', userId)
+    .where('space_settings.calendar_enabled', true)
+    .select('space_members.space_id');
+  const spaceIds = memberSpaces.map((r: any) => String(r.space_id));
+
+  if (spaceIds.length === 0) return [];
+
+  // Fetch extra rows to account for filtering out not_going
+  const fetchLimit = limit + 20;
+
+  const rows = await eventBaseQuery()
+    .join('spaces', 'calendar_events.space_id', 'spaces.id')
+    .leftJoin('space_settings as ss', 'calendar_events.space_id', 'ss.space_id')
+    .whereIn('calendar_events.space_id', spaceIds)
+    .where('calendar_events.is_cancelled', false)
+    .where('calendar_events.event_date', '>=', today)
+    .orderBy('calendar_events.event_date', 'asc')
+    .orderBy('calendar_events.event_time', 'asc')
+    .limit(fetchLimit)
+    .select(
+      'spaces.name as space_name',
+      'spaces.slug as space_slug',
+      'spaces.icon_url as space_icon_url',
+      'ss.base_color as space_base_color',
+      'ss.accent_color as space_accent_color',
+    );
+
+  const eventIds = rows.map((r: any) => r.id);
+  if (eventIds.length === 0) return [];
+
+  const rsvpCountsMap = await getRsvpCountsBatch(eventIds);
+  const myRsvpMap = await getMyRsvpsBatch(eventIds, userId);
+
+  // Filter out events user RSVP'd "not_going" and apply limit
+  const results: any[] = [];
+  for (const row of rows) {
+    const myRsvp = myRsvpMap.get(String(row.id)) || null;
+    if (myRsvp === 'not_going') continue;
+
+    const event = formatEvent(row, rsvpCountsMap.get(String(row.id)), myRsvp);
+    event.spaceName = row.space_name || null;
+    event.spaceSlug = row.space_slug || null;
+    event.spaceIconUrl = row.space_icon_url || null;
+    event.spaceBaseColor = row.space_base_color || null;
+    event.spaceAccentColor = row.space_accent_color || null;
+    results.push(event);
+
+    if (results.length >= limit) break;
+  }
+
+  return results;
+}
+
 export async function deleteEvent(id: string) {
   const event = await db('calendar_events').where('id', id).first();
   if (!event) throw new NotFoundError('Calendar event');

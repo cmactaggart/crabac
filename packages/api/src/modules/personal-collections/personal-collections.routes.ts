@@ -9,6 +9,9 @@ import * as spacesService from '../spaces/spaces.service.js';
 import * as service from './personal-collections.service.js';
 import * as activitiesService from './personal-activities.service.js';
 import * as postsService from './user-posts.service.js';
+import * as calendarService from '../calendar/calendar.service.js';
+import * as blogService from '../blog/blog.service.js';
+import * as newsletterService from '../newsletter/newsletter.service.js';
 import { BadRequestError, ForbiddenError } from '../../lib/errors.js';
 import { config } from '../../config.js';
 import { parseGpxFile } from '../messages/gpx.service.js';
@@ -526,6 +529,43 @@ personalCollectionsRoutes.get(
     try {
       const summary = await service.getCollectionsSummary(req.user!.userId, req.user!.userId);
       res.json(summary);
+    } catch (err) { next(err); }
+  },
+);
+
+// ─── Aggregated Upcoming Events ───
+
+personalCollectionsRoutes.get(
+  '/me/events/upcoming',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+      const events = await calendarService.listUpcomingEventsForUser(req.user!.userId, limit);
+      res.json(events);
+    } catch (err) { next(err); }
+  },
+);
+
+// ─── Aggregated Recent Blog & Newsletter Posts ───
+
+personalCollectionsRoutes.get(
+  '/me/posts/recent',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 10, 30);
+      const [blogPosts, newsletters] = await Promise.all([
+        blogService.listRecentPostsForUser(req.user!.userId, limit),
+        newsletterService.listRecentNewslettersForUser(req.user!.userId, limit),
+      ]);
+
+      // Merge and sort by ID descending (most recent first)
+      const items = [
+        ...blogPosts.map((p: any) => ({ ...p, itemType: 'blog' as const })),
+        ...newsletters.map((n: any) => ({ ...n, itemType: 'newsletter' as const })),
+      ].sort((a, b) => (b.id > a.id ? 1 : b.id < a.id ? -1 : 0))
+       .slice(0, limit);
+
+      res.json(items);
     } catch (err) { next(err); }
   },
 );

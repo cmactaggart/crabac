@@ -26,6 +26,8 @@ import { FeedPage } from './pages/FeedPage.js';
 import { PostDetailPage } from './pages/PostDetailPage.js';
 import { PublicProfilePage } from './pages/PublicProfilePage.js';
 import { RouteBuilderPage } from './pages/RouteBuilderPage.js';
+import { UpcomingEventsPage } from './pages/UpcomingEventsPage.js';
+import { RecentPostsPage } from './pages/RecentPostsPage.js';
 import { OnboardingModal } from './components/common/OnboardingModal.js';
 import { api } from './lib/api.js';
 import { BottomTabBar } from './components/layout/BottomTabBar.js';
@@ -104,6 +106,8 @@ export function App() {
         <Route path="/feed" element={user ? <FeedPage /> : <Navigate to="/login" />} />
         <Route path="/you" element={user ? <YouPage /> : <Navigate to="/login" />} />
         <Route path="/route-builder" element={user ? <RouteBuilderPage /> : <Navigate to="/login" />} />
+        <Route path="/events" element={user ? <UpcomingEventsPage /> : <Navigate to="/login" />} />
+        <Route path="/recent-posts" element={user ? <RecentPostsPage /> : <Navigate to="/login" />} />
         <Route path="/p/:username/post/:postId" element={user ? <PostDetailPage /> : <Navigate to="/login" />} />
         <Route path="/p/:username" element={user ? <PublicProfilePage /> : <Navigate to="/login" />} />
         <Route path="/account" element={user ? <AccountPage /> : <Navigate to="/login" />} />
