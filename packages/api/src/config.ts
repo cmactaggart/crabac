@@ -64,4 +64,15 @@ export const config = {
     bundleId: process.env.APNS_BUNDLE_ID || 'ac.crab.app',
     production: process.env.APNS_PRODUCTION === 'true',
   },
+
+  fcm: {
+    serviceAccountPath: process.env.FCM_SERVICE_ACCOUNT_PATH || '',
+  },
+
+  livekit: {
+    host: process.env.LIVEKIT_HOST || 'http://localhost:7880',
+    wsUrl: process.env.LIVEKIT_WS_URL || 'wss://livekit.crab.ac',
+    apiKey: process.env.LIVEKIT_API_KEY || 'devkey',
+    apiSecret: process.env.LIVEKIT_API_SECRET || 'secret',
+  },
 } as const;

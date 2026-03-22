@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LogOut, Copy, Link2, Pencil, Trash2, PanelLeftClose, PanelLeft, UserPlus, Users, LogOut as LeaveIcon, Check, X, Clock, UserMinus, ArrowLeft, Flag, Ban, SmilePlus, Paperclip, Search, Forward, BellOff, Bell } from 'lucide-react';
+import { LogOut, Copy, Link2, Pencil, Trash2, PanelLeftClose, PanelLeft, UserPlus, Users, LogOut as LeaveIcon, Check, X, Clock, UserMinus, ArrowLeft, Flag, Ban, SmilePlus, Paperclip, Search, Forward, BellOff, Bell, Phone } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { useDMStore } from '../stores/dm.js';
@@ -21,6 +21,7 @@ import { ReactionBar } from '../components/messages/ReactionBar.js';
 import { api } from '../lib/api.js';
 import { SearchPanel } from '../components/search/SearchPanel.js';
 import { ShareToSpacePicker } from '../components/common/ShareToSpacePicker.js';
+import { useCallStore } from '../stores/call.js';
 import type { DirectMessage, Conversation, FollowStatus } from '@crabac/shared';
 
 export function DMView() {
@@ -105,6 +106,7 @@ export function DMView() {
         ) : (
           <DMHeaderContent otherParticipant={otherParticipant} currentUserId={user?.id || ''} />
         )}
+        <CallButton conversationId={conversationId} />
         <button
           onClick={async () => {
             if (activeConv.muted) {
@@ -403,6 +405,45 @@ function GroupDMHeaderContent({ conversation, currentUserId }: { conversation: C
         />
       )}
     </>
+  );
+}
+
+// ─── Call Button ───
+
+function CallButton({ conversationId }: { conversationId: string }) {
+  const initiateCall = useCallStore((s) => s.initiateCall);
+  const activeCall = useCallStore((s) => s.activeCall);
+  const connecting = useCallStore((s) => s.connecting);
+
+  const isInCall = !!activeCall;
+
+  return (
+    <button
+      onClick={async () => {
+        if (!isInCall && !connecting) {
+          try {
+            await initiateCall(conversationId);
+          } catch (err: any) {
+            console.error('Call failed:', err);
+            alert(`Call failed: ${err?.message || err?.code || JSON.stringify(err)}`);
+          }
+        }
+      }}
+      disabled={isInCall || connecting}
+      style={{
+        background: 'none',
+        border: 'none',
+        color: isInCall ? 'var(--success)' : 'var(--text-secondary)',
+        cursor: isInCall || connecting ? 'default' : 'pointer',
+        padding: '4px 8px',
+        borderRadius: 4,
+        flexShrink: 0,
+        opacity: isInCall || connecting ? 0.5 : 1,
+      }}
+      title={isInCall ? 'Already in a call' : 'Start call'}
+    >
+      <Phone size={18} />
+    </button>
   );
 }
 

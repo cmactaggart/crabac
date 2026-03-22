@@ -48,7 +48,7 @@ export const createChannelSchema = z.object({
   name: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/, 'Channel name can only contain lowercase letters, numbers, and hyphens'),
   displayName: z.string().min(1).max(100).optional(),
   topic: z.string().max(1024).optional(),
-  type: z.enum(['text', 'announcement', 'read_only', 'forum', 'media_gallery', 'route_library']).optional(),
+  type: z.enum(['text', 'announcement', 'read_only', 'forum', 'media_gallery', 'route_library', 'voice']).optional(),
   isPrivate: z.boolean().optional(),
   isPublic: z.boolean().optional(),
   categoryId: z.string().optional(),
@@ -60,7 +60,7 @@ export const updateChannelSchema = z.object({
   name: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).optional(),
   displayName: z.string().min(1).max(100).nullable().optional(),
   topic: z.string().max(1024).nullable().optional(),
-  type: z.enum(['text', 'announcement', 'read_only', 'forum', 'media_gallery', 'route_library']).optional(),
+  type: z.enum(['text', 'announcement', 'read_only', 'forum', 'media_gallery', 'route_library', 'voice']).optional(),
   isPublic: z.boolean().optional(),
   isPrivate: z.boolean().optional(),
   position: z.number().int().min(0).optional(),
@@ -892,4 +892,14 @@ export const updateProfileLinkSchema = z.object({
 
 export const reorderProfileLinksSchema = z.object({
   linkIds: z.array(z.string().min(1)).min(1).max(10),
+});
+
+// ─── Calls ───
+
+export const initiateCallSchema = z.object({
+  conversationId: z.string().min(1),
+});
+
+export const respondToCallSchema = z.object({
+  action: z.enum(['accept', 'decline']),
 });

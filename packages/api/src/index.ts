@@ -53,7 +53,9 @@ import { newsletterSubscriptionRoutes } from './modules/newsletter/newsletter-su
 import { newsletterPublicRoutes } from './modules/newsletter/newsletter-public.routes.js';
 import { newsletterTrackingRoutes } from './modules/newsletter/newsletter-tracking.routes.js';
 import { devicesRoutes } from './modules/notifications/devices.routes.js';
-import { initApnProvider } from './modules/notifications/push.service.js';
+import { callRoutes } from './modules/calls/call.routes.js';
+import { registerCallGateway } from './modules/calls/call.gateway.js';
+import { initApnProvider, initFcmProvider } from './modules/notifications/push.service.js';
 import { redis } from './lib/redis.js';
 import { loadPlugins, getLoadedPlugins } from './plugins/loader.js';
 import { db } from './database/connection.js';
@@ -128,6 +130,7 @@ app.use('/api/reports', reportsRoutes);
 app.use('/api/spaces', workflowRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/devices', devicesRoutes);
+app.use('/api/calls', callRoutes);
 
 // Unified message lookup (for embeds)
 app.get('/api/messages/:messageId', authenticate, async (req, res, next) => {
@@ -177,6 +180,7 @@ registerForumGateway();
 registerGalleryGateway();
 registerRouteLibraryGateway();
 registerWorkflowGateway();
+registerCallGateway();
 registerWorkflowListener();
 registerSearchListener();
 registerCalendarListener();
@@ -186,6 +190,7 @@ registerBlogListener();
 async function start() {
   await loadPlugins(app, eventBus, db);
   initApnProvider();
+  initFcmProvider();
   initTypesense();
   await ensureCollections();
 

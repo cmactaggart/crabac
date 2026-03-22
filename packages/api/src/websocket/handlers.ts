@@ -3,6 +3,7 @@ import { redis } from '../lib/redis.js';
 import * as spacesService from '../modules/spaces/spaces.service.js';
 import * as messagesService from '../modules/messages/messages.service.js';
 import * as dmService from '../modules/dm/dm.service.js';
+import * as callService from '../modules/calls/call.service.js';
 import { getChannelSpaceId } from '../modules/channels/channels.service.js';
 import { computeChannelPermissions } from '../modules/rbac/rbac.service.js';
 import { hasPermission, Permissions } from '@crabac/shared';
@@ -218,6 +219,43 @@ export async function registerHandlers(io: Server, socket: Socket) {
       }
 
       io.to(`space:${spaceId}`).emit('space:guest_left', { spaceId, userId: targetUserId });
+    } catch {
+      // ignore
+    }
+  });
+
+  // --- Call: respond to incoming call via socket ---
+  socket.on('call:respond', async ({ callId, action }: { callId: string; action: 'accept' | 'decline' }) => {
+    try {
+      if (!['accept', 'decline'].includes(action)) return;
+      await callService.respondToCall(userId, callId, action);
+    } catch {
+      // ignore
+    }
+  });
+
+  // --- Call: leave call via socket ---
+  socket.on('call:leave', async ({ callId }: { callId: string }) => {
+    try {
+      await callService.leaveCall(userId, callId);
+    } catch {
+      // ignore
+    }
+  });
+
+  // --- Voice channel: join/leave via socket ---
+  socket.on('voice:join', async ({ channelId }: { channelId: string }) => {
+    try {
+      const result = await callService.joinVoiceChannel(userId, channelId);
+      socket.emit('voice:joined', result);
+    } catch {
+      // ignore
+    }
+  });
+
+  socket.on('voice:leave', async ({ channelId }: { channelId: string }) => {
+    try {
+      await callService.leaveVoiceChannel(userId, channelId);
     } catch {
       // ignore
     }

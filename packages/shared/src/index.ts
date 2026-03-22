@@ -17,5 +17,6 @@ export * from './types/moderation.js';
 export * from './types/workflow.js';
 export * from './types/newsletter.js';
 export * from './types/personal-collection.js';
+export * from './types/call.js';
 export * from './permissions.js';
 export * as validation from './validation/index.js';

@@ -160,6 +160,7 @@ export function CreateChannelModal({ spaceId, categories, defaultCategoryId, onC
               <option value="forum">Forum</option>
               <option value="media_gallery">Media Gallery</option>
               <option value="route_library">Route Library</option>
+              <option value="voice">Voice</option>
             </select>
           </div>
 

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, ChevronDown, Hash, LogOut, PanelLeftClose, Settings, Shield, Zap, CheckCheck, BellOff, Bell, Link, Copy, Plus, SlidersHorizontal, FolderPlus, GripVertical, ArrowRightLeft, MessageSquareDashed, Trash2, Pencil, Calendar, DoorOpen, Grid3x3, MapPinned, Globe, Lock, BookOpen, Mail } from 'lucide-react';
+import { UserPlus, ChevronDown, Hash, LogOut, PanelLeftClose, Settings, Shield, Zap, CheckCheck, BellOff, Bell, Link, Copy, Plus, SlidersHorizontal, FolderPlus, GripVertical, ArrowRightLeft, MessageSquareDashed, Trash2, Pencil, Calendar, DoorOpen, Grid3x3, MapPinned, Globe, Lock, BookOpen, Mail, Volume2 } from 'lucide-react';
+import { VoiceChannelPanel } from '../calls/VoiceChannelPanel.js';
+import { useCallStore } from '../../stores/call.js';
 import { Permissions } from '@crabac/shared';
 import type { SpaceAdminSettings } from '@crabac/shared';
 import { api } from '../../lib/api.js';
@@ -521,24 +523,45 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
     const hasUnread = unread && unread.unreadCount > 0 && !isMuted;
     const isActive = ch.id === activeChannelId;
 
-    const TypeIcon = ch.type === 'forum' ? MessageSquareDashed : ch.type === 'media_gallery' ? Grid3x3 : ch.type === 'route_library' ? MapPinned : ch.isPrivate ? Lock : Hash;
+    const TypeIcon = ch.type === 'voice' ? Volume2 : ch.type === 'forum' ? MessageSquareDashed : ch.type === 'media_gallery' ? Grid3x3 : ch.type === 'route_library' ? MapPinned : ch.isPrivate ? Lock : Hash;
     const ChannelIcon = ch.isAdmin ? Shield : ch.isPortal ? Zap : TypeIcon;
     const portalColor = '#5a9cf5';
     const iconColor = ch.isAdmin ? 'var(--warning, #f0b232)' : ch.isPortal ? portalColor : ch.isPortalSource ? portalColor : 'var(--text-muted)';
 
-    return (
+    const isVoice = ch.type === 'voice';
+    const activeVoiceChannelId = useCallStore.getState().activeVoiceChannelId;
+    const isInThisVoice = isVoice && activeVoiceChannelId === ch.id;
+
+    const handleClick = async () => {
+      if (isVoice) {
+        if (isInThisVoice) {
+          useCallStore.getState().leaveVoiceChannel();
+        } else {
+          try {
+            await useCallStore.getState().joinVoiceChannel(ch.id);
+          } catch (err: any) {
+            console.error('Failed to join voice channel:', err);
+            alert(`Failed to join voice channel: ${err?.message || JSON.stringify(err)}`);
+          }
+        }
+      } else {
+        navigate(`/space/${space.id}/channel/${ch.id}`);
+      }
+    };
+
+    const channelBtn = (
       <button
         key={ch.id}
-        onClick={() => navigate(`/space/${space.id}/channel/${ch.id}`)}
+        onClick={handleClick}
         onContextMenu={(e) => handleContextMenu(e, ch.id)}
         style={{
           ...sidebarStyles.channelItem,
-          background: isActive ? 'var(--hover)' : 'transparent',
-          color: isActive || hasUnread ? 'var(--text-primary)' : isMuted ? 'var(--text-muted)' : 'var(--text-secondary)',
+          background: isActive && !isVoice ? 'var(--hover)' : isInThisVoice ? 'var(--hover)' : 'transparent',
+          color: isInThisVoice ? 'var(--success)' : isActive || hasUnread ? 'var(--text-primary)' : isMuted ? 'var(--text-muted)' : 'var(--text-secondary)',
           fontWeight: hasUnread ? 700 : 400,
           opacity: isMuted ? 0.5 : 1,
         }}
-        title={ch.isPortal ? `Portal from another space` : ch.isPortalSource ? 'Portaled to another space' : ch.isAdmin ? 'Admin channel' : undefined}
+        title={isVoice ? (isInThisVoice ? 'Click to disconnect' : 'Click to join voice') : ch.isPortal ? `Portal from another space` : ch.isPortalSource ? 'Portaled to another space' : ch.isAdmin ? 'Admin channel' : undefined}
       >
         {dragHandleListeners && (
           <span
@@ -565,6 +588,17 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
         )}
       </button>
     );
+
+    if (ch.type === 'voice') {
+      return (
+        <div key={ch.id}>
+          {channelBtn}
+          <VoiceChannelPanel channelId={ch.id} channelName={ch.displayName || ch.name} />
+        </div>
+      );
+    }
+
+    return channelBtn;
   };
 
   // Drag overlay preview

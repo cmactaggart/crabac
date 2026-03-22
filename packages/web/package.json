@@ -10,10 +10,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@crabac/shared": "workspace:*",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
-    "@crabac/shared": "workspace:*",
+    "@livekit/components-react": "^2.9.20",
+    "livekit-client": "^2.17.3",
     "lucide-react": "^0.563.0",
     "maplibre-gl": "^5.18.0",
     "qrcode": "^1.5.4",

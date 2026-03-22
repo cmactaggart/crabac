@@ -15,6 +15,7 @@ import { MessageArea } from '../components/messages/MessageArea.js';
 import { ForumChannelView } from '../components/forums/ForumChannelView.js';
 import { GalleryChannelView } from '../components/galleries/GalleryChannelView.js';
 import { RoutesChannelView } from '../components/routes/RoutesChannelView.js';
+import { VoiceChannelView } from '../components/calls/VoiceChannelView.js';
 import { CalendarView } from '../components/calendar/CalendarView.js';
 import { BlogView } from '../components/blog/BlogView.js';
 import { NewsletterView } from '../components/newsletter/NewsletterView.js';
@@ -265,6 +266,15 @@ export function SpaceView() {
                 navigate(`/space/${spaceId}`, { replace: true });
               }}
             />
+          ) : activeChannel?.type === 'voice' ? (
+            <VoiceChannelView
+              channelId={channelId!}
+              channel={activeChannel}
+              onBack={() => {
+                setMobileView('sidebar');
+                navigate(`/space/${spaceId}`, { replace: true });
+              }}
+            />
           ) : (
             <MessageArea
               channelId={channelId}
@@ -346,6 +356,11 @@ export function SpaceView() {
               channelId={channelId}
               channel={channels.find((c) => c.id === channelId) || null}
               spaceId={spaceId}
+            />
+          ) : channels.find((c) => c.id === channelId)?.type === 'voice' ? (
+            <VoiceChannelView
+              channelId={channelId}
+              channel={channels.find((c) => c.id === channelId) || null}
             />
           ) : (
             <MessageArea

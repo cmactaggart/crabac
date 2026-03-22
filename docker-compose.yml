@@ -27,6 +27,16 @@ services:
       - typesense_data:/data
     command: --data-dir /data --api-key=xyz --enable-cors
 
+  livekit:
+    image: livekit/livekit-server:latest
+    ports:
+      - "7880:7880"   # HTTP / WebSocket
+      - "7881:7881"   # RTC over TCP
+      - "7882:7882/udp" # RTC over UDP
+    environment:
+      LIVEKIT_KEYS: "devkey: secret"
+    command: --dev --bind 0.0.0.0
+
 volumes:
   mysql_data:
   redis_data:

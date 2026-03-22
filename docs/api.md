@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.14.1
+## API Version 0.15.0
 
 Base URL: `https://app.crab.ac/api`
 
@@ -710,7 +710,7 @@ Create a channel. Requires `MANAGE_CHANNELS`.
 |-------|------|----------|-------------|
 | `name` | string | yes | Lowercase alphanumeric + hyphens |
 | `topic` | string | no | Max 1024 chars |
-| `type` | string | no | `text`, `announcement`, `read_only`, `forum`, `media_gallery`, `route_library` |
+| `type` | string | no | `text`, `announcement`, `read_only`, `forum`, `media_gallery`, `route_library`, `voice` |
 | `isPrivate` | boolean | no | Make channel private (hidden from non-members) |
 | `isPublic` | boolean | no | For public board/gallery/route access |
 | `categoryId` | string | no | |
@@ -1568,6 +1568,115 @@ Add a reaction to a DM message. Requires auth.
 ### DELETE /conversations/:conversationId/messages/:messageId/reactions/:emoji
 
 Remove your reaction from a DM message. Requires auth.
+
+---
+
+## Calls (Voice / Video)
+
+Voice and video calling powered by LiveKit. Supports 1:1 DM calls, group DM calls, and persistent voice channels in spaces.
+
+### Call Types
+
+| Type | Description |
+|------|-------------|
+| `dm` | 1:1 or group DM call. Initiated by ringing participants. |
+| `voice_channel` | Persistent space voice channel. Users join/leave freely (no ringing). |
+
+### Call Status Flow
+
+`ringing` → `active` → `ended`
+
+Voice channel calls skip `ringing` and start as `active`.
+
+### Call Participant Status
+
+`ringing` → `joined` / `declined` / `missed` → `left`
+
+### POST /calls/conversations/:conversationId/call
+
+Initiate a call in a DM or group DM conversation. All accepted conversation members are added as participants with status `ringing` (initiator is `joined`). Returns the call object with a LiveKit token.
+
+**Response:** `{ id, type, conversationId, roomName, status, participants, token: { token, wsUrl } }`
+
+Fails with `400` if a call is already in progress for this conversation.
+
+### GET /calls/conversations/:conversationId/call
+
+Get the active call for a conversation, if any.
+
+**Response:** `{ call }` (call object or `null`)
+
+### POST /calls/:callId/respond
+
+Accept or decline an incoming call.
+
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `action` | string | yes | `accept` or `decline` |
+
+**Response:** Call object. When accepting, includes `token: { token, wsUrl }` for connecting to the LiveKit room. The call transitions to `active` on first accept. If all non-initiator participants decline, the call ends automatically.
+
+### POST /calls/:callId/leave
+
+Leave an active call. If no joined participants remain, the call ends automatically and the LiveKit room is destroyed.
+
+### GET /calls/:callId
+
+Get a call's current state and participants.
+
+### POST /calls/:callId/token
+
+Get a fresh LiveKit token for an existing call (for reconnecting). Must be an active (`joined`) participant.
+
+**Response:** `{ token, wsUrl }`
+
+### POST /calls/channels/:channelId/join
+
+Join a voice channel. The channel must have `type: voice`. Requires space membership and `VIEW_CHANNELS` permission. Creates a new call if none is active, or joins the existing one. Returns the call object with a LiveKit token.
+
+**Response:** `{ id, type, channelId, spaceId, roomName, status, participants, token: { token, wsUrl } }`
+
+### POST /calls/channels/:channelId/leave
+
+Leave a voice channel. If no joined participants remain, the call ends.
+
+### GET /calls/channels/:channelId/call
+
+Get the active call for a voice channel (participants currently connected).
+
+**Response:** `{ call }` (call object or `null`)
+
+### Call Object
+
+```json
+{
+  "id": "161454337128665088",
+  "type": "dm",
+  "conversationId": "160000000000000000",
+  "channelId": null,
+  "spaceId": null,
+  "roomName": "call_161454337128665088",
+  "initiatedBy": "147122562336296960",
+  "status": "active",
+  "startedAt": "2026-03-22T12:00:00.000Z",
+  "endedAt": null,
+  "createdAt": "2026-03-22T12:00:00.000Z",
+  "participants": [
+    {
+      "userId": "147122562336296960",
+      "username": "alice",
+      "displayName": "Alice",
+      "avatarUrl": "/uploads/avatar.jpg",
+      "baseColor": null,
+      "accentColor": null,
+      "status": "joined",
+      "joinedAt": "2026-03-22T12:00:00.000Z",
+      "leftAt": null
+    }
+  ]
+}
+```
 
 ---
 
@@ -2979,6 +3088,10 @@ The API uses Socket.io for real-time communication at `/socket.io/`. Clients aut
 | `space:visit` | `{ spaceId }` | Visit a public space as guest |
 | `space:leave_visit` | `{ spaceId }` | Leave a public space guest visit |
 | `space:kick_guest` | `{ spaceId, targetUserId }` | Kick a guest (requires `MANAGE_MEMBERS`) |
+| `call:respond` | `{ callId, action }` | Accept or decline a call (`action`: `accept` or `decline`) |
+| `call:leave` | `{ callId }` | Leave a call |
+| `voice:join` | `{ channelId }` | Join a voice channel (returns `voice:joined` with call + token) |
+| `voice:leave` | `{ channelId }` | Leave a voice channel |
 | `presence:heartbeat` | _(none)_ | Refresh presence TTL |
 | `presence:status` | `{ status }` | Set status: `online`, `idle`, `dnd`, `offline` |
 
@@ -3043,6 +3156,17 @@ The API uses Socket.io for real-time communication at `/socket.io/`. Clients aut
 | `follow:request_received` | `{ user }` | Follow request received (pending approval) |
 | `follow:accepted` | `{ user }` | Follow request accepted |
 | `follow:new_follower` | `{ user }` | New follower (auto-accepted) |
+
+#### Calls
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `call:ringing` | `{ call, conversationId }` | Incoming call (sent to each participant's personal room) |
+| `call:participant_joined` | `{ call, userId, channelId? }` | Participant joined a call |
+| `call:participant_left` | `{ call, userId, channelId? }` | Participant left a call |
+| `call:participant_declined` | `{ call, userId }` | Participant declined a call |
+| `call:ended` | `{ call, conversationId?, channelId? }` | Call ended |
+| `voice:joined` | Call + token object | Response to `voice:join` with LiveKit connection details |
 
 #### Notifications & Workflows
 

@@ -5,6 +5,13 @@
         reverse_proxy localhost:3001
     }
 
+    # LiveKit — WebSocket + HTTP for voice/video calls (bypass WAF)
+    @livekit path /livekit/*
+    handle @livekit {
+        uri strip_prefix /livekit
+        reverse_proxy localhost:7880
+    }
+
     # Everything else goes through WAF
     route {
         coraza_waf {

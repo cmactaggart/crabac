@@ -51,11 +51,15 @@ import { PublicPersonalNewsletterHome } from './pages/newsletter/PublicPersonalN
 import { PublicPersonalNewsletterDetail } from './pages/newsletter/PublicPersonalNewsletterDetail.js';
 import { NewsletterPreferences } from './pages/newsletter/NewsletterPreferences.js';
 import { NewsletterVerify } from './pages/newsletter/NewsletterVerify.js';
+import { useCallSocket } from './hooks/useCallSocket.js';
+import { IncomingCallModal } from './components/calls/IncomingCallModal.js';
+import { ActiveCallOverlay } from './components/calls/ActiveCallOverlay.js';
 
 export function App() {
   const { user, loading, restore } = useAuthStore();
   usePresence(!!user);
   useDMUnreadSocket(!!user);
+  useCallSocket();
   useTabNotifications();
   useSwipeNavigation();
   const isMobile = useIsMobile();
@@ -156,6 +160,8 @@ export function App() {
       {showOnboarding && user && (
         <OnboardingModal onComplete={() => setShowOnboarding(false)} />
       )}
+      {user && <IncomingCallModal />}
+      {user && <ActiveCallOverlay />}
     </>
   );
 }
