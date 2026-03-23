@@ -51,7 +51,9 @@ export async function initiateCall(userId: string, conversationId: string): Prom
     .first();
 
   if (existingCall) {
-    throw new BadRequestError('A call is already in progress for this conversation');
+    throw new BadRequestError('A call is already in progress for this conversation', {
+      existingCallId: String(existingCall.id),
+    });
   }
 
   const callId = snowflake.generate();
@@ -352,6 +354,43 @@ export async function getCallToken(userId: string, callId: string): Promise<Call
   return createParticipantToken(call.room_name, userId, user?.username || 'Unknown');
 }
 
+export async function joinExistingCall(userId: string, callId: string): Promise<Call & { token: CallToken }> {
+  const call = await db('calls').where('id', callId).first();
+  if (!call) throw new NotFoundError('Call');
+  if (call.status === 'ended') throw new BadRequestError('Call has ended');
+
+  // Check user is a participant (in any status)
+  const participant = await db('call_participants')
+    .where({ call_id: callId, user_id: userId })
+    .first();
+  if (!participant) throw new ForbiddenError('Not a participant in this call');
+
+  // Re-join: update status to joined
+  await db('call_participants')
+    .where({ call_id: callId, user_id: userId })
+    .update({ status: 'joined', joined_at: db.fn.now(3), left_at: null });
+
+  // If call was ringing, move to active
+  if (call.status === 'ringing') {
+    await db('calls')
+      .where('id', callId)
+      .update({ status: 'active', started_at: db.fn.now(3) });
+  }
+
+  const updatedCall = await getCall(callId);
+  const user = await db('users').where('id', userId).select('username').first();
+  const token = await createParticipantToken(call.room_name, userId, user?.username || 'Unknown');
+
+  eventBus.emit('call.participant_joined', {
+    call: updatedCall,
+    userId,
+    conversationId: call.conversation_id ? String(call.conversation_id) : null,
+    channelId: call.channel_id ? String(call.channel_id) : null,
+  });
+
+  return { ...updatedCall!, token };
+}
+
 // ─── Internal Helpers ───
 
 async function endCallInternal(callId: string): Promise<void> {
@@ -377,6 +416,52 @@ async function endCallInternal(callId: string): Promise<void> {
     channelId: call?.channel_id ? String(call.channel_id) : null,
     spaceId: call?.space_id ? String(call.space_id) : null,
   });
+
+  // Send system message to DM conversation
+  if (call?.conversation_id && call.type === 'dm') {
+    try {
+      const participants = await db('call_participants')
+        .where('call_id', callId)
+        .select('user_id', 'status');
+
+      const missed = participants.filter((p: any) => p.status === 'missed');
+      const joined = participants.filter((p: any) => p.status === 'joined' || p.status === 'left');
+
+      if (joined.length <= 1 && missed.length > 0) {
+        // No one picked up — missed call
+        await dmService.sendSystemMessage(
+          String(call.conversation_id),
+          String(call.initiated_by),
+          '📞 Missed call',
+        );
+      } else if (call.started_at && call.ended_at) {
+        // Successful call — show duration
+        const start = new Date(call.started_at).getTime();
+        const end = new Date(call.ended_at).getTime();
+        const durationMs = end - start;
+        const duration = formatDuration(durationMs);
+        await dmService.sendSystemMessage(
+          String(call.conversation_id),
+          String(call.initiated_by),
+          `📞 Call ended — ${duration}`,
+        );
+      }
+    } catch {
+      // Don't let system message failures break call cleanup
+    }
+  }
+}
+
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
 async function formatCall(call: any): Promise<Call> {

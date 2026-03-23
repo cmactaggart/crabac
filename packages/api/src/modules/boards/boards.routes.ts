@@ -1,12 +1,17 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
+import path from 'path';
 import { optionalAuthenticate, requirePublicBoard, requireBoardAuth, requireReadAccess } from './boards.middleware.js';
 import * as boardsService from './boards.service.js';
 import * as forumsService from '../forums/forums.service.js';
 import * as calendarService from '../calendar/calendar.service.js';
 import * as routeLibraryService from '../route-library/route-library.service.js';
 import * as blogService from '../blog/blog.service.js';
+import * as messagesService from '../messages/messages.service.js';
+import { parseGpxFile } from '../messages/gpx.service.js';
+import { handleMulterUpload, VIDEO_EXTENSIONS } from '../../middleware/upload.js';
 import { validate } from '../../middleware/validate.js';
 import { validation } from '@crabac/shared';
+import { BadRequestError } from '../../lib/errors.js';
 
 export const boardsRoutes = Router();
 
@@ -353,6 +358,126 @@ boardsRoutes.delete(
   },
 );
 
+// Create thread with attachments (requires auth) - must be before /:channelName/:threadId
+boardsRoutes.post(
+  '/:spaceSlug/:channelName/threads/upload',
+  requirePublicBoard,
+  requireBoardAuth,
+  handleMulterUpload,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const channel = (req as any).boardChannel;
+      const title = (req.body.title || '').trim();
+      const content = (req.body.content || '').trim();
+      if (!title || title.length > 200) {
+        return next(new BadRequestError('Title is required and must be under 200 characters'));
+      }
+      if (!content || content.length > 4000) {
+        return next(new BadRequestError('Content is required and must be under 4000 characters'));
+      }
+
+      const uploadedFiles = (req.files as Express.Multer.File[]) || [];
+      for (const file of uploadedFiles) {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const isVideo = file.mimetype.startsWith('video/') || VIDEO_EXTENSIONS.has(ext);
+        if (!isVideo && file.size > 10 * 1024 * 1024) {
+          return next(new BadRequestError(`File "${file.originalname}" exceeds 10MB limit`));
+        }
+      }
+
+      const { thread, openingPostId } = await forumsService.createThread(
+        String(channel.id),
+        req.user!.userId,
+        { title, content },
+      );
+
+      for (const file of uploadedFiles) {
+        let metadata: Record<string, any> | null = null;
+        if (file.originalname.toLowerCase().endsWith('.gpx')) {
+          const gpx = await parseGpxFile(file.path);
+          if (gpx) metadata = { gpx };
+        }
+        await messagesService.createAttachment(
+          openingPostId,
+          {
+            filename: file.filename,
+            originalName: file.originalname,
+            mimeType: file.mimetype,
+            size: file.size,
+            url: `/uploads/${file.filename}`,
+          },
+          metadata,
+        );
+      }
+
+      res.status(201).json(thread);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Create post with attachments (requires auth)
+boardsRoutes.post(
+  '/:spaceSlug/:channelName/:threadId/posts/upload',
+  requirePublicBoard,
+  requireBoardAuth,
+  handleMulterUpload,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const content = (req.body.content || '').trim();
+      const uploadedFiles = (req.files as Express.Multer.File[]) || [];
+
+      if (!content && uploadedFiles.length === 0) {
+        return next(new BadRequestError('Post must have content or at least one file'));
+      }
+      if (content.length > 4000) {
+        return next(new BadRequestError('Content must be under 4000 characters'));
+      }
+
+      for (const file of uploadedFiles) {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const isVideo = file.mimetype.startsWith('video/') || VIDEO_EXTENSIONS.has(ext);
+        if (!isVideo && file.size > 10 * 1024 * 1024) {
+          return next(new BadRequestError(`File "${file.originalname}" exceeds 10MB limit`));
+        }
+      }
+
+      const post = await forumsService.createThreadPost(
+        req.params.threadId,
+        req.user!.userId,
+        { content, replyToId: req.body.replyToId },
+      );
+
+      for (const file of uploadedFiles) {
+        let metadata: Record<string, any> | null = null;
+        if (file.originalname.toLowerCase().endsWith('.gpx')) {
+          const gpx = await parseGpxFile(file.path);
+          if (gpx) metadata = { gpx };
+        }
+        await messagesService.createAttachment(
+          post.id,
+          {
+            filename: file.filename,
+            originalName: file.originalname,
+            mimeType: file.mimetype,
+            size: file.size,
+            url: `/uploads/${file.filename}`,
+          },
+          metadata,
+        );
+      }
+
+      // Re-fetch post with attachments
+      const posts = await forumsService.listThreadPosts(req.params.threadId, { limit: 50 });
+      const fullPost = posts.find((p: any) => p.id === post.id) || post;
+      res.status(201).json(fullPost);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // Create thread (requires auth) - must be before /:channelName/:threadId
 boardsRoutes.post(
   '/:spaceSlug/:channelName/threads',
@@ -362,7 +487,7 @@ boardsRoutes.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const channel = (req as any).boardChannel;
-      const thread = await forumsService.createThread(
+      const { thread } = await forumsService.createThread(
         String(channel.id),
         req.user!.userId,
         req.body,

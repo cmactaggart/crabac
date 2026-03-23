@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Pin, Lock, MessageSquare, Plus } from 'lucide-react';
+import { Pin, Lock, MessageSquare, Plus, Paperclip, X } from 'lucide-react';
 import { boardApi } from '../../lib/boardApi.js';
 import { useBoardAuthStore } from '../../stores/boardAuth.js';
 import { usePublicTheme } from '../../contexts/PublicThemeContext.js';
@@ -17,7 +17,9 @@ export function BoardThreadList() {
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
+  const [newFiles, setNewFiles] = useState<File[]>([]);
   const [creating, setCreating] = useState(false);
+  const createFileRef = useRef<HTMLInputElement>(null);
 
   const fetchThreads = useCallback(async (before?: string) => {
     if (!spaceSlug || !channelName) return;
@@ -45,14 +47,27 @@ export function BoardThreadList() {
     if (!newTitle.trim() || !newContent.trim() || !spaceSlug || !channelName) return;
     setCreating(true);
     try {
-      const thread = await boardApi<ForumThreadSummary>(`/${spaceSlug}/${channelName}/threads`, {
-        method: 'POST',
-        body: JSON.stringify({ title: newTitle.trim(), content: newContent.trim() }),
-      });
+      let thread: ForumThreadSummary;
+      if (newFiles.length > 0) {
+        const form = new FormData();
+        form.append('title', newTitle.trim());
+        form.append('content', newContent.trim());
+        newFiles.forEach((f) => form.append('files', f));
+        thread = await boardApi<ForumThreadSummary>(`/${spaceSlug}/${channelName}/threads/upload`, {
+          method: 'POST',
+          body: form,
+        });
+      } else {
+        thread = await boardApi<ForumThreadSummary>(`/${spaceSlug}/${channelName}/threads`, {
+          method: 'POST',
+          body: JSON.stringify({ title: newTitle.trim(), content: newContent.trim() }),
+        });
+      }
       setThreads((prev) => [thread, ...prev]);
       setShowCreate(false);
       setNewTitle('');
       setNewContent('');
+      setNewFiles([]);
     } catch (err: any) {
       setError(err.message || 'Failed to create thread');
     } finally {
@@ -223,6 +238,34 @@ export function BoardThreadList() {
                 }}
                 maxLength={4000}
               />
+              <input ref={createFileRef} type="file" multiple onChange={(e) => { setNewFiles((prev) => [...prev, ...Array.from(e.target.files || [])].slice(0, 20)); e.target.value = ''; }} style={{ display: 'none' }} />
+              <button
+                onClick={() => createFileRef.current?.click()}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '6px 12px',
+                  background: 'none',
+                  border: `1px solid ${c.contentBorder}`,
+                  color: c.secondaryText,
+                  borderRadius: c.contentRadius > 4 ? 6 : 4,
+                  cursor: 'pointer',
+                  fontSize: '0.8rem',
+                }}
+              >
+                <Paperclip size={14} /> Attach files
+              </button>
+              {newFiles.length > 0 && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                  {newFiles.map((f, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: c.pageBg, border: `1px solid ${c.contentBorder}`, borderRadius: 4, fontSize: '0.75rem', color: c.secondaryText }}>
+                      <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                      <button onClick={() => setNewFiles((prev) => prev.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: c.mutedText, cursor: 'pointer', padding: 1, display: 'flex' }}><X size={10} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div style={{ padding: '12px 20px', borderTop: `1px solid ${c.contentBorder}`, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button

@@ -1,9 +1,11 @@
 import apn from '@parse/node-apn';
+import admin from 'firebase-admin';
 import { config } from '../../config.js';
 import { db } from '../../database/connection.js';
 import { snowflake } from '../_shared.js';
 
 let apnProvider: apn.Provider | null = null;
+let fcmInitialized = false;
 
 export function initApnProvider() {
   if (!config.apns.keyPath || !config.apns.keyId) {
@@ -22,7 +24,24 @@ export function initApnProvider() {
   console.log('[PUSH] APNs provider initialized');
 }
 
-export async function registerDeviceToken(userId: string, token: string, platform: string, appVersion?: string) {
+export function initFcmProvider() {
+  if (!config.fcm.serviceAccountPath) {
+    console.log('[PUSH] FCM not configured, Android push notifications disabled');
+    return;
+  }
+
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert(config.fcm.serviceAccountPath),
+    });
+    fcmInitialized = true;
+    console.log('[PUSH] FCM provider initialized');
+  } catch (err) {
+    console.error('[PUSH] Failed to initialize FCM:', err);
+  }
+}
+
+export async function registerDeviceToken(userId: string, token: string, platform: string, appVersion?: string, tokenType: string = 'standard') {
   // Upsert: if token exists, update user_id; otherwise insert
   const existing = await db('device_tokens').where('token', token).first();
   if (existing) {
@@ -30,6 +49,7 @@ export async function registerDeviceToken(userId: string, token: string, platfor
       user_id: userId,
       platform,
       app_version: appVersion || null,
+      token_type: tokenType,
       updated_at: db.fn.now(),
     });
   } else {
@@ -39,6 +59,7 @@ export async function registerDeviceToken(userId: string, token: string, platfor
       token,
       platform,
       app_version: appVersion || null,
+      token_type: tokenType,
     });
   }
 }
@@ -48,31 +69,154 @@ export async function unregisterDeviceToken(token: string) {
 }
 
 export async function sendPushNotification(userId: string, title: string, body: string, data?: Record<string, string>) {
-  if (!apnProvider) return;
+  const hasIos = !!apnProvider;
+  const hasAndroid = fcmInitialized;
 
-  const tokens = await db('device_tokens')
+  if (!hasIos && !hasAndroid) return;
+
+  const allTokens = await db('device_tokens')
     .where('user_id', userId)
-    .where('platform', 'ios')
-    .select('token');
+    .whereIn('platform', [
+      ...(hasIos ? ['ios'] : []),
+      ...(hasAndroid ? ['android'] : []),
+    ])
+    .select('token', 'platform');
 
-  if (tokens.length === 0) return;
+  if (allTokens.length === 0) return;
 
-  const notification = new apn.Notification();
-  notification.alert = { title, body };
-  notification.sound = 'default';
-  notification.badge = 1;
-  notification.topic = config.apns.bundleId;
-  notification.mutableContent = true;
-  if (data) {
-    notification.payload = data;
+  const iosTokens = allTokens.filter((t) => t.platform === 'ios');
+  const androidTokens = allTokens.filter((t) => t.platform === 'android');
+
+  // Send iOS push notifications
+  if (apnProvider && iosTokens.length > 0) {
+    const notification = new apn.Notification();
+    notification.alert = { title, body };
+    notification.sound = 'default';
+    notification.badge = 1;
+    notification.topic = config.apns.bundleId;
+    notification.mutableContent = true;
+    if (data) {
+      notification.payload = data;
+    }
+
+    const result = await apnProvider.send(notification, iosTokens.map((t) => t.token));
+
+    // Clean up invalid tokens
+    for (const failure of result.failed) {
+      if (String(failure.status) === '410' || failure.response?.reason === 'Unregistered') {
+        await db('device_tokens').where('token', failure.device).delete();
+      }
+    }
   }
 
-  const result = await apnProvider.send(notification, tokens.map((t) => t.token));
+  // Send Android push notifications (high priority for calls)
+  if (fcmInitialized && androidTokens.length > 0) {
+    const messages: admin.messaging.Message[] = androidTokens.map((t) => ({
+      token: t.token,
+      notification: { title, body },
+      data: data || undefined,
+      android: {
+        priority: 'high' as const,
+        notification: {
+          sound: 'default',
+          channelId: 'default',
+        },
+      },
+    }));
 
-  // Clean up invalid tokens
-  for (const failure of result.failed) {
-    if (String(failure.status) === '410' || failure.response?.reason === 'Unregistered') {
-      await db('device_tokens').where('token', failure.device).delete();
+    const result = await admin.messaging().sendEach(messages);
+
+    // Clean up invalid tokens
+    for (let i = 0; i < result.responses.length; i++) {
+      const response = result.responses[i];
+      if (!response.success && response.error) {
+        const code = response.error.code;
+        if (
+          code === 'messaging/registration-token-not-registered' ||
+          code === 'messaging/invalid-registration-token'
+        ) {
+          await db('device_tokens').where('token', androidTokens[i].token).delete();
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Send a VoIP push notification to iOS devices for incoming calls.
+ * Uses PushKit which wakes the app and triggers CallKit for the native call UI.
+ * Falls back to a regular high-priority push for Android (FCM handles this natively).
+ */
+export async function sendVoipPush(
+  userId: string,
+  data: { callId: string; conversationId: string; callerName: string; callerAvatarUrl?: string | null },
+) {
+  const hasIos = !!apnProvider;
+  const hasAndroid = fcmInitialized;
+
+  if (!hasIos && !hasAndroid) return;
+
+  const allTokens = await db('device_tokens')
+    .where('user_id', userId)
+    .select('token', 'platform', 'token_type');
+
+  if (allTokens.length === 0) return;
+
+  // iOS: send VoIP push via PushKit tokens
+  const iosVoipTokens = allTokens.filter((t) => t.platform === 'ios' && t.token_type === 'voip');
+  if (apnProvider && iosVoipTokens.length > 0) {
+    const notification = new apn.Notification();
+    notification.pushType = 'voip';
+    notification.topic = `${config.apns.bundleId}.voip`;
+    notification.priority = 10; // immediate delivery required for VoIP
+    notification.expiry = Math.floor(Date.now() / 1000) + 60; // expire after 60s (matches ringing timeout)
+    notification.payload = {
+      callId: data.callId,
+      conversationId: data.conversationId,
+      callerName: data.callerName,
+      callerAvatarUrl: data.callerAvatarUrl || null,
+    };
+
+    const result = await apnProvider.send(notification, iosVoipTokens.map((t) => t.token));
+
+    for (const failure of result.failed) {
+      if (String(failure.status) === '410' || failure.response?.reason === 'Unregistered') {
+        await db('device_tokens').where('token', failure.device).delete();
+      }
+    }
+  }
+
+  // Android: send high-priority data-only FCM message (triggers heads-up / full-screen intent)
+  const androidTokens = allTokens.filter((t) => t.platform === 'android');
+  if (fcmInitialized && androidTokens.length > 0) {
+    const messages: admin.messaging.Message[] = androidTokens.map((t) => ({
+      token: t.token,
+      data: {
+        type: 'call_ringing',
+        callId: data.callId,
+        conversationId: data.conversationId,
+        callerName: data.callerName,
+        callerAvatarUrl: data.callerAvatarUrl || '',
+      },
+      android: {
+        priority: 'high' as const,
+        ttl: 60_000, // 60s — matches ringing timeout
+      },
+    }));
+
+    const result = await admin.messaging().sendEach(messages);
+
+    for (let i = 0; i < result.responses.length; i++) {
+      const response = result.responses[i];
+      if (!response.success && response.error) {
+        const code = response.error.code;
+        if (
+          code === 'messaging/registration-token-not-registered' ||
+          code === 'messaging/invalid-registration-token'
+        ) {
+          await db('device_tokens').where('token', androidTokens[i].token).delete();
+        }
+      }
     }
   }
 }

@@ -1,12 +1,15 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Mail, User, Bell, Newspaper } from 'lucide-react';
+import { Mail, User, Bell, Newspaper, CheckCheck, LogOut, ExternalLink } from 'lucide-react';
 import { useDMStore } from '../../stores/dm.js';
 import { useNotificationsStore } from '../../stores/notifications.js';
 import { useChannelsStore } from '../../stores/channels.js';
+import { useAuthStore } from '../../stores/auth.js';
 import { CrabIcon } from '../icons/CrabIcon.js';
 import { getContrastColor } from '../spaces/SpaceBrandedCard.js';
 import { LetterIcon } from '../icons/LetterIcon.js';
+import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu.js';
+import { api } from '../../lib/api.js';
 import type { Space } from '@crabac/shared';
 
 interface Props {
@@ -21,7 +24,9 @@ export function SpaceSidebar({ spaces, activeSpaceId, hideNavIcons }: Props) {
   const dmUnreads = useDMStore((s) => s.dmUnreads);
   const totalDMUnreads = Object.values(dmUnreads).reduce((sum, n) => sum + n, 0);
   const unreadCount = useNotificationsStore((s) => s.unreadCount);
+  const currentUserId = useAuthStore((s) => s.user?.id);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; space: Space } | null>(null);
 
   const handleSpaceMouseEnter = useCallback((spaceId: string) => {
     if (spaceId === activeSpaceId) return;
@@ -38,10 +43,69 @@ export function SpaceSidebar({ spaces, activeSpaceId, hideNavIcons }: Props) {
     }
   }, []);
 
+  const handleContextMenu = useCallback((e: React.MouseEvent, space: Space) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, space });
+  }, []);
+
+  const handleMarkAllRead = useCallback((space: Space) => {
+    const { unreads } = useChannelsStore.getState();
+    const cleared: Record<string, { unreadCount: number; mentionCount: number }> = {};
+    for (const channelId of Object.keys(unreads)) {
+      cleared[channelId] = { unreadCount: 0, mentionCount: 0 };
+    }
+    useChannelsStore.setState((s) => ({ unreads: { ...s.unreads, ...cleared } }));
+    setContextMenu(null);
+  }, []);
+
+  const handleLeaveSpace = useCallback(async (space: Space) => {
+    setContextMenu(null);
+    if (!confirm(`Are you sure you want to leave ${space.name}?`)) return;
+    try {
+      await api(`/spaces/${space.id}/leave`, { method: 'POST' });
+      navigate('/');
+    } catch (err: any) {
+      alert(err.message || 'Failed to leave space');
+    }
+  }, [navigate]);
+
   const isYouActive = location.pathname === '/you' || location.pathname.startsWith('/p/');
   const isNotificationsActive = location.pathname === '/notifications';
   const isFeedActive = location.pathname === '/feed';
   const isDMActive = location.pathname.startsWith('/dm');
+
+  const getContextMenuItems = (space: Space): ContextMenuItem[] => {
+    const items: ContextMenuItem[] = [
+      {
+        label: 'Mark All as Read',
+        icon: <CheckCheck size={16} />,
+        onClick: () => handleMarkAllRead(space),
+      },
+    ];
+
+    if (space.slug) {
+      items.push({
+        label: 'View Profile',
+        icon: <ExternalLink size={16} />,
+        onClick: () => {
+          navigate(`/p/${space.slug}`);
+          setContextMenu(null);
+        },
+      });
+    }
+
+    items.push(
+      { label: '', icon: undefined, separator: true, onClick: () => {} },
+      {
+        label: 'Leave Space',
+        icon: <LogOut size={16} />,
+        danger: true,
+        onClick: () => handleLeaveSpace(space),
+      },
+    );
+
+    return items;
+  };
 
   return (
     <div style={styles.sidebar}>
@@ -140,6 +204,7 @@ export function SpaceSidebar({ spaces, activeSpaceId, hideNavIcons }: Props) {
           <button
             key={space.id}
             onClick={() => navigate(`/space/${space.id}`)}
+            onContextMenu={(e) => handleContextMenu(e, space)}
             onMouseEnter={() => handleSpaceMouseEnter(space.id)}
             onMouseLeave={handleSpaceMouseLeave}
             style={{
@@ -167,6 +232,14 @@ export function SpaceSidebar({ spaces, activeSpaceId, hideNavIcons }: Props) {
         );
       })}
 
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={getContextMenuItems(contextMenu.space)}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }

@@ -521,6 +521,26 @@ export async function emitDMCreated(conversationId: string, messageId: string) {
   eventBus.emit('dm.created', { message, conversationId });
 }
 
+export async function sendSystemMessage(conversationId: string, authorId: string, content: string) {
+  const id = snowflake.generate();
+
+  await db('direct_messages').insert({
+    id,
+    conversation_id: conversationId,
+    author_id: authorId,
+    type: 'system',
+    content,
+  });
+
+  await db('conversations')
+    .where('id', conversationId)
+    .update({ updated_at: db.fn.now(3) });
+
+  const message = await getDM(String(id));
+  eventBus.emit('dm.created', { message, conversationId: String(conversationId) });
+  return message;
+}
+
 // ─── DM Search ───
 
 export async function searchDMs(
@@ -715,6 +735,7 @@ function formatDM(row: any, reactions: any[] = [], attachments: any[] = [], embe
     id: row.id.toString(),
     conversationId: row.conversation_id.toString(),
     authorId: row.author_id.toString(),
+    type: row.type || 'user',
     content: row.content,
     editedAt: row.edited_at,
     reactions,

@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNotificationsStore } from '../stores/notifications.js';
 import { useDMStore } from '../stores/dm.js';
+import { useCallStore } from '../stores/call.js';
 
 const BASE_TITLE = 'crab.ac';
 const FAVICON_HREF = '/favicon.svg';
@@ -64,16 +65,53 @@ function updateFavicon(count: number) {
 export function useTabNotifications() {
   const unreadCount = useNotificationsStore((s) => s.unreadCount);
   const dmUnreads = useDMStore((s) => s.dmUnreads);
+  const incomingCall = useCallStore((s) => s.incomingCall);
+  const flashRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const dmUnreadCount = Object.values(dmUnreads).reduce((sum, n) => sum + n, 0);
   const totalCount = unreadCount + dmUnreadCount;
 
+  // Normal title/favicon for unread counts
   useEffect(() => {
-    document.title = totalCount > 0 ? `(${totalCount}) ${BASE_TITLE}` : BASE_TITLE;
-    updateFavicon(totalCount);
+    if (!incomingCall) {
+      document.title = totalCount > 0 ? `(${totalCount}) ${BASE_TITLE}` : BASE_TITLE;
+      updateFavicon(totalCount);
+    }
 
     return () => {
       document.title = BASE_TITLE;
     };
-  }, [totalCount]);
+  }, [totalCount, incomingCall]);
+
+  // Flash title for incoming calls
+  useEffect(() => {
+    if (!incomingCall) {
+      if (flashRef.current) {
+        clearInterval(flashRef.current);
+        flashRef.current = null;
+      }
+      return;
+    }
+
+    const caller = incomingCall.participants.find(
+      (p) => p.userId === incomingCall.initiatedBy,
+    );
+    const callerName = caller?.displayName || caller?.username || 'Someone';
+    const normalTitle = totalCount > 0 ? `(${totalCount}) ${BASE_TITLE}` : BASE_TITLE;
+    const callTitle = `Incoming call from ${callerName}...`;
+    let showCall = true;
+
+    document.title = callTitle;
+    flashRef.current = setInterval(() => {
+      showCall = !showCall;
+      document.title = showCall ? callTitle : normalTitle;
+    }, 1000);
+
+    return () => {
+      if (flashRef.current) {
+        clearInterval(flashRef.current);
+        flashRef.current = null;
+      }
+    };
+  }, [incomingCall, totalCount]);
 }

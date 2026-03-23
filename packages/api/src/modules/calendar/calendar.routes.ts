@@ -291,6 +291,62 @@ calendarRoutes.post(
   },
 );
 
+// ─── Meeting Rooms ───
+
+calendarRoutes.get(
+  '/:spaceId/calendar/active-rooms',
+  requireMember,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const clientDate = req.query.date as string | undefined;
+      const rooms = await calendarService.getActiveEventRooms(req.params.spaceId, clientDate);
+      res.json(rooms);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+calendarRoutes.get(
+  '/:spaceId/calendar/my-active-room',
+  requireMember,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await calendarService.getMyActiveEventRoom(req.params.spaceId, req.user!.userId);
+      res.json({ room: result });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+calendarRoutes.post(
+  '/:spaceId/calendar/events/:eventId/room/join',
+  requireMember,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const clientDate = req.body.date as string | undefined;
+      const result = await calendarService.joinEventRoom(req.params.eventId, req.user!.userId, clientDate);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+calendarRoutes.post(
+  '/:spaceId/calendar/events/:eventId/room/leave',
+  requireMember,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await calendarService.leaveEventRoom(req.params.eventId, req.user!.userId);
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // ─── RSVP ───
 
 calendarRoutes.post(

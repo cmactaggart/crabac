@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Pin, Lock, Send, Reply, X } from 'lucide-react';
+import { Pin, Lock, Send, Reply, X, Paperclip } from 'lucide-react';
 import { boardApi } from '../../lib/boardApi.js';
 import { useBoardAuthStore } from '../../stores/boardAuth.js';
 import { usePublicTheme } from '../../contexts/PublicThemeContext.js';
+import { MessageAttachments } from '../../components/messages/MessageAttachments.js';
 import type { ForumThread, Message } from '@crabac/shared';
 
 export function BoardThreadDetail() {
@@ -16,8 +17,10 @@ export function BoardThreadDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [replyContent, setReplyContent] = useState('');
+  const [replyFiles, setReplyFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const replyFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!spaceSlug || !channelName || !threadId) return;
@@ -35,15 +38,28 @@ export function BoardThreadDetail() {
   }, [spaceSlug, channelName, threadId]);
 
   const handleReply = async () => {
-    if (!replyContent.trim() || sending || !threadId) return;
+    if ((!replyContent.trim() && replyFiles.length === 0) || sending || !threadId) return;
     setSending(true);
     try {
-      const post = await boardApi<Message>(`/${spaceSlug}/${channelName}/${threadId}/posts`, {
-        method: 'POST',
-        body: JSON.stringify({ content: replyContent.trim(), replyToId: replyingTo?.id }),
-      });
+      let post: Message;
+      if (replyFiles.length > 0) {
+        const form = new FormData();
+        form.append('content', replyContent.trim());
+        if (replyingTo?.id) form.append('replyToId', replyingTo.id);
+        replyFiles.forEach((f) => form.append('files', f));
+        post = await boardApi<Message>(`/${spaceSlug}/${channelName}/${threadId}/posts/upload`, {
+          method: 'POST',
+          body: form,
+        });
+      } else {
+        post = await boardApi<Message>(`/${spaceSlug}/${channelName}/${threadId}/posts`, {
+          method: 'POST',
+          body: JSON.stringify({ content: replyContent.trim(), replyToId: replyingTo?.id }),
+        });
+      }
       setPosts((prev) => [...prev, post]);
       setReplyContent('');
+      setReplyFiles([]);
       setReplyingTo(null);
     } catch (err: any) {
       setError(err.message);
@@ -137,28 +153,57 @@ export function BoardThreadDetail() {
             rows={4}
             maxLength={4000}
           />
-          <button
-            onClick={handleReply}
-            disabled={!replyContent.trim() || sending}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              marginTop: 8,
-              padding: '6px 16px',
-              background: c.accent,
-              border: 'none',
-              color: '#fff',
-              borderRadius: c.contentRadius > 4 ? 6 : 4,
-              cursor: 'pointer',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              opacity: !replyContent.trim() || sending ? 0.5 : 1,
-            }}
-          >
-            <Send size={14} />
-            {sending ? 'Posting...' : 'Post Reply'}
-          </button>
+          <input ref={replyFileRef} type="file" multiple onChange={(e) => { setReplyFiles((prev) => [...prev, ...Array.from(e.target.files || [])].slice(0, 20)); e.target.value = ''; }} style={{ display: 'none' }} />
+          {replyFiles.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+              {replyFiles.map((f, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: c.pageBg, border: `1px solid ${c.contentBorder}`, borderRadius: 4, fontSize: '0.75rem', color: c.secondaryText }}>
+                  <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                  <button onClick={() => setReplyFiles((prev) => prev.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: c.mutedText, cursor: 'pointer', padding: 1, display: 'flex' }}><X size={10} /></button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
+            <button
+              onClick={() => replyFileRef.current?.click()}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '6px 12px',
+                background: 'none',
+                border: `1px solid ${c.contentBorder}`,
+                color: c.secondaryText,
+                borderRadius: c.contentRadius > 4 ? 6 : 4,
+                cursor: 'pointer',
+                fontSize: '0.8rem',
+              }}
+            >
+              <Paperclip size={14} /> Attach
+            </button>
+            <button
+              onClick={handleReply}
+              disabled={(!replyContent.trim() && replyFiles.length === 0) || sending}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 16px',
+                background: c.accent,
+                border: 'none',
+                color: '#fff',
+                borderRadius: c.contentRadius > 4 ? 6 : 4,
+                cursor: 'pointer',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                opacity: (!replyContent.trim() && replyFiles.length === 0) || sending ? 0.5 : 1,
+              }}
+            >
+              <Send size={14} />
+              {sending ? 'Posting...' : 'Post Reply'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -252,6 +297,11 @@ function SidebarPost({ post, isFirst, colors: c, onReply }: { post: Message; isF
         <div style={{ fontSize: '0.9rem', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: c.pageText }}>
           {post.content}
         </div>
+        {post.attachments && post.attachments.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            <MessageAttachments attachments={post.attachments} noPadding />
+          </div>
+        )}
         {!isFirst && onReply && (
           <button onClick={() => onReply(post)} style={{ background: 'none', border: 'none', color: c.linkColor, cursor: 'pointer', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, padding: 0 }}>
             <Reply size={12} /> Reply
@@ -316,6 +366,11 @@ function StackedPost({ post, isFirst, colors: c, contentRadius, onReply }: { pos
       <div style={{ fontSize: '0.9rem', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: c.pageText }}>
         {post.content}
       </div>
+      {post.attachments && post.attachments.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <MessageAttachments attachments={post.attachments} noPadding />
+        </div>
+      )}
       {!isFirst && onReply && (
         <button onClick={() => onReply(post)} style={{ background: 'none', border: 'none', color: c.linkColor, cursor: 'pointer', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, padding: 0 }}>
           <Reply size={12} /> Reply

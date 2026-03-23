@@ -20,6 +20,7 @@ import { CreateChannelModal } from '../channels/CreateChannelModal.js';
 import { CreateCategoryModal } from '../channels/CreateCategoryModal.js';
 import { CreateCategoryModal as CalendarCategoryModal } from '../calendar/CreateCategoryModal.js';
 import { CreateEventModal as CalendarEventModal } from '../calendar/CreateEventModal.js';
+import { EventRoomPanel } from '../calendar/EventRoomPanel.js';
 import { MySpacePreferences } from '../settings/MySpacePreferences.js';
 import type { Space, Channel, ChannelCategory } from '@crabac/shared';
 import {
@@ -646,6 +647,23 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
                   <Settings size={18} />
                 </button>
               )}
+              {String(space.ownerId) !== user?.id && (
+                <button
+                  onClick={async () => {
+                    if (!confirm('Are you sure you want to leave this space?')) return;
+                    try {
+                      await api(`/spaces/${space.id}/leave`, { method: 'POST' });
+                      navigate('/');
+                    } catch (err: any) {
+                      alert(err.message || 'Failed to leave space');
+                    }
+                  }}
+                  style={{ ...sidebarStyles.inviteBtn, color: 'var(--danger)' }}
+                  title="Leave Space"
+                >
+                  <LogOut size={18} />
+                </button>
+              )}
             </>
           )}
           {!fullWidth && (
@@ -658,28 +676,31 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
 
       <div style={sidebarStyles.channelList}>
         {space.calendarEnabled && (
-          <button
-            onClick={() => {
-              setCalendarOpen(true);
-              useLayoutStore.getState().setMobileView('chat');
-              navigate(`/space/${space.id}`, { replace: true });
-            }}
-            onContextMenu={(e) => {
-              if (!canManageCalendar) return;
-              e.preventDefault();
-              setCalendarContextMenu({ x: e.clientX, y: e.clientY });
-            }}
-            style={{
-              ...sidebarStyles.channelItem,
-              background: calendarOpen ? 'rgba(88, 101, 242, 0.18)' : 'rgba(88, 101, 242, 0.08)',
-              color: calendarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
-              marginBottom: 4,
-              borderRadius: 'var(--radius)',
-            }}
-          >
-            <Calendar size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-            <span style={{ flex: 1 }}>Calendar</span>
-          </button>
+          <>
+            <button
+              onClick={() => {
+                setCalendarOpen(true);
+                useLayoutStore.getState().setMobileView('chat');
+                navigate(`/space/${space.id}`, { replace: true });
+              }}
+              onContextMenu={(e) => {
+                if (!canManageCalendar) return;
+                e.preventDefault();
+                setCalendarContextMenu({ x: e.clientX, y: e.clientY });
+              }}
+              style={{
+                ...sidebarStyles.channelItem,
+                background: calendarOpen ? 'rgba(88, 101, 242, 0.18)' : 'rgba(88, 101, 242, 0.08)',
+                color: calendarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
+                marginBottom: 4,
+                borderRadius: 'var(--radius)',
+              }}
+            >
+              <Calendar size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+              <span style={{ flex: 1 }}>Calendar</span>
+            </button>
+            <EventRoomPanel spaceId={space.id} compact />
+          </>
         )}
         {space.blogEnabled && (
           <button

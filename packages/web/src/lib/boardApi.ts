@@ -12,9 +12,12 @@ export class BoardApiError extends Error {
 }
 
 export async function boardApi<T = any>(path: string, options?: RequestInit): Promise<T> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
+  const headers: Record<string, string> = {};
+
+  // Don't set Content-Type for FormData — let the browser set multipart boundary
+  if (!(options?.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   // Check for board auth token
   const token = localStorage.getItem('boardToken');

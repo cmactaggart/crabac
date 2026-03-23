@@ -71,8 +71,8 @@ export function ForumChannelView({ channelId, channel, spaceId, showBackButton, 
     [spaceId, channelId, fetchThreads],
   );
 
-  const handleCreateThread = async (data: { title: string; content: string }) => {
-    await createThread(spaceId, channelId, data);
+  const handleCreateThread = async (data: { title: string; content: string }, files: File[], collectionItems: { type: string; id: string }[]) => {
+    await createThread(spaceId, channelId, data, files.length > 0 ? files : undefined, collectionItems.length > 0 ? collectionItems : undefined);
   };
 
   // Thread detail view
@@ -135,6 +135,7 @@ export function ForumChannelView({ channelId, channel, spaceId, showBackButton, 
           <CreateThreadModal
             onSubmit={handleCreateThread}
             onClose={() => setShowCreateThread(false)}
+            spaceId={spaceId}
           />
         )}
       </div>

@@ -412,40 +412,116 @@ function GroupDMHeaderContent({ conversation, currentUserId }: { conversation: C
 
 function CallButton({ conversationId }: { conversationId: string }) {
   const initiateCall = useCallStore((s) => s.initiateCall);
+  const joinExistingCall = useCallStore((s) => s.joinExistingCall);
+  const fetchActiveCall = useCallStore((s) => s.fetchActiveCall);
   const activeCall = useCallStore((s) => s.activeCall);
   const connecting = useCallStore((s) => s.connecting);
+  const [showMenu, setShowMenu] = useState(false);
+  const [existingCallId, setExistingCallId] = useState<string | null>(null);
 
   const isInCall = !!activeCall;
 
+  const handleCall = async () => {
+    if (isInCall || connecting) return;
+    try {
+      await initiateCall(conversationId);
+    } catch (err: any) {
+      // If there's an existing call, show join/new options
+      if (err?.data?.existingCallId) {
+        setExistingCallId(err.data.existingCallId);
+        setShowMenu(true);
+      } else {
+        console.error('Call failed:', err);
+        alert(`Call failed: ${err?.message || err?.code || JSON.stringify(err)}`);
+      }
+    }
+  };
+
+  const handleJoinExisting = async () => {
+    setShowMenu(false);
+    if (!existingCallId) return;
+    try {
+      await joinExistingCall(existingCallId);
+    } catch (err: any) {
+      console.error('Join call failed:', err);
+      alert(`Join call failed: ${err?.message || JSON.stringify(err)}`);
+    }
+  };
+
+  const handleStartNew = async () => {
+    setShowMenu(false);
+    if (!existingCallId) return;
+    try {
+      // Leave/end the existing call first, then start a new one
+      await api(`/calls/${existingCallId}/leave`, { method: 'POST' }).catch(() => {});
+      await initiateCall(conversationId);
+    } catch (err: any) {
+      console.error('Call failed:', err);
+      alert(`Call failed: ${err?.message || JSON.stringify(err)}`);
+    }
+  };
+
   return (
-    <button
-      onClick={async () => {
-        if (!isInCall && !connecting) {
-          try {
-            await initiateCall(conversationId);
-          } catch (err: any) {
-            console.error('Call failed:', err);
-            alert(`Call failed: ${err?.message || err?.code || JSON.stringify(err)}`);
-          }
-        }
-      }}
-      disabled={isInCall || connecting}
-      style={{
-        background: 'none',
-        border: 'none',
-        color: isInCall ? 'var(--success)' : 'var(--text-secondary)',
-        cursor: isInCall || connecting ? 'default' : 'pointer',
-        padding: '4px 8px',
-        borderRadius: 4,
-        flexShrink: 0,
-        opacity: isInCall || connecting ? 0.5 : 1,
-      }}
-      title={isInCall ? 'Already in a call' : 'Start call'}
-    >
-      <Phone size={18} />
-    </button>
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        onClick={handleCall}
+        disabled={isInCall || connecting}
+        style={{
+          background: 'none',
+          border: 'none',
+          color: isInCall ? 'var(--success)' : 'var(--text-secondary)',
+          cursor: isInCall || connecting ? 'default' : 'pointer',
+          padding: '4px 8px',
+          borderRadius: 4,
+          opacity: isInCall || connecting ? 0.5 : 1,
+        }}
+        title={isInCall ? 'Already in a call' : 'Start call'}
+      >
+        <Phone size={18} />
+      </button>
+      {showMenu && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 999 }} onClick={() => setShowMenu(false)} />
+          <div style={{
+            position: 'absolute',
+            top: '100%',
+            right: 0,
+            marginTop: 4,
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+            zIndex: 1000,
+            minWidth: 200,
+            overflow: 'hidden',
+          }}>
+            <div style={{ padding: '8px 12px', fontSize: '0.75rem', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
+              A call is already active
+            </div>
+            <button onClick={handleJoinExisting} style={callMenuBtnStyle}>
+              Join existing call
+            </button>
+            <button onClick={handleStartNew} style={{ ...callMenuBtnStyle, color: 'var(--danger)' }}>
+              End &amp; start new call
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
+
+const callMenuBtnStyle: Record<string, string | number> = {
+  display: 'block',
+  width: '100%',
+  padding: '8px 12px',
+  background: 'none',
+  border: 'none',
+  color: 'var(--text-primary)',
+  fontSize: '0.85rem',
+  cursor: 'pointer',
+  textAlign: 'left',
+};
 
 // ─── Group Members Panel ───
 
@@ -1178,9 +1254,16 @@ function DMMessageList({
       )}
 
       {messages.map((msg, i) => {
+        if (msg.type === 'system') {
+          return (
+            <div key={msg.id} style={systemMessageStyles.wrapper}>
+              <span style={systemMessageStyles.text}>{msg.content}</span>
+            </div>
+          );
+        }
         const prev = messages[i - 1];
         const prevHasEmbed = prev && ((prev.embeds && prev.embeds.length > 0) || (prev.attachments && prev.attachments.length > 0));
-        const sameAuthor = prev?.authorId === msg.authorId && !prevHasEmbed;
+        const sameAuthor = prev?.authorId === msg.authorId && !prevHasEmbed && prev?.type !== 'system';
         const gap = sameAuthor && prev ? snowflakeTime(msg.id) - snowflakeTime(prev.id) : Infinity;
         const compact = sameAuthor && gap < 60000;
         const spacedSameAuthor = sameAuthor && gap >= 60000 && gap < 900000;
@@ -1546,6 +1629,21 @@ const mobileLayout: React.CSSProperties = {
   display: 'flex',
   overflow: 'hidden',
   background: 'linear-gradient(to bottom, var(--bg-primary), color-mix(in srgb, var(--bg-primary), black 18%))',
+};
+
+const systemMessageStyles: Record<string, React.CSSProperties> = {
+  wrapper: {
+    display: 'flex',
+    justifyContent: 'center',
+    padding: '8px 16px',
+  },
+  text: {
+    fontSize: '0.8rem',
+    color: 'var(--text-muted)',
+    background: 'var(--bg-secondary)',
+    padding: '4px 12px',
+    borderRadius: 12,
+  },
 };
 
 const styles: Record<string, React.CSSProperties> = {

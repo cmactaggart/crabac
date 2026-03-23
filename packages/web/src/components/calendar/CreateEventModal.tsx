@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, MapPinned, ImagePlus, Trash2 } from 'lucide-react';
+import { X, MapPinned, ImagePlus, Trash2, Headphones } from 'lucide-react';
 import { useCalendarStore } from '../../stores/calendar.js';
 import { useChannelsStore } from '../../stores/channels.js';
 import { usePreferencesStore } from '../../stores/preferences.js';
@@ -38,6 +38,11 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
   const [showRouteSelect, setShowRouteSelect] = useState(!!(editEvent?.routeId || prefillRouteId));
   const [routeChannelId, setRouteChannelId] = useState('');
   const [routeOptions, setRouteOptions] = useState<RouteItem[]>([]);
+  const [endTime, setEndTime] = useState(editEvent?.endTime || '');
+  const [meetingRoomEnabled, setMeetingRoomEnabled] = useState(editEvent?.meetingRoomEnabled || false);
+  const [meetingRoomEarlyEntry, setMeetingRoomEarlyEntry] = useState<number>(
+    editEvent?.meetingRoomEarlyEntry != null ? editEvent.meetingRoomEarlyEntry : 15,
+  );
   const [imageUrl, setImageUrl] = useState(editEvent?.imageUrl || '');
   const [imageUploading, setImageUploading] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -109,12 +114,15 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
           name: name.trim(),
           description: description.trim() || null,
           eventTime: eventTime || null,
+          endTime: (eventTime && endTime) ? endTime : null,
           categoryId: categoryId || null,
           isPublic,
           location: location.trim() || null,
           activityType: activityType || null,
           routeId: (showRouteSelect && routeId) ? routeId : null,
           imageUrl: imageUrl || null,
+          meetingRoomEnabled,
+          meetingRoomEarlyEntry: meetingRoomEnabled ? meetingRoomEarlyEntry : null,
           recurrenceRule: {
             freq: recurrenceFreq,
             interval: recurrenceInterval,
@@ -130,12 +138,15 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
           description: description.trim() || null,
           eventDate,
           eventTime: eventTime || null,
+          endTime: (eventTime && endTime) ? endTime : null,
           categoryId: categoryId || null,
           isPublic,
           location: location.trim() || null,
           activityType: activityType || null,
           routeId: (showRouteSelect && routeId) ? routeId : null,
           imageUrl: imageUrl || null,
+          meetingRoomEnabled,
+          meetingRoomEarlyEntry: meetingRoomEnabled ? meetingRoomEarlyEntry : null,
         };
 
         if (editEvent) {
@@ -305,6 +316,18 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
             style={styles.input}
           />
 
+          {eventTime && (
+            <>
+              <label style={styles.label}>End Time (optional)</label>
+              <input
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                style={styles.input}
+              />
+            </>
+          )}
+
           <label style={styles.label}>{routeLinked ? 'Meet Point' : 'Location (optional)'}</label>
           <input
             value={location}
@@ -395,6 +418,40 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: -4 }}>
             Visible on the public calendar web view
           </span>
+
+          {/* Meeting Room */}
+          <div style={{ marginTop: 4 }}>
+            <label style={{ ...styles.label, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={meetingRoomEnabled}
+                onChange={(e) => setMeetingRoomEnabled(e.target.checked)}
+                style={{ margin: 0 }}
+              />
+              <Headphones size={14} />
+              <span style={{ textTransform: 'none', fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-primary)' }}>Enable meeting room</span>
+            </label>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: 22 }}>
+              Add a voice + text room for this event
+            </span>
+            {meetingRoomEnabled && (
+              <div style={{ marginTop: 8, padding: 12, background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <label style={styles.label}>When can people join?</label>
+                <select
+                  value={meetingRoomEarlyEntry}
+                  onChange={(e) => setMeetingRoomEarlyEntry(parseInt(e.target.value))}
+                  style={styles.input}
+                >
+                  <option value={0}>At event start</option>
+                  <option value={5}>5 minutes early</option>
+                  <option value={15}>15 minutes early</option>
+                  <option value={30}>30 minutes early</option>
+                  <option value={60}>1 hour early</option>
+                  <option value={-1}>Anytime</option>
+                </select>
+              </div>
+            )}
+          </div>
 
           <label style={styles.label}>Description (optional)</label>
           <textarea

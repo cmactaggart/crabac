@@ -2,6 +2,7 @@ import { db } from '../../database/connection.js';
 import { snowflake } from '../_shared.js';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../../lib/errors.js';
 import { eventBus } from '../../lib/event-bus.js';
+import { getAttachmentsForMessages, createAttachment } from '../messages/messages.service.js';
 
 export async function createThread(
   channelId: string,
@@ -38,7 +39,7 @@ export async function createThread(
   const thread = await getThread(threadId);
   const spaceId = String(channel.space_id);
   eventBus.emit('forum.thread_created', { thread, channelId, spaceId });
-  return thread;
+  return { thread, openingPostId: String(messageId) };
 }
 
 export async function listThreads(
@@ -124,15 +125,18 @@ export async function listThreadPosts(
 
   const rows = await query;
 
-  // Get reactions for posts
+  // Get reactions, attachments, and replyTo data for posts
   const messageIds = rows.map((r: any) => r.id);
-  const reactions = await getReactionsForMessages(messageIds);
+  const [reactions, attachments] = await Promise.all([
+    getReactionsForMessages(messageIds),
+    getAttachmentsForMessages(messageIds),
+  ]);
 
   // Get replyTo data for posts that have reply_to_id
   const replyToIds = rows.filter((r: any) => r.reply_to_id).map((r: any) => r.reply_to_id);
   const replyToMap = await getReplyToData(replyToIds);
 
-  return rows.map((r: any) => formatPost(r, reactions.get(r.id) || [], replyToMap.get(String(r.reply_to_id))));
+  return rows.map((r: any) => formatPost(r, reactions.get(r.id) || [], replyToMap.get(String(r.reply_to_id)), attachments.get(r.id) || []));
 }
 
 export async function createThreadPost(
@@ -224,6 +228,73 @@ export async function getThreadChannelId(threadId: string): Promise<string> {
   return String(thread.channel_id);
 }
 
+/**
+ * Create message attachments from personal collection items (routes and gallery photos).
+ */
+export async function attachFromCollection(
+  messageId: string,
+  userId: string,
+  items: { type: string; id: string }[],
+) {
+  for (const item of items) {
+    if (item.type === 'route') {
+      const route = await db('personal_route_items')
+        .where({ id: item.id, user_id: userId })
+        .first();
+      if (!route) continue;
+
+      const gpxMetadata: Record<string, any> = {
+        gpx: {
+          trackName: route.track_name || route.name,
+          distanceKm: route.distance_km != null ? Number(route.distance_km) : null,
+          elevationGainM: route.elevation_gain_m != null ? Number(route.elevation_gain_m) : null,
+          elevationLossM: route.elevation_loss_m != null ? Number(route.elevation_loss_m) : null,
+          durationSec: route.duration_sec != null ? Number(route.duration_sec) : null,
+          startLat: route.start_lat != null ? Number(route.start_lat) : null,
+          startLng: route.start_lng != null ? Number(route.start_lng) : null,
+          bounds: typeof route.bounds === 'string' ? JSON.parse(route.bounds) : route.bounds,
+          geojson: typeof route.geojson === 'string' ? JSON.parse(route.geojson) : route.geojson,
+        },
+      };
+
+      await createAttachment(
+        messageId,
+        {
+          filename: route.filename || `route-${item.id}.gpx`,
+          originalName: route.original_name || route.name || 'route.gpx',
+          mimeType: 'application/gpx+xml',
+          size: route.file_size || 0,
+          url: route.url,
+        },
+        gpxMetadata,
+      );
+    } else if (item.type === 'gallery') {
+      const galleryItem = await db('personal_gallery_items')
+        .where({ id: item.id, user_id: userId })
+        .first();
+      if (!galleryItem) continue;
+
+      const attachments = await db('personal_gallery_attachments')
+        .where('gallery_item_id', item.id)
+        .orderBy('position', 'asc');
+
+      for (const att of attachments) {
+        await createAttachment(
+          messageId,
+          {
+            filename: att.filename,
+            originalName: att.original_name,
+            mimeType: att.mime_type,
+            size: att.size,
+            url: att.url,
+          },
+          null,
+        );
+      }
+    }
+  }
+}
+
 // ─── Helpers ───
 
 function formatThread(row: any) {
@@ -256,7 +327,7 @@ function formatThreadSummary(row: any) {
   };
 }
 
-function formatPost(row: any, reactions: any[], replyTo?: any) {
+function formatPost(row: any, reactions: any[], replyTo?: any, attachments: any[] = []) {
   let metadata = row.metadata;
   if (typeof metadata === 'string') {
     try { metadata = JSON.parse(metadata); } catch { metadata = null; }
@@ -274,7 +345,7 @@ function formatPost(row: any, reactions: any[], replyTo?: any) {
     messageType: row.message_type ?? 'user',
     metadata: metadata ?? null,
     reactions,
-    attachments: [],
+    attachments,
     author: {
       id: row.author_id,
       username: row.author_username,

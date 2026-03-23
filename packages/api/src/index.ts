@@ -55,6 +55,7 @@ import { newsletterTrackingRoutes } from './modules/newsletter/newsletter-tracki
 import { devicesRoutes } from './modules/notifications/devices.routes.js';
 import { callRoutes } from './modules/calls/call.routes.js';
 import { registerCallGateway } from './modules/calls/call.gateway.js';
+import { registerCalendarGateway } from './modules/calendar/calendar.gateway.js';
 import { initApnProvider, initFcmProvider } from './modules/notifications/push.service.js';
 import { redis } from './lib/redis.js';
 import { loadPlugins, getLoadedPlugins } from './plugins/loader.js';
@@ -142,7 +143,7 @@ app.get('/api/messages/:messageId', authenticate, async (req, res, next) => {
     const message = await messagesService.getMessageById(messageId);
     const isMember = await spacesService.isMember(message.spaceId, userId);
     if (!isMember) return next(new ForbiddenError('Not a member of this space'));
-    res.json({ type: 'channel', ...message });
+    res.json({ source: 'channel', ...message });
     return;
   } catch {
     // Not a channel message, try DM
@@ -152,7 +153,7 @@ app.get('/api/messages/:messageId', authenticate, async (req, res, next) => {
     const dm = await dmService.getMessageById(messageId);
     const isMember = await dmService.isConversationMember(dm.conversationId, userId);
     if (!isMember) return next(new ForbiddenError('Not a member of this conversation'));
-    res.json({ type: 'dm', ...dm });
+    res.json({ source: 'dm', ...dm });
   } catch {
     next(new NotFoundError('Message'));
   }
@@ -181,6 +182,7 @@ registerGalleryGateway();
 registerRouteLibraryGateway();
 registerWorkflowGateway();
 registerCallGateway();
+registerCalendarGateway();
 registerWorkflowListener();
 registerSearchListener();
 registerCalendarListener();

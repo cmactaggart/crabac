@@ -7,6 +7,7 @@ export function errorHandler(err: any, _req: Request, res: Response, _next: Next
       error: {
         code: err.code,
         message: err.message,
+        ...(err.data && { data: err.data }),
       },
     });
     return;

@@ -52,14 +52,20 @@ import { PublicPersonalNewsletterDetail } from './pages/newsletter/PublicPersona
 import { NewsletterPreferences } from './pages/newsletter/NewsletterPreferences.js';
 import { NewsletterVerify } from './pages/newsletter/NewsletterVerify.js';
 import { useCallSocket } from './hooks/useCallSocket.js';
+import { useRingtone } from './hooks/useRingtone.js';
 import { IncomingCallModal } from './components/calls/IncomingCallModal.js';
 import { ActiveCallOverlay } from './components/calls/ActiveCallOverlay.js';
+import { MeetingRoomOverlay } from './components/calls/MeetingRoomOverlay.js';
+import { useCallStore } from './stores/call.js';
+import { ToastContainer } from './components/common/ToastContainer.js';
 
 export function App() {
   const { user, loading, restore } = useAuthStore();
+  const activeEventId = useCallStore((s) => s.activeEventId);
   usePresence(!!user);
   useDMUnreadSocket(!!user);
   useCallSocket();
+  useRingtone();
   useTabNotifications();
   useSwipeNavigation();
   const isMobile = useIsMobile();
@@ -161,7 +167,8 @@ export function App() {
         <OnboardingModal onComplete={() => setShowOnboarding(false)} />
       )}
       {user && <IncomingCallModal />}
-      {user && <ActiveCallOverlay />}
+      {user && activeEventId ? <MeetingRoomOverlay /> : user && <ActiveCallOverlay />}
+      <ToastContainer />
     </>
   );
 }

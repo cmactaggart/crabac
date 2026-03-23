@@ -6,14 +6,17 @@ const router = Router();
 
 router.post('/register', authenticate, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { token, platform, appVersion } = req.body;
+    const { token, platform, appVersion, tokenType } = req.body;
     if (!token || !platform) {
       return res.status(400).json({ error: { message: 'token and platform required' } });
     }
     if (!['ios', 'android'].includes(platform)) {
       return res.status(400).json({ error: { message: 'platform must be ios or android' } });
     }
-    await registerDeviceToken(req.user!.userId, token, platform, appVersion);
+    if (tokenType && !['standard', 'voip'].includes(tokenType)) {
+      return res.status(400).json({ error: { message: 'tokenType must be standard or voip' } });
+    }
+    await registerDeviceToken(req.user!.userId, token, platform, appVersion, tokenType);
     res.status(200).json({ success: true });
   } catch (err) {
     next(err);

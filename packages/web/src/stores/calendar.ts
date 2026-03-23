@@ -2,6 +2,10 @@ import { create } from 'zustand';
 import { api } from '../lib/api.js';
 import type { CalendarCategory, CalendarEvent, EventRsvp, EventSeries } from '@crabac/shared';
 
+interface ActiveRooms {
+  events: CalendarEvent[];
+}
+
 interface CalendarState {
   categories: CalendarCategory[];
   events: CalendarEvent[];
@@ -12,6 +16,7 @@ interface CalendarState {
   currentMonth: number; // 0-11
   currentYear: number;
   loading: boolean;
+  activeRooms: ActiveRooms;
 
   fetchCategories: (spaceId: string) => Promise<void>;
   createCategory: (spaceId: string, data: { name: string; color: string }) => Promise<CalendarCategory>;
@@ -23,15 +28,15 @@ interface CalendarState {
   uploadEventImage: (spaceId: string, file: File) => Promise<string>;
   createEvent: (spaceId: string, data: {
     name: string; description?: string | null; eventDate: string; eventTime?: string | null;
-    categoryId?: string | null; isPublic?: boolean;
+    endTime?: string | null; categoryId?: string | null; isPublic?: boolean;
     location?: string | null; activityType?: string | null; routeId?: string | null;
-    imageUrl?: string | null;
+    imageUrl?: string | null; meetingRoomEnabled?: boolean; meetingRoomEarlyEntry?: number | null;
   }) => Promise<CalendarEvent>;
   updateEvent: (spaceId: string, id: string, data: {
     name?: string; description?: string | null; eventDate?: string; eventTime?: string | null;
-    categoryId?: string | null; isPublic?: boolean;
+    endTime?: string | null; categoryId?: string | null; isPublic?: boolean;
     location?: string | null; activityType?: string | null; routeId?: string | null;
-    imageUrl?: string | null;
+    imageUrl?: string | null; meetingRoomEnabled?: boolean; meetingRoomEarlyEntry?: number | null;
   }) => Promise<CalendarEvent>;
   deleteEvent: (spaceId: string, id: string) => Promise<void>;
 
@@ -44,6 +49,10 @@ interface CalendarState {
   deleteSeries: (spaceId: string, seriesId: string) => Promise<void>;
   overrideOccurrence: (spaceId: string, eventId: string, data: any) => Promise<CalendarEvent>;
   cancelOccurrence: (spaceId: string, eventId: string) => Promise<CalendarEvent>;
+
+  fetchActiveRooms: (spaceId: string) => Promise<void>;
+  joinEventRoom: (spaceId: string, eventId: string) => Promise<{ call: any; token: any; channelId?: string }>;
+  leaveEventRoom: (spaceId: string, eventId: string) => Promise<void>;
 
   setSelectedDate: (date: string | null) => void;
   setSelectedEvent: (event: CalendarEvent | null) => void;
@@ -64,6 +73,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
   currentMonth: now.getMonth(),
   currentYear: now.getFullYear(),
   loading: false,
+  activeRooms: { events: [] },
 
   fetchCategories: async (spaceId) => {
     try {
@@ -244,6 +254,31 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     return event;
   },
 
+  fetchActiveRooms: async (spaceId) => {
+    try {
+      const today = formatDateStr(new Date());
+      const result = await api<ActiveRooms>(`/spaces/${spaceId}/calendar/active-rooms?date=${today}`);
+      set({ activeRooms: result });
+    } catch {
+      /* ignore */
+    }
+  },
+
+  joinEventRoom: async (spaceId, eventId) => {
+    const today = formatDateStr(new Date());
+    const result = await api<{ call: any; token: any; channelId?: string }>(`/spaces/${spaceId}/calendar/events/${eventId}/room/join`, {
+      method: 'POST',
+      body: JSON.stringify({ date: today }),
+    });
+    return result;
+  },
+
+  leaveEventRoom: async (spaceId, eventId) => {
+    await api(`/spaces/${spaceId}/calendar/events/${eventId}/room/leave`, {
+      method: 'POST',
+    });
+  },
+
   setSelectedDate: (date) => set({ selectedDate: date }),
   setSelectedEvent: (event) => set({ selectedEvent: event }),
 
@@ -268,6 +303,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     upcomingEvents: [],
     selectedDate: null,
     selectedEvent: null,
+    activeRooms: { events: [] },
   }),
 }));
 

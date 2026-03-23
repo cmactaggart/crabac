@@ -1,12 +1,25 @@
+import { useEffect } from 'react';
 import { Phone, PhoneOff } from 'lucide-react';
 import { useCallStore } from '../../stores/call.js';
 import { Avatar } from '../common/Avatar.js';
+
+const RINGING_TIMEOUT_MS = 60_000; // 60 seconds — matches server timeout
 
 export function IncomingCallModal() {
   const incomingCall = useCallStore((s) => s.incomingCall);
   const acceptCall = useCallStore((s) => s.acceptCall);
   const declineCall = useCallStore((s) => s.declineCall);
+  const dismissIncoming = useCallStore((s) => s.dismissIncoming);
   const connecting = useCallStore((s) => s.connecting);
+
+  // Auto-dismiss after timeout
+  useEffect(() => {
+    if (!incomingCall) return;
+    const timer = setTimeout(() => {
+      dismissIncoming();
+    }, RINGING_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [incomingCall?.id, dismissIncoming]);
 
   if (!incomingCall) return null;
 

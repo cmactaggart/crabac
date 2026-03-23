@@ -1,8 +1,10 @@
 import { eventBus } from '../../lib/event-bus.js';
 import { io } from '../../websocket/socket-server.js';
-import { sendPushNotification } from '../notifications/push.service.js';
+import { sendVoipPush } from '../notifications/push.service.js';
 import { db } from '../../database/connection.js';
 import { config } from '../../config.js';
+
+const RINGING_TIMEOUT_MS = 60_000; // 60 seconds
 
 export function registerCallGateway() {
   // Incoming call — ring all participants via their personal rooms
@@ -18,23 +20,50 @@ export function registerCallGateway() {
         conversationId,
       });
 
-      // Push notification for offline users
+      // VoIP push for mobile (triggers CallKit on iOS, full-screen intent on Android)
       try {
-        const connectedSockets = await io.in(`user:${participant.userId}`).fetchSockets();
-        if (connectedSockets.length === 0) {
-          const caller = call.participants.find((p: any) => p.userId === callerId);
-          const callerName = caller?.displayName || caller?.username || 'Someone';
-          sendPushNotification(
-            participant.userId,
-            callerName,
-            'Incoming call',
-            { type: 'call_ringing', callId: call.id, conversationId },
-          );
-        }
+        const caller = call.participants.find((p: any) => p.userId === callerId);
+        const callerName = caller?.displayName || caller?.username || 'Someone';
+        sendVoipPush(participant.userId, {
+          callId: call.id,
+          conversationId,
+          callerName,
+          callerAvatarUrl: caller?.avatarUrl || null,
+        });
       } catch {
         // ignore push errors
       }
     }
+
+    // Auto-end the call if still ringing after timeout
+    setTimeout(async () => {
+      try {
+        const current = await db('calls').where('id', call.id).first();
+        if (current && current.status === 'ringing') {
+          await db('calls').where('id', call.id).update({ status: 'ended', ended_at: db.fn.now(3) });
+          await db('call_participants').where({ call_id: call.id, status: 'ringing' }).update({ status: 'missed' });
+
+          const endedCall = await db('calls').where('id', call.id).first();
+          if (endedCall) {
+            const { deleteRoom } = await import('livekit-server-sdk').then((m) => {
+              const rs = new m.RoomServiceClient(config.livekit.host, config.livekit.apiKey, config.livekit.apiSecret);
+              return { deleteRoom: (name: string) => rs.deleteRoom(name) };
+            });
+            deleteRoom(endedCall.room_name).catch(() => {});
+          }
+
+          // Notify all participants
+          if (conversationId) {
+            io.to(`dm:${conversationId}`).emit('call:ended', { call: { ...call, status: 'ended' }, conversationId });
+          }
+          for (const p of call.participants) {
+            io.to(`user:${p.userId}`).emit('call:ended', { call: { ...call, status: 'ended' } });
+          }
+        }
+      } catch {
+        // ignore timeout cleanup errors
+      }
+    }, RINGING_TIMEOUT_MS);
   });
 
   // Participant joined
@@ -47,6 +76,9 @@ export function registerCallGateway() {
     if (channelId && spaceId) {
       io.to(`space:${spaceId}`).emit('call:participant_joined', { call, userId, channelId });
     }
+
+    // Notify the user's other devices so they can dismiss the incoming call
+    io.to(`user:${userId}`).emit('call:answered_elsewhere', { callId: call.id });
   });
 
   // Participant declined
@@ -56,6 +88,9 @@ export function registerCallGateway() {
     if (conversationId) {
       io.to(`dm:${conversationId}`).emit('call:participant_declined', { call, userId });
     }
+
+    // Notify the user's other devices so they can dismiss the incoming call
+    io.to(`user:${userId}`).emit('call:declined_elsewhere', { callId: call.id });
   });
 
   // Participant left

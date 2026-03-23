@@ -20,10 +20,13 @@ export interface ConversationParticipant {
   status: string;
 }
 
+export type DirectMessageType = 'user' | 'system';
+
 export interface DirectMessage {
   id: string;
   conversationId: string;
   authorId: string;
+  type: DirectMessageType;
   content: string;
   editedAt: string | null;
   reactions: import('./message.js').Reaction[];

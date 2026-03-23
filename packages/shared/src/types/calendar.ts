@@ -15,6 +15,7 @@ export interface CalendarEvent {
   description: string | null;
   eventDate: string; // YYYY-MM-DD
   eventTime: string | null; // HH:mm
+  endTime: string | null; // HH:mm
   location: string | null;
   activityType: 'ride' | 'run' | 'walk' | null;
   routeId: string | null;
@@ -24,6 +25,14 @@ export interface CalendarEvent {
   seriesId?: string | null;
   isOverride?: boolean;
   isCancelled?: boolean;
+  meetingRoomEnabled?: boolean;
+  meetingRoomEarlyEntry?: number | null; // minutes before event, -1 = anytime
+  meetingRoom?: {
+    status: 'pending' | 'open' | 'active' | 'closed';
+    callId: string | null;
+    channelId: string | null;
+    participantCount: number;
+  } | null;
   rsvpCounts?: { going: number; maybe: number; notGoing: number };
   myRsvp?: 'going' | 'maybe' | 'not_going' | null;
   createdAt: string;
@@ -58,8 +67,11 @@ export interface EventSeries {
   routeId: string | null;
   imageUrl?: string | null;
   isPublic: boolean;
+  meetingRoomEnabled?: boolean;
+  meetingRoomEarlyEntry?: number | null;
   recurrenceRule: RecurrenceRule;
   eventTime: string | null;
+  endTime: string | null;
   createdAt: string;
   updatedAt: string;
 }

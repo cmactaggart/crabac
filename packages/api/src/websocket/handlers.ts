@@ -48,7 +48,11 @@ export async function registerHandlers(io: Server, socket: Socket) {
 
       // Check channel-level VIEW_CHANNELS
       const perms = await computeChannelPermissions(spaceId, channelId, userId);
-      if (!hasPermission(perms, Permissions.VIEW_CHANNELS)) return;
+      if (!hasPermission(perms, Permissions.VIEW_CHANNELS)) {
+        // Allow access to event meeting room channels for active participants
+        const meetingRoom = await db('event_meeting_rooms').where('channel_id', channelId).first();
+        if (!meetingRoom) return;
+      }
 
       socket.join(`channel:${channelId}`);
       console.log(`Socket ${socket.id} joined channel:${channelId}`);

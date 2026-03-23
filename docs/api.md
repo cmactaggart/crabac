@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.15.0
+## API Version 0.16.0
 
 Base URL: `https://app.crab.ac/api`
 
@@ -30,6 +30,8 @@ Access tokens are short-lived JWTs obtained via login or token refresh. When a t
   }
 }
 ```
+
+Some errors include a `data` field with machine-readable context (e.g. `data.existingCallId` when a call already exists).
 
 Common HTTP status codes: `400` (validation), `401` (unauthenticated), `403` (forbidden), `404` (not found), `429` (rate limited).
 
@@ -1241,6 +1243,44 @@ Override a single occurrence in a series. Marks it as `isOverride: true` and app
 
 Cancel a single occurrence in a series. Sets `isCancelled: true` and notifies RSVP'd users. Requires `MANAGE_CALENDAR`.
 
+### Meeting Rooms
+
+Calendar events can have associated voice/video meeting rooms with a temporary text chat channel. Meeting rooms are created on first join and cleaned up when the last participant leaves.
+
+#### GET /spaces/:spaceId/calendar/active-rooms
+
+List active meeting rooms for events happening today. Requires membership.
+
+**Query:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `date` | string | today | `YYYY-MM-DD`, override date for lookup |
+
+**Response:** Array of active room objects with participant counts.
+
+#### GET /spaces/:spaceId/calendar/my-active-room
+
+Check if the current user is in an active meeting room in this space. Requires membership.
+
+**Response:** `{ room }` (room object or `null`)
+
+#### POST /spaces/:spaceId/calendar/events/:eventId/room/join
+
+Join the meeting room for a calendar event. Creates the room and a temporary text channel if they don't exist yet. Requires membership.
+
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `date` | string | no | `YYYY-MM-DD`, override date |
+
+**Response:** `{ call, token: { token, wsUrl }, channelId, meetingRoom }` — includes the LiveKit token for voice/video and the temporary channel ID for text chat.
+
+#### POST /spaces/:spaceId/calendar/events/:eventId/room/leave
+
+Leave the meeting room for a calendar event. If no participants remain, the room is closed, the temporary text channel and its messages are deleted, and the LiveKit room is destroyed.
+
+**Response:** `204 No Content`
+
 ---
 
 ## Route Library
@@ -1598,7 +1638,9 @@ Initiate a call in a DM or group DM conversation. All accepted conversation memb
 
 **Response:** `{ id, type, conversationId, roomName, status, participants, token: { token, wsUrl } }`
 
-Fails with `400` if a call is already in progress for this conversation.
+Fails with `400` if a call is already in progress for this conversation. The error includes `data.existingCallId` so the client can offer to join the existing call or end it and start a new one.
+
+Calls that remain in `ringing` status for 60 seconds are automatically ended by the server — unanswered participants are marked as `missed`.
 
 ### GET /calls/conversations/:conversationId/call
 
@@ -1620,6 +1662,16 @@ Accept or decline an incoming call.
 ### POST /calls/:callId/leave
 
 Leave an active call. If no joined participants remain, the call ends automatically and the LiveKit room is destroyed.
+
+### POST /calls/:callId/join
+
+Join or rejoin an existing call. Works for participants who left, declined, or missed the call. Updates participant status to `joined` and returns a LiveKit token. If the call was still `ringing`, it transitions to `active`.
+
+**Response:** Call object with `token: { token, wsUrl }`
+
+### POST /calls/:callId/end
+
+End a call. The caller must be a participant. Marks the caller as `left` — if no joined participants remain, the call ends and the LiveKit room is destroyed.
 
 ### GET /calls/:callId
 
@@ -2345,7 +2397,23 @@ Mark all notifications as read.
 
 ## Push Notification Devices
 
-Register device tokens for native push notifications (APNs for iOS). All endpoints require auth.
+Register device tokens for native push notifications (APNs for iOS, FCM for Android). All endpoints require auth.
+
+Each device can register two tokens: a `standard` token for regular notifications (messages, follows, etc.) and a `voip` token for incoming call notifications. iOS apps should register their PushKit VoIP token separately from the regular APNs token.
+
+### Token Types
+
+| Type | Description |
+|------|-------------|
+| `standard` | Regular push notifications (APNs / FCM). Default. |
+| `voip` | VoIP push for incoming calls. iOS only — triggers CallKit for the native incoming call screen. |
+
+### Push Behavior for Calls
+
+When a call is initiated, VoIP pushes are sent to all participants (regardless of online status):
+
+- **iOS VoIP tokens**: PushKit push with `pushType: voip`, topic `ac.crab.mobile.voip`, data-only payload (`callId`, `conversationId`, `callerName`, `callerAvatarUrl`). Expires after 60 seconds (matching the ringing timeout).
+- **Android tokens**: High-priority data-only FCM message (no `notification` block) so the app can display a full-screen incoming call UI.
 
 ### POST /devices/register
 
@@ -2357,8 +2425,15 @@ Register or update a device token for push notifications.
 | `token` | string | yes | Device push token |
 | `platform` | string | yes | `ios` or `android` |
 | `appVersion` | string | no | App version string |
+| `tokenType` | string | no | `standard` (default) or `voip` |
 
 **Response:** `{ success: true }`
+
+iOS apps should make two registration calls: one for the regular APNs token and one for the PushKit VoIP token:
+```
+POST /devices/register  { token: "<apns-token>", platform: "ios" }
+POST /devices/register  { token: "<pushkit-token>", platform: "ios", tokenType: "voip" }
+```
 
 ### DELETE /devices/:token
 
@@ -3165,8 +3240,17 @@ The API uses Socket.io for real-time communication at `/socket.io/`. Clients aut
 | `call:participant_joined` | `{ call, userId, channelId? }` | Participant joined a call |
 | `call:participant_left` | `{ call, userId, channelId? }` | Participant left a call |
 | `call:participant_declined` | `{ call, userId }` | Participant declined a call |
-| `call:ended` | `{ call, conversationId?, channelId? }` | Call ended |
+| `call:ended` | `{ call, conversationId?, channelId? }` | Call ended (including auto-timeout after 60s ringing) |
+| `call:answered_elsewhere` | `{ callId }` | Call was accepted on another device (dismiss incoming UI) |
+| `call:declined_elsewhere` | `{ callId }` | Call was declined on another device (dismiss incoming UI) |
 | `voice:joined` | Call + token object | Response to `voice:join` with LiveKit connection details |
+
+#### Calendar
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `calendar:room_participant_changed` | `{ eventId, participantCount }` | Meeting room participant count changed |
+| `calendar:room_closed` | `{ eventId }` | Meeting room closed (last participant left) |
 
 #### Notifications & Workflows
 

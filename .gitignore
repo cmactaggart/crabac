@@ -21,6 +21,10 @@ keys/
 *.pem
 *.p12
 
+# Firebase
+androidpush/
+*-firebase-adminsdk-*.json
+
 # Uploads
 packages/api/uploads/
 

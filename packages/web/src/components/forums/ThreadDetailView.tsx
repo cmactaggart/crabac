@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Pin, Lock, Send, Reply, X } from 'lucide-react';
+import { ArrowLeft, Pin, Lock, Send, Reply, X, Paperclip, Library } from 'lucide-react';
 import { useForumsStore } from '../../stores/forums.js';
 import { useChannelsStore } from '../../stores/channels.js';
 import { useNotificationsStore } from '../../stores/notifications.js';
 import { getSocket } from '../../lib/socket.js';
 import { ThreadPost } from './ThreadPost.js';
 import { ReportModal } from '../moderation/ReportModal.js';
+import { TabbedCollectionPicker } from '../common/TabbedCollectionPicker.js';
+import type { CollectionPickerItem } from '../common/TabbedCollectionPicker.js';
 import type { ForumThread, Message } from '@crabac/shared';
 
 interface Props {
@@ -21,10 +23,14 @@ export function ThreadDetailView({ spaceId, channelId, thread, onBack, canModera
   const markRead = useChannelsStore((s) => s.markRead);
   const { notifications, markAsRead } = useNotificationsStore();
   const [replyContent, setReplyContent] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
+  const [collectionItems, setCollectionItems] = useState<{ type: string; id: string }[]>([]);
+  const [showPicker, setShowPicker] = useState(false);
   const [sending, setSending] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [reportTarget, setReportTarget] = useState<Message | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchThreadPosts(spaceId, channelId, thread.id);
@@ -78,20 +84,32 @@ export function ThreadDetailView({ spaceId, channelId, thread, onBack, canModera
   }, [threadPosts.length]);
 
   const handleSendReply = async () => {
-    if (!replyContent.trim() || sending) return;
+    if ((!replyContent.trim() && files.length === 0 && collectionItems.length === 0) || sending) return;
     setSending(true);
     try {
-      await createThreadPost(spaceId, channelId, thread.id, {
-        content: replyContent.trim(),
-        replyToId: replyingTo?.id,
-      });
+      const post = await createThreadPost(
+        spaceId, channelId, thread.id,
+        { content: replyContent.trim(), replyToId: replyingTo?.id },
+        files.length > 0 ? files : undefined,
+        collectionItems.length > 0 ? collectionItems : undefined,
+      );
+      // Ensure the post appears immediately even if socket event hasn't arrived yet
+      if (post) addPost(post);
       setReplyContent('');
+      setFiles([]);
+      setCollectionItems([]);
       setReplyingTo(null);
     } catch {
       // error handled by store
     } finally {
       setSending(false);
     }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(e.target.files || []);
+    setFiles((prev) => [...prev, ...selected].slice(0, 20));
+    e.target.value = '';
   };
 
   const activeThread = useForumsStore((s) => s.activeThread) || thread;
@@ -157,6 +175,50 @@ export function ThreadDetailView({ spaceId, channelId, thread, onBack, canModera
               </button>
             </div>
           )}
+          {files.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', width: '100%' }}>
+              {files.map((f, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: 'var(--bg-tertiary)', borderRadius: 4, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  {f.type.startsWith('image/') && (
+                    <img src={URL.createObjectURL(f)} alt="" style={{ width: 20, height: 20, borderRadius: 3, objectFit: 'cover' }} />
+                  )}
+                  <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                  <button onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 1, display: 'flex' }}>
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {collectionItems.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', width: '100%' }}>
+              {collectionItems.map((item, i) => (
+                <div key={`col-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: 'var(--bg-tertiary)', borderRadius: 4, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  <span style={{ fontSize: '0.6rem', padding: '1px 4px', background: 'var(--accent)', color: '#fff', borderRadius: 3, fontWeight: 600 }}>
+                    {item.type === 'route' ? 'Route' : item.type === 'event' ? 'Event' : 'Photo'}
+                  </span>
+                  <button onClick={() => setCollectionItems((prev) => prev.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 1, display: 'flex' }}>
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <input ref={fileRef} type="file" multiple onChange={handleFileSelect} style={{ display: 'none' }} />
+          <button
+            onClick={() => fileRef.current?.click()}
+            style={styles.attachBtn}
+            title="Upload files"
+          >
+            <Paperclip size={18} />
+          </button>
+          <button
+            onClick={() => setShowPicker(true)}
+            style={styles.attachBtn}
+            title="From Collections"
+          >
+            <Library size={16} />
+          </button>
           <textarea
             value={replyContent}
             onChange={(e) => setReplyContent(e.target.value)}
@@ -173,10 +235,10 @@ export function ThreadDetailView({ spaceId, channelId, thread, onBack, canModera
           />
           <button
             onClick={handleSendReply}
-            disabled={!replyContent.trim() || sending}
+            disabled={(!replyContent.trim() && files.length === 0 && collectionItems.length === 0) || sending}
             style={{
               ...styles.sendBtn,
-              opacity: !replyContent.trim() || sending ? 0.5 : 1,
+              opacity: (!replyContent.trim() && files.length === 0 && collectionItems.length === 0) || sending ? 0.5 : 1,
             }}
           >
             <Send size={18} />
@@ -200,6 +262,16 @@ export function ThreadDetailView({ spaceId, channelId, thread, onBack, canModera
           messagePreview={reportTarget.content?.slice(0, 200)}
           contentLabel="Forum Post"
           onClose={() => setReportTarget(null)}
+        />
+      )}
+      {showPicker && (
+        <TabbedCollectionPicker
+          spaceId={spaceId}
+          onSelect={(items: CollectionPickerItem[]) => {
+            setCollectionItems((prev) => [...prev, ...items.map((i) => ({ type: i.type, id: i.id }))]);
+            setShowPicker(false);
+          }}
+          onClose={() => setShowPicker(false)}
         />
       )}
     </div>
@@ -296,6 +368,16 @@ const styles: Record<string, React.CSSProperties> = {
     outline: 'none',
     resize: 'none',
     fontFamily: 'inherit',
+  },
+  attachBtn: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--text-muted)',
+    cursor: 'pointer',
+    padding: '8px 4px',
+    display: 'flex',
+    alignItems: 'center',
+    flexShrink: 0,
   },
   sendBtn: {
     background: 'var(--accent)',

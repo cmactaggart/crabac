@@ -68,6 +68,7 @@ export async function createChannel(
 export async function listChannels(spaceId: string) {
   const channels = await db('channels')
     .where('space_id', spaceId)
+    .whereNot('name', 'like', 'event-room-%')
     .orderBy('position', 'asc');
   return channels.map(formatChannel);
 }
@@ -83,6 +84,7 @@ export async function listChannelsForUser(spaceId: string, userId: string, cache
 
   const allChannels = await db('channels')
     .where('space_id', spaceId)
+    .whereNot('name', 'like', 'event-room-%')
     .orderBy('position', 'asc');
 
   // Preload user's channel memberships to avoid N+1 queries

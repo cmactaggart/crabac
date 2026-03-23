@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Trash2, Flag, Reply } from 'lucide-react';
 import { Avatar } from '../common/Avatar.js';
 import { Markdown } from '../common/Markdown.js';
+import { MessageAttachments } from '../messages/MessageAttachments.js';
 import { useAuthStore } from '../../stores/auth.js';
 import { useMessagesStore } from '../../stores/messages.js';
 import { useForumsStore } from '../../stores/forums.js';
@@ -89,6 +90,9 @@ export function ThreadPost({ post, channelId, isFirstPost, canModerate, onReport
         <div style={styles.content}>
           <Markdown content={post.content} />
         </div>
+        {post.attachments && post.attachments.length > 0 && (
+          <MessageAttachments attachments={post.attachments} noPadding />
+        )}
         {post.reactions && post.reactions.length > 0 && (
           <div style={styles.reactions}>
             {post.reactions.map((r) => (

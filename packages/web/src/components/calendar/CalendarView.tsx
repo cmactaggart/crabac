@@ -10,6 +10,7 @@ import { EventDetailModal } from './EventDetailModal.js';
 import { CreateEventModal } from './CreateEventModal.js';
 import { CreateCategoryModal } from './CreateCategoryModal.js';
 import { UpcomingEventsList } from './UpcomingEventsList.js';
+import { EventRoomPanel } from './EventRoomPanel.js';
 import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu.js';
 import { PersonalCollectionPicker } from '../common/PersonalCollectionPicker.js';
 import { api } from '../../lib/api.js';
@@ -150,12 +151,15 @@ export function CalendarView({ spaceId, showBackButton, onBack }: Props) {
   };
 
   const upcomingPanel = (
-    <UpcomingEventsList
-      spaceId={spaceId}
-      events={upcomingEvents}
-      loading={upcomingLoading}
-      onEventClick={handleEventClick}
-    />
+    <>
+      <EventRoomPanel spaceId={spaceId} />
+      <UpcomingEventsList
+        spaceId={spaceId}
+        events={upcomingEvents}
+        loading={upcomingLoading}
+        onEventClick={handleEventClick}
+      />
+    </>
   );
 
   const calendarGrid = (

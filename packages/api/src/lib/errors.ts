@@ -1,11 +1,14 @@
 export class AppError extends Error {
+  public data?: Record<string, any>;
   constructor(
     public statusCode: number,
     message: string,
     public code?: string,
+    data?: Record<string, any>,
   ) {
     super(message);
     this.name = 'AppError';
+    this.data = data;
   }
 }
 
@@ -34,7 +37,7 @@ export class UnauthorizedError extends AppError {
 }
 
 export class BadRequestError extends AppError {
-  constructor(message: string) {
-    super(400, message, 'BAD_REQUEST');
+  constructor(message: string, data?: Record<string, any>) {
+    super(400, message, 'BAD_REQUEST', data);
   }
 }

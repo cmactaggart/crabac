@@ -662,7 +662,7 @@ export async function createAttachment(
   };
 }
 
-async function getAttachmentsForMessages(messageIds: string[]): Promise<Map<string, any[]>> {
+export async function getAttachmentsForMessages(messageIds: string[]): Promise<Map<string, any[]>> {
   if (messageIds.length === 0) return new Map();
 
   const rows = await db('attachments').whereIn('message_id', messageIds).select('*');

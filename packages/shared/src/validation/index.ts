@@ -238,9 +238,15 @@ export const bulkUpdateVisibilitySchema = z.object({
 });
 
 // Forum Threads
+const collectionItemSchema = z.object({
+  type: z.enum(['route', 'gallery']),
+  id: z.string(),
+});
+
 export const createThreadSchema = z.object({
   title: z.string().min(1).max(200),
   content: z.string().min(1).max(4000),
+  collectionItems: z.array(collectionItemSchema).optional(),
 });
 
 export const updateThreadSchema = z.object({
@@ -250,8 +256,9 @@ export const updateThreadSchema = z.object({
 });
 
 export const createThreadPostSchema = z.object({
-  content: z.string().min(1).max(4000),
+  content: z.string().max(4000).default(''),
   replyToId: z.string().optional(),
+  collectionItems: z.array(collectionItemSchema).optional(),
 });
 
 export const threadsQuerySchema = z.object({
@@ -320,12 +327,15 @@ export const createCalendarEventSchema = z.object({
   description: z.string().max(4000).nullable().optional(),
   eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   eventTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
   categoryId: z.string().nullable().optional(),
   isPublic: z.boolean().optional(),
   location: z.string().max(500).nullable().optional(),
   activityType: z.enum(['ride', 'run', 'walk']).nullable().optional(),
   routeId: z.string().nullable().optional(),
   imageUrl: z.string().max(512).nullable().optional(),
+  meetingRoomEnabled: z.boolean().optional(),
+  meetingRoomEarlyEntry: z.number().int().min(-1).max(60).nullable().optional(),
 });
 
 export const updateCalendarEventSchema = z.object({
@@ -333,12 +343,15 @@ export const updateCalendarEventSchema = z.object({
   description: z.string().max(4000).nullable().optional(),
   eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   eventTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
   categoryId: z.string().nullable().optional(),
   isPublic: z.boolean().optional(),
   location: z.string().max(500).nullable().optional(),
   activityType: z.enum(['ride', 'run', 'walk']).nullable().optional(),
   routeId: z.string().nullable().optional(),
   imageUrl: z.string().max(512).nullable().optional(),
+  meetingRoomEnabled: z.boolean().optional(),
+  meetingRoomEarlyEntry: z.number().int().min(-1).max(60).nullable().optional(),
 });
 
 export const calendarEventsQuerySchema = z.object({
@@ -360,12 +373,15 @@ export const createEventSeriesSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(4000).nullable().optional(),
   eventTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
   categoryId: z.string().nullable().optional(),
   isPublic: z.boolean().optional(),
   location: z.string().max(500).nullable().optional(),
   activityType: z.enum(['ride', 'run', 'walk']).nullable().optional(),
   routeId: z.string().nullable().optional(),
   imageUrl: z.string().max(512).nullable().optional(),
+  meetingRoomEnabled: z.boolean().optional(),
+  meetingRoomEarlyEntry: z.number().int().min(-1).max(60).nullable().optional(),
   recurrenceRule: recurrenceRuleSchema,
 });
 
@@ -373,12 +389,15 @@ export const updateEventSeriesSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(4000).nullable().optional(),
   eventTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
   categoryId: z.string().nullable().optional(),
   isPublic: z.boolean().optional(),
   location: z.string().max(500).nullable().optional(),
   activityType: z.enum(['ride', 'run', 'walk']).nullable().optional(),
   routeId: z.string().nullable().optional(),
   imageUrl: z.string().max(512).nullable().optional(),
+  meetingRoomEnabled: z.boolean().optional(),
+  meetingRoomEarlyEntry: z.number().int().min(-1).max(60).nullable().optional(),
   recurrenceRule: recurrenceRuleSchema.optional(),
   updateMode: z.enum(['all', 'future']).default('all'),
 });

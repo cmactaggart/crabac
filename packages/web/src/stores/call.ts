@@ -30,8 +30,15 @@ interface CallState {
   // Voice channel state
   activeVoiceChannelId: string | null;
 
+  // Event room state
+  activeEventId: string | null;
+  activeEventChannelId: string | null;
+  activeEventSpaceId: string | null;
+  activeEventName: string | null;
+
   // Actions
   initiateCall: (conversationId: string) => Promise<void>;
+  joinExistingCall: (callId: string) => Promise<void>;
   acceptCall: (callId: string) => Promise<void>;
   declineCall: (callId: string) => Promise<void>;
   leaveCall: () => Promise<void>;
@@ -42,6 +49,9 @@ interface CallState {
   // Voice channel actions
   joinVoiceChannel: (channelId: string) => Promise<void>;
   leaveVoiceChannel: () => Promise<void>;
+
+  // Event room actions
+  joinEventCall: (call: Call, token: CallToken, eventId: string, channelId?: string | null, spaceId?: string | null, eventName?: string | null) => Promise<void>;
 
   // Socket event handlers
   handleIncomingCall: (call: Call, conversationId: string) => void;
@@ -95,6 +105,10 @@ export const useCallStore = create<CallState>((set, get) => ({
   connecting: false,
   incomingCall: null,
   activeVoiceChannelId: null,
+  activeEventId: null,
+  activeEventChannelId: null,
+  activeEventSpaceId: null,
+  activeEventName: null,
 
   initiateCall: async (conversationId) => {
     set({ connecting: true });
@@ -128,6 +142,38 @@ export const useCallStore = create<CallState>((set, get) => ({
       if (callId) {
         api(`/calls/${callId}/leave`, { method: 'POST' }).catch(() => {});
       }
+      set({ connecting: false });
+      throw err;
+    }
+  },
+
+  joinExistingCall: async (callId) => {
+    // Leave any current call first
+    const { activeCall } = get();
+    if (activeCall) {
+      await get().leaveCall();
+    }
+
+    set({ connecting: true });
+    try {
+      const result = await api<Call & { token: CallToken }>(`/calls/${callId}/join`, {
+        method: 'POST',
+      });
+      const { token, ...call } = result;
+      const room = await connectToRoom(token.token, token.wsUrl);
+
+      await room.localParticipant.setMicrophoneEnabled(true);
+
+      setupRoomListeners(room, set, get);
+      set({
+        activeCall: call,
+        room,
+        connecting: false,
+        localAudioMuted: false,
+        localVideoOff: true,
+        participants: getAllParticipantStates(room),
+      });
+    } catch (err) {
       set({ connecting: false });
       throw err;
     }
@@ -200,6 +246,10 @@ export const useCallStore = create<CallState>((set, get) => ({
       localVideoOff: true,
       isScreenSharing: false,
       activeVoiceChannelId: null,
+      activeEventId: null,
+      activeEventChannelId: null,
+      activeEventSpaceId: null,
+      activeEventName: null,
     });
   },
 
@@ -261,6 +311,38 @@ export const useCallStore = create<CallState>((set, get) => ({
     await get().leaveCall();
   },
 
+  joinEventCall: async (call, token, eventId, channelId, spaceId, eventName) => {
+    // Leave any existing call first
+    const { activeCall } = get();
+    if (activeCall) {
+      await get().leaveCall();
+    }
+
+    set({ connecting: true });
+    try {
+      const room = await connectToRoom(token.token, token.wsUrl);
+      await room.localParticipant.setMicrophoneEnabled(true);
+
+      setupRoomListeners(room, set, get);
+      set({
+        activeCall: call,
+        room,
+        connecting: false,
+        activeEventId: eventId,
+        activeEventChannelId: channelId || null,
+        activeEventSpaceId: spaceId || null,
+        activeEventName: eventName || null,
+        activeVoiceChannelId: null,
+        localAudioMuted: false,
+        localVideoOff: true,
+        participants: getAllParticipantStates(room),
+      });
+    } catch (err) {
+      set({ connecting: false });
+      throw err;
+    }
+  },
+
   handleIncomingCall: (call, conversationId) => {
     // Don't show incoming if already in a call
     if (get().activeCall) return;
@@ -279,6 +361,10 @@ export const useCallStore = create<CallState>((set, get) => ({
         room: null,
         participants: [],
         activeVoiceChannelId: null,
+        activeEventId: null,
+        activeEventChannelId: null,
+        activeEventSpaceId: null,
+        activeEventName: null,
       });
     }
   },
@@ -364,6 +450,10 @@ function setupRoomListeners(
       room: null,
       participants: [],
       activeVoiceChannelId: null,
+      activeEventId: null,
+      activeEventChannelId: null,
+      activeEventSpaceId: null,
+      activeEventName: null,
     });
   });
 }

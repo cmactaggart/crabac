@@ -96,6 +96,7 @@ export async function api<T = any>(
       res.status,
       body?.error?.code || 'UNKNOWN',
       body?.error?.message || res.statusText,
+      body?.error?.data,
     );
   }
 
@@ -108,6 +109,7 @@ export class ApiError extends Error {
     public status: number,
     public code: string,
     message: string,
+    public data?: Record<string, any>,
   ) {
     super(message);
   }

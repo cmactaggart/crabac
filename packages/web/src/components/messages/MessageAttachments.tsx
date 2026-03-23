@@ -7,9 +7,10 @@ import { MediaCarousel } from './MediaCarousel.js';
 
 interface MessageAttachmentsProps {
   attachments: Attachment[];
+  noPadding?: boolean;
 }
 
-export function MessageAttachments({ attachments }: MessageAttachmentsProps) {
+export function MessageAttachments({ attachments, noPadding }: MessageAttachmentsProps) {
   const [carouselData, setCarouselData] = useState<{ attachments: Attachment[]; startIndex: number } | null>(null);
 
   if (!attachments || attachments.length === 0) return null;
@@ -24,7 +25,7 @@ export function MessageAttachments({ attachments }: MessageAttachmentsProps) {
 
   return (
     <>
-      <div style={styles.attachments}>
+      <div style={{ ...styles.attachments, ...(noPadding ? { paddingLeft: 0 } : {}) }}>
         {gpxAtts.map((att) => (
           <GpxPreviewCard key={att.id} attachment={att} gpx={(att as any).metadata!.gpx as GpxTrackMetadata} />
         ))}

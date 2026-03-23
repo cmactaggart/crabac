@@ -1,9 +1,19 @@
 import { db } from '../../database/connection.js';
 import { snowflake } from '../_shared.js';
-import { NotFoundError } from '../../lib/errors.js';
+import { NotFoundError, ForbiddenError, BadRequestError } from '../../lib/errors.js';
 import { eventBus } from '../../lib/event-bus.js';
 import { createNotification } from '../notifications/notifications.service.js';
+import { createParticipantToken } from '../calls/call.service.js';
+import * as spacesService from '../spaces/spaces.service.js';
+import { RoomServiceClient } from 'livekit-server-sdk';
+import { config } from '../../config.js';
 import type { RecurrenceRule } from '@crabac/shared';
+
+const roomService = new RoomServiceClient(
+  config.livekit.host,
+  config.livekit.apiKey,
+  config.livekit.apiSecret,
+);
 
 // ─── Categories ───
 
@@ -123,6 +133,9 @@ export async function createEvent(
     activityType?: string | null;
     routeId?: string | null;
     imageUrl?: string | null;
+    endTime?: string | null;
+    meetingRoomEnabled?: boolean;
+    meetingRoomEarlyEntry?: number | null;
   },
 ) {
   const id = snowflake.generate();
@@ -135,11 +148,14 @@ export async function createEvent(
     description: data.description || null,
     event_date: data.eventDate,
     event_time: data.eventTime || null,
+    end_time: data.endTime || null,
     is_public: data.isPublic ?? false,
     location: data.location || null,
     activity_type: data.activityType || null,
     route_id: data.routeId || null,
     image_url: data.imageUrl || null,
+    meeting_room_enabled: data.meetingRoomEnabled ?? false,
+    meeting_room_early_entry: data.meetingRoomEarlyEntry ?? null,
   });
 
   const event = await getEvent(id);
@@ -155,12 +171,15 @@ export async function updateEvent(
     description?: string | null;
     eventDate?: string;
     eventTime?: string | null;
+    endTime?: string | null;
     categoryId?: string | null;
     isPublic?: boolean;
     location?: string | null;
     activityType?: string | null;
     routeId?: string | null;
     imageUrl?: string | null;
+    meetingRoomEnabled?: boolean;
+    meetingRoomEarlyEntry?: number | null;
   },
 ) {
   const updates: Record<string, any> = {};
@@ -168,12 +187,15 @@ export async function updateEvent(
   if (data.description !== undefined) updates.description = data.description;
   if (data.eventDate !== undefined) updates.event_date = data.eventDate;
   if (data.eventTime !== undefined) updates.event_time = data.eventTime;
+  if (data.endTime !== undefined) updates.end_time = data.endTime;
   if (data.categoryId !== undefined) updates.category_id = data.categoryId;
   if (data.isPublic !== undefined) updates.is_public = data.isPublic;
   if (data.location !== undefined) updates.location = data.location;
   if (data.activityType !== undefined) updates.activity_type = data.activityType;
   if (data.routeId !== undefined) updates.route_id = data.routeId;
   if (data.imageUrl !== undefined) updates.image_url = data.imageUrl;
+  if (data.meetingRoomEnabled !== undefined) updates.meeting_room_enabled = data.meetingRoomEnabled;
+  if (data.meetingRoomEarlyEntry !== undefined) updates.meeting_room_early_entry = data.meetingRoomEarlyEntry;
 
   if (Object.keys(updates).length > 0) {
     updates.updated_at = db.fn.now(3);
@@ -449,10 +471,13 @@ function formatEvent(
     activityType: row.activity_type || null,
     routeId: row.route_id ? String(row.route_id) : null,
     imageUrl: row.image_url || null,
+    endTime: row.end_time || null,
     isPublic: !!row.is_public,
     seriesId: row.series_id ? String(row.series_id) : null,
     isOverride: !!row.is_override,
     isCancelled: !!row.is_cancelled,
+    meetingRoomEnabled: !!row.meeting_room_enabled,
+    meetingRoomEarlyEntry: row.meeting_room_early_entry ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -581,6 +606,9 @@ export async function createSeries(
     activityType?: string | null;
     routeId?: string | null;
     imageUrl?: string | null;
+    endTime?: string | null;
+    meetingRoomEnabled?: boolean;
+    meetingRoomEarlyEntry?: number | null;
     recurrenceRule: RecurrenceRule;
   },
 ) {
@@ -597,8 +625,11 @@ export async function createSeries(
     route_id: data.routeId || null,
     image_url: data.imageUrl || null,
     is_public: data.isPublic ?? false,
+    meeting_room_enabled: data.meetingRoomEnabled ?? false,
+    meeting_room_early_entry: data.meetingRoomEarlyEntry ?? null,
     recurrence_rule: JSON.stringify(data.recurrenceRule),
     event_time: data.eventTime || null,
+    end_time: data.endTime || null,
   });
 
   // Generate occurrences
@@ -614,11 +645,14 @@ export async function createSeries(
       description: data.description || null,
       event_date: date,
       event_time: data.eventTime || null,
+      end_time: data.endTime || null,
       is_public: data.isPublic ?? false,
       location: data.location || null,
       activity_type: data.activityType || null,
       route_id: data.routeId || null,
       image_url: data.imageUrl || null,
+      meeting_room_enabled: data.meetingRoomEnabled ?? false,
+      meeting_room_early_entry: data.meetingRoomEarlyEntry ?? null,
       series_id: seriesId,
     });
   }
@@ -651,6 +685,9 @@ export async function updateSeries(
     activityType?: string | null;
     routeId?: string | null;
     imageUrl?: string | null;
+    endTime?: string | null;
+    meetingRoomEnabled?: boolean;
+    meetingRoomEarlyEntry?: number | null;
     recurrenceRule?: RecurrenceRule;
     updateMode?: 'all' | 'future';
   },
@@ -663,12 +700,15 @@ export async function updateSeries(
   if (data.name !== undefined) updates.name = data.name;
   if (data.description !== undefined) updates.description = data.description;
   if (data.eventTime !== undefined) updates.event_time = data.eventTime;
+  if (data.endTime !== undefined) updates.end_time = data.endTime;
   if (data.categoryId !== undefined) updates.category_id = data.categoryId;
   if (data.isPublic !== undefined) updates.is_public = data.isPublic;
   if (data.location !== undefined) updates.location = data.location;
   if (data.activityType !== undefined) updates.activity_type = data.activityType;
   if (data.routeId !== undefined) updates.route_id = data.routeId;
   if (data.imageUrl !== undefined) updates.image_url = data.imageUrl;
+  if (data.meetingRoomEnabled !== undefined) updates.meeting_room_enabled = data.meetingRoomEnabled;
+  if (data.meetingRoomEarlyEntry !== undefined) updates.meeting_room_early_entry = data.meetingRoomEarlyEntry;
   if (data.recurrenceRule !== undefined) updates.recurrence_rule = JSON.stringify(data.recurrenceRule);
   updates.updated_at = db.fn.now(3);
 
@@ -707,11 +747,14 @@ export async function updateSeries(
       description: updatedSeries.description,
       event_date: date,
       event_time: updatedSeries.event_time,
+      end_time: updatedSeries.end_time,
       is_public: !!updatedSeries.is_public,
       location: updatedSeries.location,
       activity_type: updatedSeries.activity_type,
       route_id: updatedSeries.route_id,
       image_url: updatedSeries.image_url,
+      meeting_room_enabled: !!updatedSeries.meeting_room_enabled,
+      meeting_room_early_entry: updatedSeries.meeting_room_early_entry,
       series_id: seriesId,
     });
   }
@@ -838,9 +881,345 @@ function formatSeries(row: any) {
     routeId: row.route_id ? String(row.route_id) : null,
     imageUrl: row.image_url || null,
     isPublic: !!row.is_public,
+    meetingRoomEnabled: !!row.meeting_room_enabled,
+    meetingRoomEarlyEntry: row.meeting_room_early_entry ?? null,
     recurrenceRule: rule,
     eventTime: row.event_time || null,
+    endTime: row.end_time || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+// ─── Meeting Rooms ───
+
+function parseTimeToMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function getCurrentMinutes(): number {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
+}
+
+/**
+ * Returns today's events with meeting rooms enabled.
+ * The client determines open/active status based on local time.
+ * Accepts clientDate (YYYY-MM-DD) so the server filters for the client's "today."
+ */
+export async function getActiveEventRooms(spaceId: string, clientDate?: string) {
+  const today = clientDate || formatDateStr(new Date());
+
+  // Get all events with meeting rooms enabled for the given date
+  const rows = await db('calendar_events')
+    .leftJoin('event_meeting_rooms', 'calendar_events.id', 'event_meeting_rooms.event_id')
+    .where('calendar_events.space_id', spaceId)
+    .where('calendar_events.meeting_room_enabled', true)
+    .where('calendar_events.is_cancelled', false)
+    .where('calendar_events.event_date', today)
+    .whereNotNull('calendar_events.event_time')
+    .whereNotNull('calendar_events.end_time')
+    .select(
+      'calendar_events.*',
+      'event_meeting_rooms.event_id as room_event_id',
+      'event_meeting_rooms.status as room_status',
+      'event_meeting_rooms.call_id as room_call_id',
+      'event_meeting_rooms.channel_id as room_channel_id',
+    );
+
+  // Get participant counts for active rooms
+  const callIds = rows
+    .map((r: any) => r.room_call_id)
+    .filter(Boolean);
+
+  const participantCounts = new Map<string, number>();
+  if (callIds.length > 0) {
+    const counts = await db('call_participants')
+      .whereIn('call_id', callIds)
+      .where('status', 'joined')
+      .groupBy('call_id')
+      .select('call_id', db.raw('COUNT(*) as count'));
+    for (const c of counts) {
+      participantCounts.set(String(c.call_id), Number(c.count));
+    }
+  }
+
+  // Return all meeting-room events — client computes open/active based on local time
+  const events: any[] = [];
+  for (const row of rows) {
+    const participantCount = row.room_call_id
+      ? (participantCounts.get(String(row.room_call_id)) || 0)
+      : 0;
+
+    const rsvpCounts = await getRsvpCounts(String(row.id));
+    const event = formatEvent(row, rsvpCounts);
+    event.meetingRoom = {
+      status: row.room_status || 'pending',
+      callId: row.room_call_id ? String(row.room_call_id) : null,
+      channelId: row.room_channel_id ? String(row.room_channel_id) : null,
+      participantCount,
+    };
+    events.push(event);
+  }
+
+  return { events };
+}
+
+export async function joinEventRoom(eventId: string, userId: string, clientDate?: string) {
+  // Get the event
+  const event = await db('calendar_events').where('id', eventId).first();
+  if (!event) throw new NotFoundError('Calendar event');
+  if (!event.meeting_room_enabled) throw new BadRequestError('Meeting room not enabled for this event');
+
+  const spaceId = String(event.space_id);
+
+  // Verify user is a space member
+  const member = await spacesService.isMember(spaceId, userId);
+  if (!member) throw new ForbiddenError('Not a member of this space');
+
+  // Check the event is today (using client's date since times are in user's local timezone)
+  const today = clientDate || formatDateStr(new Date());
+  let eventDate = event.event_date;
+  if (eventDate instanceof Date) eventDate = formatDateStr(eventDate);
+  else if (typeof eventDate === 'string' && eventDate.includes('T')) eventDate = eventDate.split('T')[0];
+
+  if (eventDate !== today) throw new BadRequestError('Meeting room is only available on the event day');
+  if (!event.event_time || !event.end_time) throw new BadRequestError('Event must have start and end times for meeting room');
+
+  // Time validation is done client-side (event times are in user's local timezone).
+  // Server just verifies the event is today and has meeting room enabled.
+
+  // Find or create event_meeting_rooms row
+  let meetingRoom = await db('event_meeting_rooms').where('event_id', eventId).first();
+
+  if (!meetingRoom) {
+    await db('event_meeting_rooms').insert({
+      event_id: eventId,
+      status: 'open',
+    });
+    meetingRoom = await db('event_meeting_rooms').where('event_id', eventId).first();
+  }
+
+  let callId: string;
+  let roomName: string;
+
+  if (!meetingRoom.call_id) {
+    // Create a new call
+    const newCallId = snowflake.generate();
+    callId = String(newCallId);
+    roomName = `event_${eventId}_${newCallId}`;
+
+    await db('calls').insert({
+      id: newCallId,
+      type: 'voice_channel',
+      channel_id: null,
+      space_id: event.space_id,
+      room_name: roomName,
+      initiated_by: userId,
+      status: 'active',
+      started_at: db.fn.now(3),
+    });
+
+    // Add participant
+    await db('call_participants').insert({
+      call_id: callId,
+      user_id: userId,
+      status: 'joined',
+      joined_at: db.fn.now(3),
+    });
+
+    // Update meeting room with call_id
+    await db('event_meeting_rooms')
+      .where('event_id', eventId)
+      .update({ call_id: callId });
+  } else {
+    callId = String(meetingRoom.call_id);
+    const call = await db('calls').where('id', callId).first();
+    if (!call) throw new NotFoundError('Call');
+    roomName = call.room_name;
+
+    // Add or update participant
+    const existingParticipant = await db('call_participants')
+      .where({ call_id: callId, user_id: userId })
+      .first();
+
+    if (existingParticipant) {
+      await db('call_participants')
+        .where({ call_id: callId, user_id: userId })
+        .update({ status: 'joined', joined_at: db.fn.now(3), left_at: null });
+    } else {
+      await db('call_participants').insert({
+        call_id: callId,
+        user_id: userId,
+        status: 'joined',
+        joined_at: db.fn.now(3),
+      });
+    }
+  }
+
+  // Create temp text channel if not yet created
+  if (!meetingRoom.channel_id) {
+    const channelId = snowflake.generate();
+    await db('channels').insert({
+      id: channelId,
+      space_id: event.space_id,
+      name: `event-room-${eventId}`,
+      display_name: event.name,
+      type: 'text',
+      position: -1,
+      is_private: true,
+    });
+    await db('event_meeting_rooms').where('event_id', eventId).update({ channel_id: channelId });
+    meetingRoom.channel_id = channelId;
+  }
+
+  // Generate LiveKit token
+  const user = await db('users').where('id', userId).select('username').first();
+  const token = await createParticipantToken(roomName, userId, user?.username || 'Unknown');
+
+  // Get participant count
+  const countResult = await db('call_participants')
+    .where({ call_id: callId, status: 'joined' })
+    .count('* as count')
+    .first();
+  const participantCount = Number(countResult?.count || 0);
+
+  // Emit event
+  eventBus.emit('calendar.room.participant_changed', {
+    eventId: String(eventId),
+    spaceId,
+    participantCount,
+  });
+
+  const updatedRoom = await db('event_meeting_rooms').where('event_id', eventId).first();
+
+  return {
+    call: {
+      id: callId,
+      roomName,
+      spaceId,
+    },
+    token,
+    channelId: String(meetingRoom.channel_id),
+    meetingRoom: {
+      id: String(updatedRoom.id),
+      eventId: String(eventId),
+      status: updatedRoom.status,
+      callId,
+      participantCount,
+    },
+  };
+}
+
+export async function leaveEventRoom(eventId: string, userId: string) {
+  const meetingRoom = await db('event_meeting_rooms').where('event_id', eventId).first();
+  if (!meetingRoom) throw new NotFoundError('Meeting room');
+
+  const event = await db('calendar_events').where('id', eventId).first();
+  if (!event) throw new NotFoundError('Calendar event');
+
+  const spaceId = String(event.space_id);
+  const callId = meetingRoom.call_id ? String(meetingRoom.call_id) : null;
+
+  if (callId) {
+    // Update participant status
+    await db('call_participants')
+      .where({ call_id: callId, user_id: userId })
+      .update({ status: 'left', left_at: db.fn.now(3) });
+
+    // Check if any joined participants remain
+    const remaining = await db('call_participants')
+      .where({ call_id: callId, status: 'joined' })
+      .count('* as count')
+      .first();
+
+    const participantCount = Number(remaining?.count || 0);
+
+    // Emit participant changed
+    eventBus.emit('calendar.room.participant_changed', {
+      eventId: String(eventId),
+      spaceId,
+      participantCount,
+    });
+
+    // If no participants remain and event has ended, close the room
+    if (participantCount === 0) {
+      const nowMinutes = getCurrentMinutes();
+      const endMinutes = event.end_time ? parseTimeToMinutes(event.end_time) : 0;
+
+      if (nowMinutes >= endMinutes) {
+        // End the call
+        await db('calls')
+          .where('id', callId)
+          .update({ status: 'ended', ended_at: db.fn.now(3) });
+
+        // Mark any still-ringing participants as missed
+        await db('call_participants')
+          .where({ call_id: callId, status: 'ringing' })
+          .update({ status: 'missed' });
+
+        // Remove the LiveKit room
+        const call = await db('calls').where('id', callId).first();
+        if (call) {
+          roomService.deleteRoom(call.room_name).catch(() => {});
+        }
+
+        // Delete the temp text channel
+        if (meetingRoom.channel_id) {
+          await db('messages').where('channel_id', meetingRoom.channel_id).delete();
+          await db('channels').where('id', meetingRoom.channel_id).delete();
+        }
+
+        // Close the meeting room
+        await db('event_meeting_rooms')
+          .where('event_id', eventId)
+          .update({ status: 'closed', channel_id: null });
+
+        eventBus.emit('calendar.room.closed', {
+          eventId: String(eventId),
+          spaceId,
+        });
+      }
+    }
+  }
+}
+
+export async function getMyActiveEventRoom(spaceId: string, userId: string) {
+  // Find any active event meeting room in this space where the user is a joined participant
+  const row = await db('event_meeting_rooms')
+    .join('calendar_events', 'calendar_events.id', 'event_meeting_rooms.event_id')
+    .join('calls', 'calls.id', 'event_meeting_rooms.call_id')
+    .join('call_participants', 'call_participants.call_id', 'calls.id')
+    .where('calendar_events.space_id', spaceId)
+    .where('calls.status', 'active')
+    .where('call_participants.user_id', userId)
+    .where('call_participants.status', 'joined')
+    .whereIn('event_meeting_rooms.status', ['open', 'active'])
+    .select(
+      'calendar_events.id as event_id',
+      'calendar_events.name as event_name',
+      'calls.id as call_id',
+      'calls.room_name',
+      'event_meeting_rooms.channel_id',
+    )
+    .first();
+
+  if (!row) return null;
+
+  // Generate a fresh LiveKit token so the user can reconnect
+  const user = await db('users').where('id', userId).select('username').first();
+  const token = await createParticipantToken(row.room_name, userId, user?.username || 'Unknown');
+
+  return {
+    eventId: String(row.event_id),
+    eventName: row.event_name,
+    call: {
+      id: String(row.call_id),
+      roomName: row.room_name,
+      spaceId,
+    },
+    token,
+    channelId: row.channel_id ? String(row.channel_id) : null,
   };
 }

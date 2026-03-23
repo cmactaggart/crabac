@@ -1,6 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { Mic, MicOff, Video, VideoOff, PhoneOff, Monitor, MonitorOff, Maximize2, Minimize2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Mic, MicOff, Video, VideoOff, PhoneOff, Monitor, MonitorOff, Maximize2, Minimize2, Pin } from 'lucide-react';
 import { Track } from 'livekit-client';
 import { useCallStore, type ParticipantState } from '../../stores/call.js';
 import { Avatar } from '../common/Avatar.js';
@@ -19,11 +18,36 @@ export function ActiveCallOverlay() {
   const activeVoiceChannelId = useCallStore((s) => s.activeVoiceChannelId);
 
   const [minimized, setMinimized] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [pinnedUserId, setPinnedUserId] = useState<string | null>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onFsChange = () => setFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
 
   if (!activeCall || !room) return null;
 
   const isVoiceChannel = !!activeVoiceChannelId;
+
+  // Auto-pin screen sharer
+  const screenSharer = participants.find((p) => p.isScreenSharing);
+  const effectivePinned = screenSharer?.userId || pinnedUserId;
+  const pinnedParticipant = effectivePinned ? participants.find((p) => p.userId === effectivePinned) : null;
   const hasVideo = participants.some((p) => !p.isCameraOff || p.isScreenSharing);
+  const showPinnedLayout = pinnedParticipant && (pinnedParticipant.isScreenSharing || !pinnedParticipant.isCameraOff);
+
+  const handleToggleFullscreen = () => {
+    if (!fullscreen) {
+      overlayRef.current?.requestFullscreen?.().catch(() => {});
+      setFullscreen(true);
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+      setFullscreen(false);
+    }
+  };
 
   // Minimized pill bar at the top
   if (minimized) {
@@ -50,9 +74,17 @@ export function ActiveCallOverlay() {
     );
   }
 
+  const unpinnedParticipants = showPinnedLayout
+    ? participants.filter((p) => p.userId !== effectivePinned)
+    : [];
+
   return (
-    <div style={styles.overlay}>
-      <div style={{ ...styles.callWindow, ...(hasVideo ? styles.callWindowLarge : {}) }}>
+    <div style={styles.overlay} ref={overlayRef}>
+      <div style={{
+        ...styles.callWindow,
+        ...(hasVideo || fullscreen ? styles.callWindowLarge : {}),
+        ...(fullscreen ? { width: '100%', height: '100%', maxWidth: '100%', maxHeight: '100%', borderRadius: 0 } : {}),
+      }}>
         {/* Header */}
         <div style={styles.header}>
           <span style={styles.liveIndicator} />
@@ -63,55 +95,79 @@ export function ActiveCallOverlay() {
             {participants.length} participant{participants.length !== 1 ? 's' : ''}
           </span>
           <div style={{ flex: 1 }} />
+          <button onClick={handleToggleFullscreen} style={styles.miniBtn} title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
+            <Maximize2 size={16} />
+          </button>
           <button onClick={() => setMinimized(true)} style={styles.miniBtn} title="Minimize">
             <Minimize2 size={16} />
           </button>
         </div>
 
-        {/* Participants Grid */}
-        <div style={styles.participantsGrid}>
-          {participants.map((p) => (
-            <ParticipantTile key={p.userId} participant={p} room={room} />
-          ))}
-        </div>
+        {/* Pinned layout: main stage + side strip */}
+        {showPinnedLayout ? (
+          <div style={styles.pinnedLayout}>
+            <div style={styles.mainStage}>
+              <ParticipantTile
+                participant={pinnedParticipant}
+                room={room}
+                large
+                preferScreenShare={pinnedParticipant.isScreenSharing}
+              />
+              {!screenSharer && (
+                <button
+                  onClick={() => setPinnedUserId(null)}
+                  style={styles.unpinBtn}
+                  title="Unpin"
+                >
+                  <Pin size={14} /> Unpin
+                </button>
+              )}
+            </div>
+            {unpinnedParticipants.length > 0 && (
+              <div style={styles.sideStrip}>
+                {unpinnedParticipants.map((p) => (
+                  <div key={p.userId} onClick={() => setPinnedUserId(p.userId)} style={{ cursor: 'pointer' }}>
+                    <ParticipantTile participant={p} room={room} small />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Grid layout: all participants equal */
+          <div style={styles.participantsGrid}>
+            {participants.map((p) => (
+              <div key={p.userId} onClick={() => setPinnedUserId(p.userId)} style={{ cursor: 'pointer' }}>
+                <ParticipantTile participant={p} room={room} />
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Controls */}
         <div style={styles.controls}>
           <button
             onClick={toggleMute}
-            style={{
-              ...styles.controlBtn,
-              background: localAudioMuted ? 'var(--danger)' : 'var(--bg-tertiary)',
-            }}
+            style={{ ...styles.controlBtn, background: localAudioMuted ? 'var(--danger)' : 'var(--bg-tertiary)' }}
             title={localAudioMuted ? 'Unmute' : 'Mute'}
           >
             {localAudioMuted ? <MicOff size={20} /> : <Mic size={20} />}
           </button>
           <button
             onClick={toggleCamera}
-            style={{
-              ...styles.controlBtn,
-              background: localVideoOff ? 'var(--bg-tertiary)' : 'var(--accent)',
-            }}
+            style={{ ...styles.controlBtn, background: localVideoOff ? 'var(--bg-tertiary)' : 'var(--accent)' }}
             title={localVideoOff ? 'Turn on camera' : 'Turn off camera'}
           >
             {localVideoOff ? <VideoOff size={20} /> : <Video size={20} />}
           </button>
           <button
             onClick={toggleScreenShare}
-            style={{
-              ...styles.controlBtn,
-              background: isScreenSharing ? 'var(--accent)' : 'var(--bg-tertiary)',
-            }}
+            style={{ ...styles.controlBtn, background: isScreenSharing ? 'var(--accent)' : 'var(--bg-tertiary)' }}
             title={isScreenSharing ? 'Stop sharing' : 'Share screen'}
           >
             {isScreenSharing ? <MonitorOff size={20} /> : <Monitor size={20} />}
           </button>
-          <button
-            onClick={leaveCall}
-            style={{ ...styles.controlBtn, background: 'var(--danger)' }}
-            title="Leave call"
-          >
+          <button onClick={leaveCall} style={{ ...styles.controlBtn, background: 'var(--danger)' }} title="Leave call">
             <PhoneOff size={20} />
           </button>
         </div>
@@ -120,21 +176,27 @@ export function ActiveCallOverlay() {
   );
 }
 
-function ParticipantTile({ participant, room }: { participant: ParticipantState; room: any }) {
+function ParticipantTile({ participant, room, large, small, preferScreenShare }: {
+  participant: ParticipantState;
+  room: any;
+  large?: boolean;
+  small?: boolean;
+  preferScreenShare?: boolean;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hasVideo = !participant.isCameraOff || participant.isScreenSharing;
 
   useEffect(() => {
     if (!videoRef.current || !hasVideo || !room) return;
 
-    // Find the participant in the room and attach their video track
     const lkParticipant = participant.userId === room.localParticipant.identity
       ? room.localParticipant
       : room.remoteParticipants.get(participant.userId);
 
     if (!lkParticipant) return;
 
-    const source = participant.isScreenSharing ? Track.Source.ScreenShare : Track.Source.Camera;
+    const source = (preferScreenShare && participant.isScreenSharing) ? Track.Source.ScreenShare :
+                   participant.isScreenSharing ? Track.Source.ScreenShare : Track.Source.Camera;
     const pub = lkParticipant.getTrackPublication(source);
     const track = pub?.track;
 
@@ -147,23 +209,36 @@ function ParticipantTile({ participant, room }: { participant: ParticipantState;
         track.detach(videoRef.current);
       }
     };
-  }, [hasVideo, participant.userId, participant.isScreenSharing, room]);
+  }, [hasVideo, participant.userId, participant.isScreenSharing, participant.isCameraOff, room, preferScreenShare]);
+
+  const tileStyle = large
+    ? { ...styles.tile, width: '100%', height: '100%' }
+    : small
+      ? { ...styles.tile, width: 120, height: 90 }
+      : styles.tile;
 
   return (
     <div style={{
-      ...styles.tile,
+      ...tileStyle,
       border: participant.isSpeaking ? '2px solid var(--accent)' : '2px solid transparent',
     }}>
       {hasVideo ? (
-        <video ref={videoRef} style={styles.video} autoPlay playsInline muted={participant.userId === room?.localParticipant?.identity} />
+        <video
+          ref={videoRef}
+          style={{ ...styles.video, objectFit: preferScreenShare ? 'contain' : 'cover' }}
+          autoPlay
+          playsInline
+          muted={participant.userId === room?.localParticipant?.identity}
+        />
       ) : (
         <div style={styles.avatarCenter}>
-          <Avatar src={participant.avatarUrl} name={participant.displayName} size={48} />
+          <Avatar src={participant.avatarUrl} name={participant.displayName} size={large ? 64 : small ? 32 : 48} />
         </div>
       )}
       <div style={styles.tileLabel}>
         {participant.isMuted && <MicOff size={12} style={{ color: 'var(--danger)' }} />}
         <span style={{ fontSize: '0.75rem' }}>{participant.displayName}</span>
+        {participant.isScreenSharing && <Monitor size={12} style={{ color: 'var(--accent)' }} />}
       </div>
     </div>
   );
@@ -194,7 +269,8 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
   },
   callWindowLarge: {
-    width: 720,
+    width: 860,
+    height: '80vh',
   },
   header: {
     display: 'flex',
@@ -202,12 +278,53 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 8,
     padding: '12px 16px',
     borderBottom: '1px solid var(--border)',
+    flexShrink: 0,
   },
   liveIndicator: {
     width: 8,
     height: 8,
     borderRadius: '50%',
     background: 'var(--success)',
+    flexShrink: 0,
+  },
+  pinnedLayout: {
+    flex: 1,
+    display: 'flex',
+    overflow: 'hidden',
+    minHeight: 0,
+  },
+  mainStage: {
+    flex: 1,
+    position: 'relative',
+    background: '#000',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 0,
+  },
+  unpinBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    background: 'rgba(0,0,0,0.6)',
+    border: 'none',
+    color: '#fff',
+    cursor: 'pointer',
+    padding: '4px 8px',
+    borderRadius: 4,
+    fontSize: '0.75rem',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+  },
+  sideStrip: {
+    width: 140,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    padding: 4,
+    overflowY: 'auto',
+    background: 'var(--bg-secondary)',
     flexShrink: 0,
   },
   participantsGrid: {
@@ -262,6 +379,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 12,
     padding: '12px 16px',
     borderTop: '1px solid var(--border)',
+    flexShrink: 0,
   },
   controlBtn: {
     width: 44,

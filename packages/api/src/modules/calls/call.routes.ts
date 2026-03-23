@@ -65,6 +65,35 @@ callRoutes.get('/:callId', async (req, res, next) => {
   }
 });
 
+// Join an existing call (rejoin after leaving or on refresh)
+callRoutes.post('/:callId/join', async (req, res, next) => {
+  try {
+    const { callId } = req.params;
+    const userId = req.user!.userId;
+    const call = await callService.joinExistingCall(userId, callId);
+    res.json(call);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// End a call (force)
+callRoutes.post('/:callId/end', async (req, res, next) => {
+  try {
+    const { callId } = req.params;
+    const userId = req.user!.userId;
+    // Verify the user is a participant
+    const call = await callService.getCall(callId);
+    if (!call) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Call not found' } });
+    const isParticipant = call.participants.some((p) => p.userId === userId);
+    if (!isParticipant) return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not a participant' } });
+    await callService.leaveCall(userId, callId);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Get a fresh token for an existing call (reconnect)
 callRoutes.post('/:callId/token', async (req, res, next) => {
   try {

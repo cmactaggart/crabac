@@ -11,12 +11,12 @@ interface ForumsState {
   postsLoading: boolean;
 
   fetchThreads: (spaceId: string, channelId: string, options?: { before?: string; sort?: string }) => Promise<void>;
-  createThread: (spaceId: string, channelId: string, data: { title: string; content: string }) => Promise<ForumThread>;
+  createThread: (spaceId: string, channelId: string, data: { title: string; content: string }, files?: File[], collectionItems?: { type: string; id: string }[]) => Promise<ForumThread>;
   getThread: (spaceId: string, channelId: string, threadId: string) => Promise<ForumThread>;
   setActiveThread: (thread: ForumThread | null) => void;
 
   fetchThreadPosts: (spaceId: string, channelId: string, threadId: string, options?: { before?: string }) => Promise<void>;
-  createThreadPost: (spaceId: string, channelId: string, threadId: string, data: { content: string; replyToId?: string }) => Promise<Message>;
+  createThreadPost: (spaceId: string, channelId: string, threadId: string, data: { content: string; replyToId?: string }, files?: File[], collectionItems?: { type: string; id: string }[]) => Promise<Message>;
 
   updateThread: (spaceId: string, channelId: string, threadId: string, data: { title?: string; isPinned?: boolean; isLocked?: boolean }) => Promise<ForumThread>;
   deleteThread: (spaceId: string, channelId: string, threadId: string) => Promise<void>;
@@ -56,7 +56,21 @@ export const useForumsStore = create<ForumsState>((set, get) => ({
     }
   },
 
-  createThread: async (spaceId, channelId, data) => {
+  createThread: async (spaceId, channelId, data, files, collectionItems) => {
+    if ((files && files.length > 0) || (collectionItems && collectionItems.length > 0)) {
+      const form = new FormData();
+      form.append('title', data.title);
+      form.append('content', data.content);
+      if (files) files.forEach((f) => form.append('files', f));
+      if (collectionItems && collectionItems.length > 0) {
+        form.append('collectionItems', JSON.stringify(collectionItems));
+      }
+      const result = await api<ForumThread & { openingPostId?: string }>(
+        `/spaces/${spaceId}/channels/${channelId}/threads/upload`,
+        { method: 'POST', body: form },
+      );
+      return result;
+    }
     const thread = await api<ForumThread>(
       `/spaces/${spaceId}/channels/${channelId}/threads`,
       { method: 'POST', body: JSON.stringify(data) },
@@ -93,10 +107,24 @@ export const useForumsStore = create<ForumsState>((set, get) => ({
     }
   },
 
-  createThreadPost: async (spaceId, channelId, threadId, data) => {
+  createThreadPost: async (spaceId, channelId, threadId, data, files, collectionItems) => {
+    if ((files && files.length > 0) || (collectionItems && collectionItems.length > 0)) {
+      const form = new FormData();
+      form.append('content', data.content);
+      if (data.replyToId) form.append('replyToId', data.replyToId);
+      if (files) files.forEach((f) => form.append('files', f));
+      if (collectionItems && collectionItems.length > 0) {
+        form.append('collectionItems', JSON.stringify(collectionItems));
+      }
+      const post = await api<Message>(
+        `/spaces/${spaceId}/channels/${channelId}/threads/${threadId}/posts/upload`,
+        { method: 'POST', body: form },
+      );
+      return post;
+    }
     const post = await api<Message>(
       `/spaces/${spaceId}/channels/${channelId}/threads/${threadId}/posts`,
-      { method: 'POST', body: JSON.stringify(data) },
+      { method: 'POST', body: JSON.stringify({ ...data, collectionItems }) },
     );
     return post;
   },
