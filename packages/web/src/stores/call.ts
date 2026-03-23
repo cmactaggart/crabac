@@ -125,15 +125,21 @@ export const useCallStore = create<CallState>((set, get) => ({
       const room = await connectToRoom(token.token, token.wsUrl);
       console.log('[Call] Connected to room, enabling mic...');
 
-      // Enable microphone
-      await room.localParticipant.setMicrophoneEnabled(true);
+      // Enable microphone — catch separately so the call still connects even if mic fails
+      let micFailed = false;
+      try {
+        await room.localParticipant.setMicrophoneEnabled(true);
+      } catch (micErr) {
+        console.warn('[Call] Failed to enable microphone:', micErr);
+        micFailed = true;
+      }
 
       setupRoomListeners(room, set, get);
       set({
         activeCall: call,
         room,
         connecting: false,
-        localAudioMuted: false,
+        localAudioMuted: micFailed,
         localVideoOff: true,
         participants: [buildParticipantState(room.localParticipant)],
       });
@@ -162,14 +168,20 @@ export const useCallStore = create<CallState>((set, get) => ({
       const { token, ...call } = result;
       const room = await connectToRoom(token.token, token.wsUrl);
 
-      await room.localParticipant.setMicrophoneEnabled(true);
+      let micFailed = false;
+      try {
+        await room.localParticipant.setMicrophoneEnabled(true);
+      } catch (micErr) {
+        console.warn('[Call] Failed to enable microphone:', micErr);
+        micFailed = true;
+      }
 
       setupRoomListeners(room, set, get);
       set({
         activeCall: call,
         room,
         connecting: false,
-        localAudioMuted: false,
+        localAudioMuted: micFailed,
         localVideoOff: true,
         participants: getAllParticipantStates(room),
       });
@@ -180,7 +192,7 @@ export const useCallStore = create<CallState>((set, get) => ({
   },
 
   acceptCall: async (callId) => {
-    set({ connecting: true, incomingCall: null });
+    set({ connecting: true });
     try {
       const result = await api<Call & { token?: CallToken }>(`/calls/${callId}/respond`, {
         method: 'POST',
@@ -190,20 +202,26 @@ export const useCallStore = create<CallState>((set, get) => ({
       const { token, ...call } = result;
       const room = await connectToRoom(token!.token, token!.wsUrl);
 
-      await room.localParticipant.setMicrophoneEnabled(true);
+      // Enable mic — catch separately so the call still connects even if mic fails
+      try {
+        await room.localParticipant.setMicrophoneEnabled(true);
+      } catch (micErr) {
+        console.warn('[Call] Failed to enable microphone:', micErr);
+      }
 
       setupRoomListeners(room, set, get);
       set({
         activeCall: call,
         room,
         connecting: false,
+        incomingCall: null,
         localAudioMuted: false,
         localVideoOff: true,
         participants: getAllParticipantStates(room),
       });
     } catch (err) {
-      set({ connecting: false });
-      throw err;
+      set({ connecting: false, incomingCall: null });
+      console.error('[Call] Failed to accept call:', err);
     }
   },
 

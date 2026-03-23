@@ -1,6 +1,6 @@
 import { eventBus } from '../../lib/event-bus.js';
 import { io } from '../../websocket/socket-server.js';
-import { sendVoipPush } from '../notifications/push.service.js';
+import { sendVoipPush, sendPushNotification } from '../notifications/push.service.js';
 import { db } from '../../database/connection.js';
 import { config } from '../../config.js';
 
@@ -79,6 +79,17 @@ export function registerCallGateway() {
 
     // Notify the user's other devices so they can dismiss the incoming call
     io.to(`user:${userId}`).emit('call:answered_elsewhere', { callId: call.id });
+
+    // Silent push to cancel ringing on mobile devices that may be backgrounded
+    for (const p of call.participants) {
+      if (p.userId === userId) continue; // skip the one who just joined
+      if (p.status === 'ringing') {
+        sendPushNotification(p.userId, '', '', {
+          type: 'call_answered_elsewhere',
+          callId: call.id,
+        }).catch(() => {});
+      }
+    }
   });
 
   // Participant declined
@@ -114,6 +125,14 @@ export function registerCallGateway() {
     }
     if (channelId && spaceId) {
       io.to(`space:${spaceId}`).emit('call:ended', { call, channelId });
+    }
+
+    // Silent push to cancel ringing on mobile devices
+    for (const p of call.participants) {
+      sendPushNotification(p.userId, '', '', {
+        type: 'call_ended',
+        callId: call.id,
+      }).catch(() => {});
     }
   });
 }

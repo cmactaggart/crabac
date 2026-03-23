@@ -193,7 +193,10 @@ export async function leaveCall(userId: string, callId: string): Promise<void> {
     channelId: call.channel_id ? String(call.channel_id) : null,
   });
 
-  if (Number(remaining?.count) === 0) {
+  // DM calls: end when fewer than 2 participants remain (no point in a solo call)
+  // Voice channels: end only when completely empty
+  const threshold = call.type === 'dm' ? 2 : 1;
+  if (Number(remaining?.count) < threshold) {
     await endCallInternal(callId);
   }
 }

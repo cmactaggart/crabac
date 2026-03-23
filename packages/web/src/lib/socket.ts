@@ -42,7 +42,7 @@ export function connectSocket(): Socket {
 
   socket = io('/', {
     auth: (cb) => cb({ token: getAccessToken() }),
-    transports: ['websocket', 'polling'],
+    transports: ['polling', 'websocket'],
     reconnection: true,
     reconnectionDelay: 1000,
     reconnectionAttempts: Infinity,
