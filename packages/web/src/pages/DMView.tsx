@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { LogOut, Copy, Link2, Pencil, Trash2, PanelLeftClose, PanelLeft, UserPlus, Users, LogOut as LeaveIcon, Check, X, Clock, UserMinus, ArrowLeft, Flag, Ban, SmilePlus, Paperclip, Search, Forward, BellOff, Bell, Phone } from 'lucide-react';
+import { LogOut, Copy, Link2, Pencil, Trash2, PanelLeftClose, PanelLeft, UserPlus, Users, LogOut as LeaveIcon, Check, X, Clock, UserMinus, ArrowLeft, Flag, Ban, SmilePlus, Paperclip, Search, Forward, BellOff, Bell, Phone, PhoneOff } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { useDMStore } from '../stores/dm.js';
@@ -416,112 +416,112 @@ function CallButton({ conversationId }: { conversationId: string }) {
   const fetchActiveCall = useCallStore((s) => s.fetchActiveCall);
   const activeCall = useCallStore((s) => s.activeCall);
   const connecting = useCallStore((s) => s.connecting);
-  const [showMenu, setShowMenu] = useState(false);
   const [existingCallId, setExistingCallId] = useState<string | null>(null);
 
   const isInCall = !!activeCall;
+
+  // Check for existing active call on mount and when conversationId changes
+  useEffect(() => {
+    fetchActiveCall(conversationId).then((call) => {
+      setExistingCallId(call?.id || null);
+    });
+  }, [conversationId, fetchActiveCall]);
+
+  // Clear existing call state when we join a call ourselves
+  useEffect(() => {
+    if (isInCall) setExistingCallId(null);
+  }, [isInCall]);
 
   const handleCall = async () => {
     if (isInCall || connecting) return;
     try {
       await initiateCall(conversationId);
     } catch (err: any) {
-      // If there's an existing call, show join/new options
       if (err?.data?.existingCallId) {
         setExistingCallId(err.data.existingCallId);
-        setShowMenu(true);
       } else {
-        console.error('Call failed:', err);
-        alert(`Call failed: ${err?.message || err?.code || JSON.stringify(err)}`);
+        alert(`Call failed: ${err?.message || JSON.stringify(err)}`);
       }
     }
   };
 
-  const handleJoinExisting = async () => {
-    setShowMenu(false);
+  const handleJoin = async () => {
     if (!existingCallId) return;
     try {
       await joinExistingCall(existingCallId);
     } catch (err: any) {
-      console.error('Join call failed:', err);
-      alert(`Join call failed: ${err?.message || JSON.stringify(err)}`);
+      alert(`Join failed: ${err?.message || JSON.stringify(err)}`);
     }
   };
 
-  const handleStartNew = async () => {
-    setShowMenu(false);
+  const handleEndExisting = async () => {
     if (!existingCallId) return;
     try {
-      // Leave/end the existing call first, then start a new one
-      await api(`/calls/${existingCallId}/leave`, { method: 'POST' }).catch(() => {});
-      await initiateCall(conversationId);
+      await api(`/calls/${existingCallId}/end`, { method: 'POST' });
+      setExistingCallId(null);
     } catch (err: any) {
-      console.error('Call failed:', err);
-      alert(`Call failed: ${err?.message || JSON.stringify(err)}`);
+      alert(`End call failed: ${err?.message || JSON.stringify(err)}`);
     }
   };
 
+  // There's an existing call we're not in
+  if (existingCallId && !isInCall) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+        <button
+          onClick={handleJoin}
+          disabled={connecting}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--success)',
+            cursor: connecting ? 'default' : 'pointer',
+            padding: '4px 8px',
+            borderRadius: 4,
+          }}
+          title="Join existing call"
+        >
+          <Phone size={18} />
+        </button>
+        <button
+          onClick={handleEndExisting}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--danger)',
+            cursor: 'pointer',
+            padding: '4px 8px',
+            borderRadius: 4,
+            opacity: 0.7,
+          }}
+          title="End existing call"
+        >
+          <PhoneOff size={16} />
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ position: 'relative', flexShrink: 0 }}>
-      <button
-        onClick={handleCall}
-        disabled={isInCall || connecting}
-        style={{
-          background: 'none',
-          border: 'none',
-          color: isInCall ? 'var(--success)' : 'var(--text-secondary)',
-          cursor: isInCall || connecting ? 'default' : 'pointer',
-          padding: '4px 8px',
-          borderRadius: 4,
-          opacity: isInCall || connecting ? 0.5 : 1,
-        }}
-        title={isInCall ? 'Already in a call' : 'Start call'}
-      >
-        <Phone size={18} />
-      </button>
-      {showMenu && (
-        <>
-          <div style={{ position: 'fixed', inset: 0, zIndex: 999 }} onClick={() => setShowMenu(false)} />
-          <div style={{
-            position: 'absolute',
-            top: '100%',
-            right: 0,
-            marginTop: 4,
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border)',
-            borderRadius: 8,
-            boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
-            zIndex: 1000,
-            minWidth: 200,
-            overflow: 'hidden',
-          }}>
-            <div style={{ padding: '8px 12px', fontSize: '0.75rem', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
-              A call is already active
-            </div>
-            <button onClick={handleJoinExisting} style={callMenuBtnStyle}>
-              Join existing call
-            </button>
-            <button onClick={handleStartNew} style={{ ...callMenuBtnStyle, color: 'var(--danger)' }}>
-              End &amp; start new call
-            </button>
-          </div>
-        </>
-      )}
-    </div>
+    <button
+      onClick={handleCall}
+      disabled={isInCall || connecting}
+      style={{
+        background: 'none',
+        border: 'none',
+        color: isInCall ? 'var(--success)' : 'var(--text-secondary)',
+        cursor: isInCall || connecting ? 'default' : 'pointer',
+        padding: '4px 8px',
+        borderRadius: 4,
+        flexShrink: 0,
+        opacity: isInCall || connecting ? 0.5 : 1,
+      }}
+      title={isInCall ? 'Already in a call' : 'Start call'}
+    >
+      <Phone size={18} />
+    </button>
   );
 }
-
-const callMenuBtnStyle: Record<string, string | number> = {
-  display: 'block',
-  width: '100%',
-  padding: '8px 12px',
-  background: 'none',
-  border: 'none',
-  color: 'var(--text-primary)',
-  fontSize: '0.85rem',
-  cursor: 'pointer',
-  textAlign: 'left',
-};
 
 // ─── Group Members Panel ───
 

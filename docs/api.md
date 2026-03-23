@@ -1671,7 +1671,7 @@ Join or rejoin an existing call. Works for participants who left, declined, or m
 
 ### POST /calls/:callId/end
 
-End a call. The caller must be a participant. Marks the caller as `left` — if no joined participants remain, the call ends and the LiveKit room is destroyed.
+Force-end a call for all participants. The caller must be a participant. Terminates the call immediately — all ringing participants are marked as `missed`, the LiveKit room is destroyed, and `call:ended` is emitted to all participants. Use this to clear stale calls that can't be rejoined.
 
 ### GET /calls/:callId
 
@@ -2410,9 +2410,10 @@ Each device can register two tokens: a `standard` token for regular notification
 
 ### Push Behavior for Calls
 
-When a call is initiated, VoIP pushes are sent to all participants (regardless of online status):
+When a call is initiated, pushes are sent to all participants (regardless of online status):
 
 - **iOS VoIP tokens**: PushKit push with `pushType: voip`, topic `ac.crab.mobile.voip`, data-only payload (`callId`, `conversationId`, `callerName`, `callerAvatarUrl`). Expires after 60 seconds (matching the ringing timeout).
+- **iOS standard tokens (fallback)**: If no VoIP token is registered, a regular APNs alert notification is sent with the call data in the payload. This ensures call notifications work before the app is updated to register PushKit tokens.
 - **Android tokens**: High-priority data-only FCM message (no `notification` block) so the app can display a full-screen incoming call UI.
 
 ### POST /devices/register

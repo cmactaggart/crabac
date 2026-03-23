@@ -391,6 +391,19 @@ export async function joinExistingCall(userId: string, callId: string): Promise<
   return { ...updatedCall!, token };
 }
 
+export async function forceEndCall(userId: string, callId: string): Promise<void> {
+  const call = await db('calls').where('id', callId).first();
+  if (!call) throw new NotFoundError('Call');
+  if (call.status === 'ended') return;
+
+  const participant = await db('call_participants')
+    .where({ call_id: callId, user_id: userId })
+    .first();
+  if (!participant) throw new ForbiddenError('Not a participant in this call');
+
+  await endCallInternal(callId);
+}
+
 // ─── Internal Helpers ───
 
 async function endCallInternal(callId: string): Promise<void> {

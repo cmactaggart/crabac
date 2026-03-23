@@ -162,14 +162,17 @@ export async function sendVoipPush(
 
   if (allTokens.length === 0) return;
 
-  // iOS: send VoIP push via PushKit tokens
+  // iOS: prefer VoIP push via PushKit tokens, fall back to regular APNs
   const iosVoipTokens = allTokens.filter((t) => t.platform === 'ios' && t.token_type === 'voip');
+  const iosStandardTokens = allTokens.filter((t) => t.platform === 'ios' && t.token_type === 'standard');
+
   if (apnProvider && iosVoipTokens.length > 0) {
+    // Send VoIP push — triggers CallKit
     const notification = new apn.Notification();
     notification.pushType = 'voip';
     notification.topic = `${config.apns.bundleId}.voip`;
-    notification.priority = 10; // immediate delivery required for VoIP
-    notification.expiry = Math.floor(Date.now() / 1000) + 60; // expire after 60s (matches ringing timeout)
+    notification.priority = 10;
+    notification.expiry = Math.floor(Date.now() / 1000) + 60;
     notification.payload = {
       callId: data.callId,
       conversationId: data.conversationId,
@@ -178,6 +181,27 @@ export async function sendVoipPush(
     };
 
     const result = await apnProvider.send(notification, iosVoipTokens.map((t) => t.token));
+
+    for (const failure of result.failed) {
+      if (String(failure.status) === '410' || failure.response?.reason === 'Unregistered') {
+        await db('device_tokens').where('token', failure.device).delete();
+      }
+    }
+  } else if (apnProvider && iosStandardTokens.length > 0) {
+    // Fallback: regular APNs push for devices that haven't registered a VoIP token yet
+    const notification = new apn.Notification();
+    notification.alert = { title: data.callerName, body: 'Incoming call' };
+    notification.sound = 'default';
+    notification.badge = 1;
+    notification.topic = config.apns.bundleId;
+    notification.mutableContent = true;
+    notification.payload = {
+      type: 'call_ringing',
+      callId: data.callId,
+      conversationId: data.conversationId,
+    };
+
+    const result = await apnProvider.send(notification, iosStandardTokens.map((t) => t.token));
 
     for (const failure of result.failed) {
       if (String(failure.status) === '410' || failure.response?.reason === 'Unregistered') {

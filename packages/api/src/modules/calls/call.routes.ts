@@ -77,17 +77,12 @@ callRoutes.post('/:callId/join', async (req, res, next) => {
   }
 });
 
-// End a call (force)
+// Force-end a call (terminates for all participants)
 callRoutes.post('/:callId/end', async (req, res, next) => {
   try {
     const { callId } = req.params;
     const userId = req.user!.userId;
-    // Verify the user is a participant
-    const call = await callService.getCall(callId);
-    if (!call) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Call not found' } });
-    const isParticipant = call.participants.some((p) => p.userId === userId);
-    if (!isParticipant) return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not a participant' } });
-    await callService.leaveCall(userId, callId);
+    await callService.forceEndCall(userId, callId);
     res.json({ success: true });
   } catch (err) {
     next(err);
