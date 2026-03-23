@@ -30,6 +30,9 @@ interface SpacesState {
   fetchPublicSpaces: (opts?: { search?: string; tag?: string }) => Promise<void>;
   fetchFeaturedSpaces: () => Promise<void>;
   fetchPublicTags: () => Promise<void>;
+  mutedSpaces: Set<string>;
+  fetchMutedSpaces: () => Promise<void>;
+  toggleSpaceMute: (spaceId: string) => Promise<void>;
 }
 
 export const useSpacesStore = create<SpacesState>((set, get) => ({
@@ -40,6 +43,7 @@ export const useSpacesStore = create<SpacesState>((set, get) => ({
   publicSpaces: [],
   featuredSpaces: [],
   publicTags: { predefined: [], inUse: [] },
+  mutedSpaces: new Set<string>(),
 
   fetchSpaces: async () => {
     set({ loading: true });
@@ -169,6 +173,30 @@ export const useSpacesStore = create<SpacesState>((set, get) => ({
       set({ publicTags: tags });
     } catch {
       // ignore
+    }
+  },
+
+  fetchMutedSpaces: async () => {
+    try {
+      const ids = await api<string[]>('/users/muted-spaces');
+      set({ mutedSpaces: new Set(ids) });
+    } catch {
+      // ignore
+    }
+  },
+
+  toggleSpaceMute: async (spaceId) => {
+    const muted = get().mutedSpaces.has(spaceId);
+    // Optimistic update
+    const next = new Set(get().mutedSpaces);
+    if (muted) {
+      next.delete(spaceId);
+      set({ mutedSpaces: next });
+      await api(`/spaces/${spaceId}/mute`, { method: 'DELETE' });
+    } else {
+      next.add(spaceId);
+      set({ mutedSpaces: next });
+      await api(`/spaces/${spaceId}/mute`, { method: 'PUT' });
     }
   },
 }));

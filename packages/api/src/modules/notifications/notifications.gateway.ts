@@ -57,8 +57,17 @@ export function registerNotificationGateway() {
     }
 
     // Send push notification
-    const pushContent = formatNotificationForPush(notification);
     const d = notification.data || {};
+
+    // Skip push if user has the space muted
+    if (d.spaceId) {
+      const spaceMuted = await db('space_mutes')
+        .where({ space_id: d.spaceId, user_id: userId })
+        .first();
+      if (spaceMuted) return;
+    }
+
+    const pushContent = formatNotificationForPush(notification);
     const pushData: Record<string, string> = { type: notification.type };
     if (d.spaceId) pushData.spaceId = d.spaceId;
     if (d.channelId) pushData.channelId = d.channelId;

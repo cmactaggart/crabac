@@ -121,6 +121,13 @@ async function sendChannelMessagePush(message: any, channelId: string, spaceId: 
     .select('user_id');
   const mutedSet = new Set(mutedRows.map((r: any) => String(r.user_id)));
 
+  // Filter out users who have the entire space muted
+  const spaceMutedRows = await db('space_mutes')
+    .where('space_id', spaceId)
+    .whereIn('user_id', memberIds)
+    .select('user_id');
+  for (const r of spaceMutedRows) mutedSet.add(String(r.user_id));
+
   // Filter out users who have the author muted
   const authorMutedRows = await db('user_mutes')
     .where('muted_user_id', message.authorId)

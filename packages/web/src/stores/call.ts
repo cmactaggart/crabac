@@ -69,6 +69,18 @@ async function connectToRoom(token: string, wsUrl: string): Promise<Room> {
   const room = new Room({
     adaptiveStream: true,
     dynacast: true,
+    audioCaptureDefaults: {
+      autoGainControl: true,
+      echoCancellation: true,
+      noiseSuppression: true,
+    },
+    publishDefaults: {
+      dtx: false,       // Disable discontinuous transmission — Safari handles silence packets inconsistently
+      red: false,        // Disable redundant encoding — not supported in all browsers
+      audioPreset: {
+        maxBitrate: 48_000,
+      },
+    },
   });
 
   await room.connect(wsUrl, token);
@@ -425,9 +437,17 @@ export const useCallStore = create<CallState>((set, get) => ({
 }));
 
 function getAllParticipantStates(room: Room): ParticipantState[] {
-  const states: ParticipantState[] = [buildParticipantState(room.localParticipant)];
+  const seen = new Set<string>();
+  const states: ParticipantState[] = [];
+  const local = buildParticipantState(room.localParticipant);
+  seen.add(local.userId);
+  states.push(local);
   for (const p of room.remoteParticipants.values()) {
-    states.push(buildParticipantState(p));
+    const state = buildParticipantState(p);
+    if (!seen.has(state.userId)) {
+      seen.add(state.userId);
+      states.push(state);
+    }
   }
   return states;
 }

@@ -472,3 +472,33 @@ spacesRoutes.put(
     }
   },
 );
+
+// ─── Space Mutes ───
+
+spacesRoutes.get('/:spaceId/mute', authenticate, requireMember, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const muted = await spacesService.isSpaceMuted(req.params.spaceId, req.user!.userId);
+    res.json({ muted });
+  } catch (err) {
+    next(err);
+  }
+});
+
+spacesRoutes.put('/:spaceId/mute', authenticate, requireMember, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await spacesService.muteSpace(req.params.spaceId, req.user!.userId);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+spacesRoutes.delete('/:spaceId/mute', authenticate, requireMember, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await spacesService.unmuteSpace(req.params.spaceId, req.user!.userId);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+

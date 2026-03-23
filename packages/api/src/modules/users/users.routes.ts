@@ -145,6 +145,18 @@ usersRoutes.delete('/mutes/:userId', async (req: Request, res: Response, next: N
   }
 });
 
+// ─── Space Mutes ───
+
+usersRoutes.get('/muted-spaces', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { getMutedSpaces } = await import('../spaces/spaces.service.js');
+    const mutedSpaces = await getMutedSpaces(req.user!.userId);
+    res.json(mutedSpaces);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── Blocks ───
 
 usersRoutes.get('/blocks', async (req: Request, res: Response, next: NextFunction) => {

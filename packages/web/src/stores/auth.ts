@@ -5,6 +5,7 @@ import { useNotificationsStore } from './notifications.js';
 import { useMutesStore } from './mutes.js';
 import { useBlocksStore } from './blocks.js';
 import { usePreferencesStore } from './preferences.js';
+import { useSpacesStore } from './spaces.js';
 import type { User, MfaChallengeResponse } from '@crabac/shared';
 
 interface AuthState {
@@ -43,6 +44,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       useMutesStore.getState().fetchMutes();
       useBlocksStore.getState().fetchBlocks();
       usePreferencesStore.getState().fetchPreferences();
+      useSpacesStore.getState().fetchMutedSpaces();
       return undefined;
     } catch (err: any) {
       set({ error: err.message });
@@ -105,6 +107,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       useMutesStore.getState().fetchMutes();
       useBlocksStore.getState().fetchBlocks();
       usePreferencesStore.getState().fetchPreferences();
+      useSpacesStore.getState().fetchMutedSpaces();
     } catch (err: any) {
       // Only clear tokens if the server explicitly rejected them
       // Don't clear on network errors or transient failures

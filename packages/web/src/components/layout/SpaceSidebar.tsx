@@ -1,10 +1,11 @@
 import { useRef, useCallback, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Mail, User, Bell, Newspaper, CheckCheck, LogOut, ExternalLink } from 'lucide-react';
+import { Mail, User, Bell, BellOff, Newspaper, CheckCheck, LogOut, ExternalLink } from 'lucide-react';
 import { useDMStore } from '../../stores/dm.js';
 import { useNotificationsStore } from '../../stores/notifications.js';
 import { useChannelsStore } from '../../stores/channels.js';
 import { useAuthStore } from '../../stores/auth.js';
+import { useSpacesStore } from '../../stores/spaces.js';
 import { CrabIcon } from '../icons/CrabIcon.js';
 import { getContrastColor } from '../spaces/SpaceBrandedCard.js';
 import { LetterIcon } from '../icons/LetterIcon.js';
@@ -74,12 +75,21 @@ export function SpaceSidebar({ spaces, activeSpaceId, hideNavIcons }: Props) {
   const isFeedActive = location.pathname === '/feed';
   const isDMActive = location.pathname.startsWith('/dm');
 
+  const mutedSpaces = useSpacesStore((s) => s.mutedSpaces);
+  const toggleSpaceMute = useSpacesStore((s) => s.toggleSpaceMute);
+
   const getContextMenuItems = (space: Space): ContextMenuItem[] => {
+    const isMuted = mutedSpaces.has(space.id);
     const items: ContextMenuItem[] = [
       {
         label: 'Mark All as Read',
         icon: <CheckCheck size={16} />,
         onClick: () => handleMarkAllRead(space),
+      },
+      {
+        label: isMuted ? 'Unmute Space' : 'Mute Space',
+        icon: isMuted ? <Bell size={16} /> : <BellOff size={16} />,
+        onClick: () => toggleSpaceMute(space.id),
       },
     ];
 

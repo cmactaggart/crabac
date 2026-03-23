@@ -635,3 +635,23 @@ function formatSpace(row: any) {
     publicTheme: row.public_theme || null,
   };
 }
+
+// ─── Space Mutes ───
+
+export async function muteSpace(spaceId: string, userId: string) {
+  await db('space_mutes').insert({ space_id: spaceId, user_id: userId }).onConflict(['space_id', 'user_id']).ignore();
+}
+
+export async function unmuteSpace(spaceId: string, userId: string) {
+  await db('space_mutes').where({ space_id: spaceId, user_id: userId }).delete();
+}
+
+export async function getMutedSpaces(userId: string): Promise<string[]> {
+  const rows = await db('space_mutes').where('user_id', userId).select('space_id');
+  return rows.map((r: any) => String(r.space_id));
+}
+
+export async function isSpaceMuted(spaceId: string, userId: string): Promise<boolean> {
+  const row = await db('space_mutes').where({ space_id: spaceId, user_id: userId }).first();
+  return !!row;
+}
