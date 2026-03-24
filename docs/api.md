@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.16.0
+## API Version 0.17.0
 
 Base URL: `https://app.crab.ac/api`
 
@@ -284,6 +284,12 @@ Mute a user. Requires auth.
 ### DELETE /users/mutes/:userId
 
 Unmute a user. Requires auth.
+
+### GET /users/muted-spaces
+
+Get all space IDs the current user has muted. Requires auth.
+
+**Response:** Array of space ID strings.
 
 ### GET /users/search
 
@@ -656,6 +662,24 @@ Get space tags. Requires membership or public access.
 Update space tags. Requires `MANAGE_SPACE`.
 
 **Body:** `{ tags: string[] }` (max 10 tags, each max 50 chars)
+
+### Space Mutes
+
+Muting a space suppresses all push notifications from that space (channel messages, mentions, events, etc.). Content is still visible — only push delivery is affected.
+
+### GET /spaces/:spaceId/mute
+
+Check if the current user has this space muted. Requires membership.
+
+**Response:** `{ muted: boolean }`
+
+### PUT /spaces/:spaceId/mute
+
+Mute a space. Requires membership.
+
+### DELETE /spaces/:spaceId/mute
+
+Unmute a space. Requires membership.
 
 ---
 
@@ -1661,7 +1685,7 @@ Accept or decline an incoming call.
 
 ### POST /calls/:callId/leave
 
-Leave an active call. If no joined participants remain, the call ends automatically and the LiveKit room is destroyed.
+Leave an active call. For DM calls, the call ends automatically when fewer than 2 participants remain (i.e. when either party hangs up). For voice channels, the call ends only when completely empty.
 
 ### POST /calls/:callId/join
 
@@ -2113,6 +2137,34 @@ Copy a personal event to a space calendar.
 
 **Body:** `{ spaceId: string }`
 
+### Personal Event Meeting Rooms
+
+Personal events can have meeting rooms, similar to space calendar events. Events must have `meetingRoomEnabled: true`, `eventTime`, and `endTime` set.
+
+**Create/update fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `endTime` | string \| null | `HH:mm` end time |
+| `meetingRoomEnabled` | boolean | Enable meeting room |
+| `meetingRoomEarlyEntry` | number | Minutes before event to allow entry (-1 = anytime, 0-120) |
+
+#### POST /users/me/collections/events/:eventId/room/join
+
+Join the meeting room for a personal event. Must be the event owner. Event must be today with meeting room enabled.
+
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `date` | string | no | `YYYY-MM-DD`, override date |
+
+**Response:** `{ call, token: { token, wsUrl }, meetingRoom }` — includes the LiveKit token for voice/video.
+
+#### POST /users/me/collections/events/:eventId/room/leave
+
+Leave the meeting room. If no participants remain, the room is closed and the LiveKit room is destroyed.
+
+**Response:** `204 No Content`
+
 ### Personal Event Categories
 
 #### GET /users/me/collections/events/categories
@@ -2415,6 +2467,10 @@ When a call is initiated, pushes are sent to all participants (regardless of onl
 - **iOS VoIP tokens**: PushKit push with `pushType: voip`, topic `ac.crab.mobile.voip`, data-only payload (`callId`, `conversationId`, `callerName`, `callerAvatarUrl`). Expires after 60 seconds (matching the ringing timeout).
 - **iOS standard tokens (fallback)**: If no VoIP token is registered, a regular APNs alert notification is sent with the call data in the payload. This ensures call notifications work before the app is updated to register PushKit tokens.
 - **Android tokens**: High-priority data-only FCM message (no `notification` block) so the app can display a full-screen incoming call UI.
+
+For group DM calls, `callerName` is set to the conversation name (if the group has one) instead of the individual caller's name. For 1:1 DMs, it remains the caller's display name.
+
+When a call is answered or ended, silent push notifications with `type: call_answered_elsewhere` or `type: call_ended` are sent to cancel ringing on other devices.
 
 ### POST /devices/register
 

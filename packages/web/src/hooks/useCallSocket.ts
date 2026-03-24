@@ -30,7 +30,10 @@ export function useCallSocket() {
         // Browser notification for unfocused tab
         const caller = call.participants.find((p) => p.userId === call.initiatedBy);
         const callerName = caller?.displayName || caller?.username || 'Someone';
-        fireNotification(`${callerName} is calling`, 'Incoming call — tap to answer');
+        // For group DMs (3+ participants), show "Group call" instead of caller name
+        const isGroup = call.participants.length > 2;
+        const notifTitle = isGroup ? 'Group call' : `${callerName} is calling`;
+        fireNotification(notifTitle, 'Incoming call — tap to answer');
       };
 
       const addToast = useToastStore.getState().addToast;
@@ -70,16 +73,19 @@ export function useCallSocket() {
 
       // Dismiss incoming call on other devices when accepted/declined elsewhere
       const onAnsweredElsewhere = ({ callId }: { callId: string }) => {
-        const incoming = useCallStore.getState().incomingCall;
-        if (incoming?.id === callId) {
-          useCallStore.getState().dismissIncoming();
+        const store = useCallStore.getState();
+        // Ignore if this device is the one that accepted or is connecting
+        if (store.activeCall?.id === callId || store.connecting) return;
+        if (store.incomingCall?.id === callId) {
+          store.dismissIncoming();
         }
       };
 
       const onDeclinedElsewhere = ({ callId }: { callId: string }) => {
-        const incoming = useCallStore.getState().incomingCall;
-        if (incoming?.id === callId) {
-          useCallStore.getState().dismissIncoming();
+        const store = useCallStore.getState();
+        if (store.activeCall?.id === callId || store.connecting) return;
+        if (store.incomingCall?.id === callId) {
+          store.dismissIncoming();
         }
       };
 

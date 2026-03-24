@@ -521,6 +521,29 @@ personalCollectionsRoutes.post(
   },
 );
 
+// ─── Personal Event Meeting Rooms ───
+
+personalCollectionsRoutes.post(
+  '/me/collections/events/:eventId/room/join',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const clientDate = req.body.date as string | undefined;
+      const result = await service.joinPersonalEventRoom(req.params.eventId, req.user!.userId, clientDate);
+      res.json(result);
+    } catch (err) { next(err); }
+  },
+);
+
+personalCollectionsRoutes.post(
+  '/me/collections/events/:eventId/room/leave',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await service.leavePersonalEventRoom(req.params.eventId, req.user!.userId);
+      res.status(204).end();
+    } catch (err) { next(err); }
+  },
+);
+
 // ─── Own Summary ───
 
 personalCollectionsRoutes.get(

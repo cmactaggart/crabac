@@ -2,6 +2,8 @@ import { db } from '../../database/connection.js';
 import { snowflake } from '../_shared.js';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../../lib/errors.js';
 import { resolveVisibleLevels } from './privacy.service.js';
+import { createParticipantToken } from '../calls/call.service.js';
+import { eventBus } from '../../lib/event-bus.js';
 import type { GpxMetadata } from '../messages/gpx.service.js';
 
 // ─── Personal Gallery ───
@@ -382,12 +384,15 @@ export async function createPersonalEvent(
     description?: string | null;
     eventDate: string;
     eventTime?: string | null;
+    endTime?: string | null;
     location?: string | null;
     visibility?: string;
     activityType?: string | null;
     categoryId?: string | null;
     routeId?: string | null;
     color?: string | null;
+    meetingRoomEnabled?: boolean;
+    meetingRoomEarlyEntry?: number;
   },
 ) {
   // Validate route exists if provided
@@ -414,12 +419,15 @@ export async function createPersonalEvent(
     description: data.description || null,
     event_date: data.eventDate,
     event_time: data.eventTime || null,
+    end_time: data.endTime || null,
     location: data.location || null,
     visibility: data.visibility || 'private',
     activity_type: data.activityType || null,
     category_id: data.categoryId || null,
     route_id: data.routeId || null,
     color: data.color || null,
+    meeting_room_enabled: data.meetingRoomEnabled || false,
+    meeting_room_early_entry: data.meetingRoomEarlyEntry ?? 0,
   });
 
   return getPersonalEvent(id);
@@ -459,12 +467,15 @@ export async function updatePersonalEvent(
     description?: string | null;
     eventDate?: string;
     eventTime?: string | null;
+    endTime?: string | null;
     location?: string | null;
     visibility?: string;
     activityType?: string | null;
     categoryId?: string | null;
     routeId?: string | null;
     color?: string | null;
+    meetingRoomEnabled?: boolean;
+    meetingRoomEarlyEntry?: number;
   },
 ) {
   const item = await db('personal_events').where('id', eventId).first();
@@ -496,6 +507,9 @@ export async function updatePersonalEvent(
   if (data.categoryId !== undefined) updates.category_id = data.categoryId;
   if (data.routeId !== undefined) updates.route_id = data.routeId;
   if (data.color !== undefined) updates.color = data.color;
+  if (data.endTime !== undefined) updates.end_time = data.endTime;
+  if (data.meetingRoomEnabled !== undefined) updates.meeting_room_enabled = data.meetingRoomEnabled;
+  if (data.meetingRoomEarlyEntry !== undefined) updates.meeting_room_early_entry = data.meetingRoomEarlyEntry;
 
   await db('personal_events').where('id', eventId).update(updates);
   return getPersonalEvent(eventId);
@@ -1008,4 +1022,152 @@ function formatPersonalEvent(row: any) {
       accentColor: row.author_accent_color || null,
     },
   };
+}
+
+// ─── Personal Event Meeting Rooms ───
+
+function formatDateStr(d: Date): string {
+  return d.toISOString().split('T')[0];
+}
+
+export async function joinPersonalEventRoom(eventId: string, userId: string, clientDate?: string) {
+  const event = await db('personal_events').where('id', eventId).first();
+  if (!event) throw new NotFoundError('Personal event');
+  if (!event.meeting_room_enabled) throw new BadRequestError('Meeting room not enabled for this event');
+
+  if (String(event.user_id) !== userId) throw new ForbiddenError('Not the owner of this event');
+
+  const today = clientDate || formatDateStr(new Date());
+  let eventDate = event.event_date;
+  if (eventDate instanceof Date) eventDate = formatDateStr(eventDate);
+  else if (typeof eventDate === 'string' && eventDate.includes('T')) eventDate = eventDate.split('T')[0];
+
+  if (eventDate !== today) throw new BadRequestError('Meeting room is only available on the event day');
+  if (!event.event_time || !event.end_time) throw new BadRequestError('Event must have start and end times for meeting room');
+
+  let meetingRoom = await db('event_meeting_rooms').where('personal_event_id', eventId).first();
+
+  if (!meetingRoom) {
+    await db('event_meeting_rooms').insert({
+      event_id: null,
+      personal_event_id: eventId,
+      status: 'open',
+    });
+    meetingRoom = await db('event_meeting_rooms').where('personal_event_id', eventId).first();
+  }
+
+  let callId: string;
+  let roomName: string;
+
+  if (!meetingRoom.call_id) {
+    const newCallId = snowflake.generate();
+    callId = String(newCallId);
+    roomName = `personal_event_${eventId}_${newCallId}`;
+
+    await db('calls').insert({
+      id: newCallId,
+      type: 'voice_channel',
+      channel_id: null,
+      space_id: null,
+      room_name: roomName,
+      initiated_by: userId,
+      status: 'active',
+      started_at: db.fn.now(3),
+    });
+
+    await db('call_participants').insert({
+      call_id: callId,
+      user_id: userId,
+      status: 'joined',
+      joined_at: db.fn.now(3),
+    });
+
+    await db('event_meeting_rooms')
+      .where('personal_event_id', eventId)
+      .update({ call_id: callId });
+  } else {
+    callId = String(meetingRoom.call_id);
+    const call = await db('calls').where('id', callId).first();
+    if (!call) throw new NotFoundError('Call');
+    roomName = call.room_name;
+
+    const existingParticipant = await db('call_participants')
+      .where({ call_id: callId, user_id: userId })
+      .first();
+
+    if (existingParticipant) {
+      await db('call_participants')
+        .where({ call_id: callId, user_id: userId })
+        .update({ status: 'joined', joined_at: db.fn.now(3), left_at: null });
+    } else {
+      await db('call_participants').insert({
+        call_id: callId,
+        user_id: userId,
+        status: 'joined',
+        joined_at: db.fn.now(3),
+      });
+    }
+  }
+
+  const user = await db('users').where('id', userId).select('username').first();
+  const token = await createParticipantToken(roomName, userId, user?.username || 'Unknown');
+
+  const countResult = await db('call_participants')
+    .where({ call_id: callId, status: 'joined' })
+    .count('* as count')
+    .first();
+  const participantCount = Number(countResult?.count || 0);
+
+  const updatedRoom = await db('event_meeting_rooms').where('personal_event_id', eventId).first();
+
+  return {
+    call: {
+      id: callId,
+      roomName,
+    },
+    token,
+    meetingRoom: {
+      id: String(updatedRoom.id),
+      personalEventId: String(eventId),
+      status: updatedRoom.status,
+      callId,
+      participantCount,
+    },
+  };
+}
+
+export async function leavePersonalEventRoom(eventId: string, userId: string) {
+  const meetingRoom = await db('event_meeting_rooms').where('personal_event_id', eventId).first();
+  if (!meetingRoom) throw new NotFoundError('Meeting room');
+
+  const callId = meetingRoom.call_id ? String(meetingRoom.call_id) : null;
+
+  if (callId) {
+    await db('call_participants')
+      .where({ call_id: callId, user_id: userId })
+      .update({ status: 'left', left_at: db.fn.now(3) });
+
+    const remaining = await db('call_participants')
+      .where({ call_id: callId, status: 'joined' })
+      .count('* as count')
+      .first();
+
+    if (Number(remaining?.count || 0) === 0) {
+      await db('calls')
+        .where('id', callId)
+        .update({ status: 'ended', ended_at: db.fn.now(3) });
+
+      const call = await db('calls').where('id', callId).first();
+      if (call) {
+        const { RoomServiceClient } = await import('livekit-server-sdk');
+        const { config } = await import('../../config.js');
+        const rs = new RoomServiceClient(config.livekit.host, config.livekit.apiKey, config.livekit.apiSecret);
+        rs.deleteRoom(call.room_name).catch(() => {});
+      }
+
+      await db('event_meeting_rooms')
+        .where('personal_event_id', eventId)
+        .update({ status: 'closed' });
+    }
+  }
 }

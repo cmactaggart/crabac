@@ -47,7 +47,9 @@ export function IncomingCallModal() {
             <PhoneOff size={24} />
           </button>
           <button
-            onClick={() => acceptCall(incomingCall.id)}
+            onClick={() => acceptCall(incomingCall.id).catch((err: any) => {
+              alert(`Failed to connect: ${err?.message || 'Connection error'}`);
+            })}
             disabled={connecting}
             style={{ ...styles.actionBtn, background: 'var(--success)' }}
             title="Accept"

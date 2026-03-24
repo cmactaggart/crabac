@@ -154,11 +154,16 @@ async function sendChannelMessagePush(message: any, channelId: string, spaceId: 
     pushData.avatarUrl = `${config.apiUrl}${message.author.avatarUrl}`;
   }
 
+  let pushCount = 0;
   for (const userId of memberIds) {
-    if (connectedUserIds.has(userId)) continue;
-    if (mutedSet.has(userId)) continue;
-    if (authorMutedSet.has(userId)) continue;
-    if (notifiedUserIds.has(userId)) continue;
+    const skip = connectedUserIds.has(userId) ? 'connected' : mutedSet.has(userId) ? 'muted' : authorMutedSet.has(userId) ? 'author_muted' : notifiedUserIds.has(userId) ? 'notified' : null;
+    if (skip) {
+      console.log(`[Push] Skipping user ${userId}: ${skip}`);
+      continue;
+    }
+    console.log(`[Push] Sending push to user ${userId}`);
     sendPushNotification(userId, title, body, pushData);
+    pushCount++;
   }
+  console.log(`[Push] Channel ${channelId}: ${memberIds.length} members, ${connectedUserIds.size} connected, ${pushCount} pushes sent`);
 }

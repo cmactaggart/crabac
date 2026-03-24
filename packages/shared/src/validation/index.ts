@@ -719,12 +719,15 @@ export const createPersonalEventSchema = z.object({
   description: z.string().max(5000).nullable().optional(),
   eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD'),
   eventTime: z.string().regex(/^\d{2}:\d{2}$/, 'Must be HH:mm').nullable().optional(),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Must be HH:mm').nullable().optional(),
   location: z.string().max(500).nullable().optional(),
   visibility: personalVisibilityEnum.default('private'),
   activityType: z.enum(['ride', 'run', 'walk']).nullable().optional(),
   categoryId: z.string().nullable().optional(),
   routeId: z.string().nullable().optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+  meetingRoomEnabled: z.boolean().optional(),
+  meetingRoomEarlyEntry: z.number().int().min(-1).max(120).optional(),
 });
 
 export const updatePersonalEventSchema = z.object({
@@ -732,12 +735,15 @@ export const updatePersonalEventSchema = z.object({
   description: z.string().max(5000).nullable().optional(),
   eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD').optional(),
   eventTime: z.string().regex(/^\d{2}:\d{2}$/, 'Must be HH:mm').nullable().optional(),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Must be HH:mm').nullable().optional(),
   location: z.string().max(500).nullable().optional(),
   visibility: personalVisibilityEnum.optional(),
   activityType: z.enum(['ride', 'run', 'walk']).nullable().optional(),
   categoryId: z.string().nullable().optional(),
   routeId: z.string().nullable().optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+  meetingRoomEnabled: z.boolean().optional(),
+  meetingRoomEarlyEntry: z.number().int().min(-1).max(120).optional(),
 });
 
 export const personalCollectionsQuerySchema = z.object({

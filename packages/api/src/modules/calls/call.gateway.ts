@@ -11,6 +11,18 @@ export function registerCallGateway() {
   eventBus.on('call.ringing', async ({ call, callerId, conversationId }) => {
     if (!io) return;
 
+    // Look up conversation name for group DMs
+    let conversationName: string | null = null;
+    if (conversationId) {
+      const conv = await db('conversations').where('id', conversationId).first();
+      if (conv?.name) conversationName = conv.name;
+    }
+
+    const caller = call.participants.find((p: any) => p.userId === callerId);
+    const callerName = caller?.displayName || caller?.username || 'Someone';
+    // For group DMs, show the group name; for 1:1 DMs, show the caller name
+    const pushDisplayName = conversationName || callerName;
+
     for (const participant of call.participants) {
       if (participant.userId === callerId) continue;
 
@@ -22,12 +34,10 @@ export function registerCallGateway() {
 
       // VoIP push for mobile (triggers CallKit on iOS, full-screen intent on Android)
       try {
-        const caller = call.participants.find((p: any) => p.userId === callerId);
-        const callerName = caller?.displayName || caller?.username || 'Someone';
         sendVoipPush(participant.userId, {
           callId: call.id,
           conversationId,
-          callerName,
+          callerName: pushDisplayName,
           callerAvatarUrl: caller?.avatarUrl || null,
         });
       } catch {

@@ -234,6 +234,7 @@ export const useCallStore = create<CallState>((set, get) => ({
     } catch (err) {
       set({ connecting: false, incomingCall: null });
       console.error('[Call] Failed to accept call:', err);
+      throw err;
     }
   },
 
