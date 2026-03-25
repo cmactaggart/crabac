@@ -283,6 +283,7 @@ export const updateSpaceAdminSettingsSchema = z.object({
   allowPublicGalleries: z.boolean().optional(),
   allowPublicCalendar: z.boolean().optional(),
   allowPublicRoutes: z.boolean().optional(),
+  allowPublicVoice: z.boolean().optional(),
   allowAnonymousBrowsing: z.boolean().optional(),
   calendarEnabled: z.boolean().optional(),
   blogEnabled: z.boolean().optional(),
