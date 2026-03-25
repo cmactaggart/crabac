@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.18.0
+## API Version 0.19.0
 
 Base URL: `https://app.crab.ac/api`
 
@@ -540,7 +540,7 @@ Additional fields:
 | Field | Type | Description |
 |-------|------|-------------|
 | `publicNavLinks` | array | Custom external links for the public page navbar. Each item: `{ label: string, url: string }`. Max 20. |
-| `publicNavDisabledFeatures` | array | Feature keys to hide from the public page navbar (e.g. `["gallery", "blog"]`). Valid keys: `boards`, `gallery`, `routes`, `calendar`, `blog`, `newsletter`. |
+| `publicNavDisabledFeatures` | array | Feature keys to hide from the public page navbar (e.g. `["gallery", "blog"]`). Valid keys: `boards`, `gallery`, `routes`, `calendar`, `blog`, `newsletter`, `voice`. |
 
 ### POST /spaces/:spaceId/admin-settings/rotate-webhook-secret
 
@@ -739,7 +739,7 @@ Create a channel. Requires `MANAGE_CHANNELS`.
 | `topic` | string | no | Max 1024 chars |
 | `type` | string | no | `text`, `announcement`, `read_only`, `forum`, `media_gallery`, `route_library`, `voice` |
 | `isPrivate` | boolean | no | Make channel private (hidden from non-members) |
-| `isPublic` | boolean | no | For public board/gallery/route access |
+| `isPublic` | boolean | no | For public board/gallery/route/voice directory listing |
 | `categoryId` | string | no | |
 | `memberIds` | string[] | no | User IDs to grant access (private channels only) |
 | `roleOverrides` | string[] | no | Role IDs to grant VIEW_CHANNELS override (private channels only) |
@@ -775,6 +775,8 @@ Update channel. Requires `MANAGE_CHANNELS`.
 **Body:** `{ name?, topic?, type?, isPublic?, isPrivate?, position?, publicVoiceAccess?, publicVoiceChat?, publicVoiceParticipation?, voicePassword?, voiceIdentityMode? }`
 
 When toggling `isPrivate` to `true`, the channel becomes hidden from non-members. When toggling to `false`, the channel becomes visible to all members again.
+
+Voice channels include additional fields in their response: `publicVoiceAccess`, `publicVoiceChat`, `publicVoiceParticipation`, `voiceIdentityMode`, and `voiceHasPassword` (derived boolean, never exposes the actual password hash). The `isPublic` flag on voice channels controls whether they appear in the public voice channel directory listing, while `publicVoiceAccess` controls whether guests can actually join.
 
 ### DELETE /spaces/:spaceId/channels/:channelId
 
@@ -2655,9 +2657,9 @@ Dismiss announcements. Requires auth.
 
 ---
 
-## Public Boards, Galleries, Routes & Blog
+## Public Boards, Galleries, Routes, Voice & Blog
 
-These endpoints power the public-facing web views (`/boards/:slug`, `/gallery/:slug`, `/routes/:slug`, `/blog/:slug`). They use optional authentication - logged-in space members see full content, while anonymous users see public content only (if `allowAnonymousBrowsing` is enabled).
+These endpoints power the public-facing web views (`/boards/:slug`, `/gallery/:slug`, `/routes/:slug`, `/voice/:slug`, `/blog/:slug`). They use optional authentication - logged-in space members see full content, while anonymous users see public content only (if `allowAnonymousBrowsing` is enabled).
 
 ### Board Auth
 
@@ -2690,8 +2692,8 @@ Get public site configuration for a space, including enabled features, navbar se
     "iconUrl": null,
     "publicTheme": null
   },
-  "enabledFeatures": ["boards", "gallery", "routes"],
-  "navFeatures": ["boards", "routes"],
+  "enabledFeatures": ["boards", "gallery", "routes", "voice"],
+  "navFeatures": ["boards", "routes", "voice"],
   "navLinks": [
     { "label": "Our Website", "url": "https://example.com" }
   ]
@@ -2708,7 +2710,7 @@ Returns `404` if no public features are enabled.
 
 #### GET /boards/:spaceSlug
 
-List public channels (forums, galleries, and route libraries) for a space. Requires `allowPublicBoards`, `allowPublicGalleries`, or `allowPublicRoutes`.
+List public channels (forums, galleries, route libraries, and voice channels) for a space. Requires at least one of `allowPublicBoards`, `allowPublicGalleries`, `allowPublicRoutes`, or `allowPublicVoice`.
 
 #### GET /boards/:spaceSlug/:channelName
 
@@ -2778,7 +2780,7 @@ Get public calendar events. Authenticated space members see all events; others s
 
 ICS calendar feed for subscribing in calendar apps (Apple Calendar, Google Calendar, Outlook, etc.). No auth required. Requires `allowPublicCalendar` in space settings.
 
-Returns events from 6 months back to 12 months forward. Authenticated space members see all events; anonymous users see only public events. RFC 5545 compliant.
+Returns events from 6 months back to 12 months forward. Authenticated space members see all events; anonymous users see only public events. RFC 5545 compliant. Events with public meeting access include an `X-MEETING-URL` property and the meeting join link appended to the `DESCRIPTION`.
 
 **Response:** `text/calendar` (`.ics` file)
 
