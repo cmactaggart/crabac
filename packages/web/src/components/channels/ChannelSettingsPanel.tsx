@@ -32,6 +32,13 @@ export function ChannelSettingsPanel({ spaceId, channel, onClose }: Props) {
   const [isPrivate, setIsPrivate] = useState(channel.isPrivate);
   const [saving, setSaving] = useState(false);
 
+  // Voice public access
+  const [publicVoiceAccess, setPublicVoiceAccess] = useState(channel.publicVoiceAccess || false);
+  const [publicVoiceChat, setPublicVoiceChat] = useState(channel.publicVoiceChat || false);
+  const [publicVoiceParticipation, setPublicVoiceParticipation] = useState(channel.publicVoiceParticipation || false);
+  const [voiceIdentityMode, setVoiceIdentityMode] = useState<'anonymous' | 'email_verify' | 'require_login'>(channel.voiceIdentityMode || 'anonymous');
+  const [voicePassword, setVoicePassword] = useState('');
+
   // Roles
   const [roles, setRoles] = useState<Role[]>([]);
   const [overrides, setOverrides] = useState<{ roleId: string; allow: string; deny: string }[]>([]);
@@ -101,13 +108,21 @@ export function ChannelSettingsPanel({ spaceId, channel, onClose }: Props) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await updateChannel(spaceId, channel.id, {
-        name: name !== channel.name ? name : undefined,
-        displayName: displayName !== (channel.displayName || '') ? (displayName || null) : undefined,
-        topic: topic !== (channel.topic || '') ? topic || undefined : undefined,
-        type: type !== channel.type ? type : undefined,
-        isPrivate: isPrivate !== channel.isPrivate ? isPrivate : undefined,
-      });
+      const updates: Record<string, any> = {};
+      if (name !== channel.name) updates.name = name;
+      if (displayName !== (channel.displayName || '')) updates.displayName = displayName || null;
+      if (topic !== (channel.topic || '')) updates.topic = topic || undefined;
+      if (type !== channel.type) updates.type = type;
+      if (isPrivate !== channel.isPrivate) updates.isPrivate = isPrivate;
+      // Voice public access fields
+      if (type === 'voice') {
+        if (publicVoiceAccess !== (channel.publicVoiceAccess || false)) updates.publicVoiceAccess = publicVoiceAccess;
+        if (publicVoiceChat !== (channel.publicVoiceChat || false)) updates.publicVoiceChat = publicVoiceChat;
+        if (publicVoiceParticipation !== (channel.publicVoiceParticipation || false)) updates.publicVoiceParticipation = publicVoiceParticipation;
+        if (voiceIdentityMode !== (channel.voiceIdentityMode || 'anonymous')) updates.voiceIdentityMode = voiceIdentityMode;
+        if (voicePassword) updates.voicePassword = voicePassword;
+      }
+      await updateChannel(spaceId, channel.id, updates);
       fetchChannels(spaceId);
     } catch {
       // ignore
@@ -188,6 +203,7 @@ export function ChannelSettingsPanel({ spaceId, channel, onClose }: Props) {
               <option value="forum">Forum</option>
               <option value="media_gallery">Media Gallery</option>
               <option value="route_library">Route Library</option>
+              <option value="voice">Voice</option>
             </select>
           </div>
 
@@ -199,6 +215,77 @@ export function ChannelSettingsPanel({ spaceId, channel, onClose }: Props) {
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
+
+        {/* Voice Public Access */}
+        {type === 'voice' && (
+          <div style={styles.section}>
+            <h4 style={styles.sectionTitle}>Public Voice Access</h4>
+
+            <div style={styles.field}>
+              <label style={styles.label}>Allow Public Access</label>
+              <button
+                onClick={() => setPublicVoiceAccess(!publicVoiceAccess)}
+                style={{
+                  ...styles.toggle,
+                  background: publicVoiceAccess ? 'var(--accent)' : 'var(--bg-tertiary)',
+                }}
+              >
+                <div style={{
+                  ...styles.toggleKnob,
+                  transform: publicVoiceAccess ? 'translateX(20px)' : 'translateX(0)',
+                }} />
+              </button>
+              <span style={styles.hint}>Anyone with the link can listen</span>
+            </div>
+
+            {publicVoiceAccess && (
+              <>
+                <div style={styles.field}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                    <input type="checkbox" checked={publicVoiceChat} onChange={(e) => setPublicVoiceChat(e.target.checked)} />
+                    Allow public chat
+                  </label>
+                </div>
+
+                <div style={styles.field}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                    <input type="checkbox" checked={publicVoiceParticipation} onChange={(e) => setPublicVoiceParticipation(e.target.checked)} />
+                    Allow public mic/camera
+                  </label>
+                </div>
+
+                <div style={styles.field}>
+                  <label style={styles.label}>Identity Requirement</label>
+                  <select value={voiceIdentityMode} onChange={(e) => setVoiceIdentityMode(e.target.value as any)} style={styles.input}>
+                    <option value="anonymous">Anonymous (display name only)</option>
+                    <option value="email_verify">Email verification</option>
+                    <option value="require_login">Require login</option>
+                  </select>
+                </div>
+
+                <div style={styles.field}>
+                  <label style={styles.label}>Password (optional)</label>
+                  <input
+                    type="password"
+                    value={voicePassword}
+                    onChange={(e) => setVoicePassword(e.target.value)}
+                    placeholder={channel.voiceHasPassword ? '••••••• (leave blank to keep)' : 'No password'}
+                    style={styles.input}
+                    autoComplete="off"
+                  />
+                </div>
+              </>
+            )}
+
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              style={{ ...styles.saveBtn, opacity: saving ? 0.5 : 1 }}
+            >
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        )}
 
         {/* Access */}
         {!channel.isAdmin && (

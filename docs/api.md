@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.17.0
+## API Version 0.18.0
 
 Base URL: `https://app.crab.ac/api`
 
@@ -506,6 +506,7 @@ Get space admin settings. Requires `MANAGE_SPACE`.
   "allowPublicGalleries": false,
   "allowPublicCalendar": false,
   "allowPublicRoutes": false,
+  "allowPublicVoice": false,
   "allowPublicBlog": false,
   "allowPublicNewsletter": false,
   "allowPublicNewsletterSubscription": false,
@@ -742,6 +743,11 @@ Create a channel. Requires `MANAGE_CHANNELS`.
 | `categoryId` | string | no | |
 | `memberIds` | string[] | no | User IDs to grant access (private channels only) |
 | `roleOverrides` | string[] | no | Role IDs to grant VIEW_CHANNELS override (private channels only) |
+| `publicVoiceAccess` | boolean | no | Allow public access to voice channel (voice type only) |
+| `publicVoiceChat` | boolean | no | Allow public guests to chat (voice type only) |
+| `publicVoiceParticipation` | boolean | no | Allow public guests to use mic/camera (voice type only) |
+| `voicePassword` | string | no | Password for public voice access (bcrypt-hashed, max 255 chars) |
+| `voiceIdentityMode` | string | no | `anonymous`, `email_verify`, or `require_login` (default: `anonymous`) |
 
 When `isPrivate` is `true`, the creating user is automatically added as a channel member. Users in `memberIds` are added to the `channel_members` table. Roles in `roleOverrides` receive a channel permission override granting `VIEW_CHANNELS | SEND_MESSAGES | ATTACH_FILES | ADD_REACTIONS`.
 
@@ -766,7 +772,7 @@ Bulk reorder channels. Requires `MANAGE_CHANNELS`.
 
 Update channel. Requires `MANAGE_CHANNELS`.
 
-**Body:** `{ name?, topic?, type?, isPublic?, isPrivate?, position? }`
+**Body:** `{ name?, topic?, type?, isPublic?, isPrivate?, position?, publicVoiceAccess?, publicVoiceChat?, publicVoiceParticipation?, voicePassword?, voiceIdentityMode? }`
 
 When toggling `isPrivate` to `true`, the channel becomes hidden from non-members. When toggling to `false`, the channel becomes visible to all members again.
 
@@ -1164,6 +1170,13 @@ Create an event. Requires `MANAGE_CALENDAR`.
 | `location` | string \| null | no | Max 500 chars |
 | `activityType` | string \| null | no | `ride`, `run`, or `walk` |
 | `routeId` | string \| null | no | Link to a route library item |
+| `meetingRoomEnabled` | boolean | no | Enable voice/video meeting room |
+| `meetingRoomEarlyEntry` | number \| null | no | Minutes before event start to allow joining (-1 = anytime) |
+| `meetingPublicAccess` | boolean | no | Allow public (unauthenticated) access to the meeting room |
+| `meetingPublicChat` | boolean | no | Allow public guests to chat |
+| `meetingPublicParticipation` | boolean | no | Allow public guests to use mic/camera |
+| `meetingRoomPassword` | string \| null | no | Password for public access (bcrypt-hashed server-side) |
+| `meetingIdentityMode` | string | no | `anonymous`, `email_verify`, or `require_login` |
 
 **Side effects:** Creating an event sends a `new_event` notification to all space members (excluding the creator) and triggers push notifications. If the space has `socialEnabled = true`, an auto-generated social post is created on behalf of the space with `metadata: { type: 'calendar_event', eventId, spaceId }`.
 
@@ -1304,6 +1317,130 @@ Join the meeting room for a calendar event. Creates the room and a temporary tex
 Leave the meeting room for a calendar event. If no participants remain, the room is closed, the temporary text channel and its messages are deleted, and the LiveKit room is destroyed.
 
 **Response:** `204 No Content`
+
+#### POST /spaces/:spaceId/calendar/events/:eventId/meeting/invite
+
+Create a public meeting invite link. Requires `MANAGE_CALENDAR`.
+
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `email` | string | no | Email to send invite to (with ICS attachment) |
+| `maxUses` | number\|null | no | Max uses for the invite (null = unlimited) |
+| `expiresInHours` | number\|null | no | Hours until expiry (null = never) |
+
+**Response:** `201` with invite object including `id`, `token`, `inviteUrl`, `email`, `maxUses`, `useCount`, `expiresAt`.
+
+#### GET /spaces/:spaceId/calendar/events/:eventId/meeting/invites
+
+List meeting invites for an event. Requires `MANAGE_CALENDAR`.
+
+**Response:** Array of invite objects.
+
+#### DELETE /spaces/:spaceId/calendar/events/:eventId/meeting/invites/:inviteId
+
+Delete a meeting invite. Requires `MANAGE_CALENDAR`.
+
+**Response:** `204 No Content`
+
+#### GET /spaces/:spaceId/calendar/events/:eventId/meeting/guests
+
+List active public guests in a meeting room. Requires membership.
+
+**Response:** Array of guest objects with `id`, `displayName`, `email`, `emailVerified`, `livekitIdentity`, `status`, `createdAt`.
+
+#### POST /spaces/:spaceId/calendar/events/:eventId/meeting/kick/:guestId
+
+Kick a public guest from the meeting room. Requires `MANAGE_CALENDAR`. Removes the guest from the LiveKit room and blocks rejoin.
+
+**Response:** `204 No Content`
+
+### Public Meeting Rooms (No Auth Required)
+
+Public meeting room endpoints allow unauthenticated users to join calendar event meetings and voice channels that have public access enabled. These endpoints are mounted at `/api/public` and use optional authentication (authenticated users get additional capabilities).
+
+**Prerequisites:** The space must have `allowPublicVoice` enabled, and the individual event/channel must have public access enabled.
+
+**Rate limiting:** Join endpoints are limited to 20 requests per 15 minutes per IP. Email verification requests are limited to 5 per hour per IP.
+
+#### GET /public/calendar/:spaceSlug/events/:eventId/meeting
+
+Get public meeting info for the pre-join screen.
+
+**Response:**
+```json
+{
+  "eventId": "...",
+  "spaceId": "...",
+  "spaceName": "...",
+  "spaceSlug": "...",
+  "eventName": "...",
+  "eventDate": "2026-03-25",
+  "eventTime": "14:00",
+  "endTime": "15:00",
+  "description": "...",
+  "imageUrl": "...",
+  "meetingPublicChat": true,
+  "meetingPublicParticipation": false,
+  "meetingIdentityMode": "anonymous",
+  "meetingHasPassword": false,
+  "participantCount": 5,
+  "roomStatus": "open"
+}
+```
+
+#### POST /public/calendar/:spaceSlug/events/:eventId/meeting/join
+
+Join a public meeting room as a guest.
+
+**Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `displayName` | string | yes | Guest display name (max 100 chars) |
+| `password` | string | no | Meeting password (if required) |
+| `sessionToken` | string | no | Existing session token for reconnect |
+| `inviteToken` | string | no | Invite token (bypasses password) |
+| `emailVerificationToken` | string | no | Verified email token (for `email_verify` mode) |
+
+**Response:** `{ token: { token, wsUrl }, sessionToken, guestId, channelId, meetingRoom }`
+
+#### POST /public/calendar/:spaceSlug/events/:eventId/meeting/leave
+
+Leave a public meeting room.
+
+**Body:** `{ sessionToken }`
+
+**Response:** `204 No Content`
+
+#### POST /public/calendar/:spaceSlug/events/:eventId/meeting/verify-email
+
+Request email verification for `email_verify` identity mode meetings.
+
+**Body:** `{ email, displayName }`
+
+**Response:** `{ sent: true }`
+
+#### GET /public/meeting/verify/:token
+
+Verify an email token (callback from verification email link).
+
+**Response:** `{ token, email, displayName, eventId, channelId }`
+
+#### GET /public/:spaceSlug/voice/:channelName/meeting
+
+Get public voice channel info for the pre-join screen. Same shape as event meeting info but for voice channels.
+
+#### POST /public/:spaceSlug/voice/:channelName/meeting/join
+
+Join a public voice channel as a guest. Same body/response shape as event meeting join.
+
+#### POST /public/:spaceSlug/voice/:channelName/meeting/leave
+
+Leave a public voice channel. Body: `{ sessionToken }`. Response: `204 No Content`.
+
+#### POST /public/:spaceSlug/voice/:channelName/meeting/verify-email
+
+Request email verification for voice channel. Body: `{ email, displayName }`. Response: `{ sent: true }`.
 
 ---
 
@@ -2425,6 +2562,8 @@ List notifications (paginated). Requires auth.
 
 Notification types: `mention`, `reply`, `reaction`, `dm`, `dm_request`, `follow_request`, `portal_invite`, `event_cancelled`, `event_rsvp`, `new_event`, `new_blog_post`, `post_tag`, `post_comment`.
 
+Actionable notifications (`follow_request`, `dm_request`, `portal_invite`) include a `resolvedStatus` field that reflects the current state of the underlying request: `"pending"`, `"accepted"`, `"rejected"`, or `null` (for non-actionable types). This allows the client to show resolved state instead of stale Accept/Reject buttons.
+
 The `new_event` notification is sent to all space members when a calendar event is created. It includes `spaceName`, `eventName`, `eventDate`, `eventTime`, `spaceId`, and `eventId` in the notification data. It also triggers a push notification and deep links to the event in the space calendar.
 
 The `event_rsvp` notification is sent to the event creator when another user RSVPs to their event. It includes `eventId`, `eventName`, `eventDate`, `eventTime`, `spaceId`, `spaceName`, `rsvpUsername`, `rsvpDisplayName`, and `rsvpStatus`. Clicking the notification navigates to the event in the space calendar.
@@ -3308,6 +3447,9 @@ The API uses Socket.io for real-time communication at `/socket.io/`. Clients aut
 |-------|---------|-------------|
 | `calendar:room_participant_changed` | `{ eventId, participantCount }` | Meeting room participant count changed |
 | `calendar:room_closed` | `{ eventId }` | Meeting room closed (last participant left) |
+| `calendar:public_guest_joined` | `{ eventId, guestId, displayName }` | Public guest joined a meeting room |
+| `calendar:public_guest_left` | `{ eventId, guestId, displayName }` | Public guest left a meeting room |
+| `calendar:public_guest_kicked` | `{ eventId, guestId, displayName, kickedBy }` | Public guest was kicked from a meeting room |
 
 #### Notifications & Workflows
 

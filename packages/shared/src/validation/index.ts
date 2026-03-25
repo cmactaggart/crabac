@@ -44,6 +44,14 @@ export const joinSpaceSchema = z.object({
 });
 
 // Channels
+const voicePublicFields = {
+  publicVoiceAccess: z.boolean().optional(),
+  publicVoiceChat: z.boolean().optional(),
+  publicVoiceParticipation: z.boolean().optional(),
+  voicePassword: z.string().max(255).nullable().optional(),
+  voiceIdentityMode: z.enum(['anonymous', 'email_verify', 'require_login']).optional(),
+};
+
 export const createChannelSchema = z.object({
   name: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/, 'Channel name can only contain lowercase letters, numbers, and hyphens'),
   displayName: z.string().min(1).max(100).optional(),
@@ -54,6 +62,7 @@ export const createChannelSchema = z.object({
   categoryId: z.string().optional(),
   memberIds: z.array(z.string()).optional(),
   roleOverrides: z.array(z.string()).optional(),
+  ...voicePublicFields,
 });
 
 export const updateChannelSchema = z.object({
@@ -64,6 +73,7 @@ export const updateChannelSchema = z.object({
   isPublic: z.boolean().optional(),
   isPrivate: z.boolean().optional(),
   position: z.number().int().min(0).optional(),
+  ...voicePublicFields,
 });
 
 // Messages
@@ -322,6 +332,14 @@ export const updateCalendarCategorySchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
 });
 
+const meetingPublicFields = {
+  meetingPublicAccess: z.boolean().optional(),
+  meetingPublicChat: z.boolean().optional(),
+  meetingPublicParticipation: z.boolean().optional(),
+  meetingRoomPassword: z.string().max(255).nullable().optional(),
+  meetingIdentityMode: z.enum(['anonymous', 'email_verify', 'require_login']).optional(),
+};
+
 export const createCalendarEventSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(4000).nullable().optional(),
@@ -336,6 +354,7 @@ export const createCalendarEventSchema = z.object({
   imageUrl: z.string().max(512).nullable().optional(),
   meetingRoomEnabled: z.boolean().optional(),
   meetingRoomEarlyEntry: z.number().int().min(-1).max(60).nullable().optional(),
+  ...meetingPublicFields,
 });
 
 export const updateCalendarEventSchema = z.object({
@@ -352,6 +371,7 @@ export const updateCalendarEventSchema = z.object({
   imageUrl: z.string().max(512).nullable().optional(),
   meetingRoomEnabled: z.boolean().optional(),
   meetingRoomEarlyEntry: z.number().int().min(-1).max(60).nullable().optional(),
+  ...meetingPublicFields,
 });
 
 export const calendarEventsQuerySchema = z.object({
@@ -382,6 +402,7 @@ export const createEventSeriesSchema = z.object({
   imageUrl: z.string().max(512).nullable().optional(),
   meetingRoomEnabled: z.boolean().optional(),
   meetingRoomEarlyEntry: z.number().int().min(-1).max(60).nullable().optional(),
+  ...meetingPublicFields,
   recurrenceRule: recurrenceRuleSchema,
 });
 
@@ -398,6 +419,7 @@ export const updateEventSeriesSchema = z.object({
   imageUrl: z.string().max(512).nullable().optional(),
   meetingRoomEnabled: z.boolean().optional(),
   meetingRoomEarlyEntry: z.number().int().min(-1).max(60).nullable().optional(),
+  ...meetingPublicFields,
   recurrenceRule: recurrenceRuleSchema.optional(),
   updateMode: z.enum(['all', 'future']).default('all'),
 });
@@ -927,4 +949,24 @@ export const initiateCallSchema = z.object({
 
 export const respondToCallSchema = z.object({
   action: z.enum(['accept', 'decline']),
+});
+
+// Public Meeting Room
+export const publicMeetingJoinSchema = z.object({
+  displayName: z.string().min(1).max(100),
+  password: z.string().max(255).optional(),
+  sessionToken: z.string().max(64).optional(),
+  inviteToken: z.string().max(64).optional(),
+  emailVerificationToken: z.string().max(64).optional(),
+});
+
+export const createMeetingInviteSchema = z.object({
+  email: z.string().email().optional(),
+  maxUses: z.number().int().min(1).nullable().optional(),
+  expiresInHours: z.number().int().min(1).max(8760).nullable().optional(),
+});
+
+export const requestMeetingEmailVerificationSchema = z.object({
+  email: z.string().email(),
+  displayName: z.string().min(1).max(100),
 });

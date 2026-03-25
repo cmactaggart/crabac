@@ -16,6 +16,7 @@ export async function getSpaceAdminSettings(spaceId: string) {
       allowPublicGalleries: false,
       allowPublicCalendar: false,
       allowPublicRoutes: false,
+      allowPublicVoice: false,
       allowAnonymousBrowsing: false,
       calendarEnabled: false,
       blogEnabled: false,
@@ -49,6 +50,7 @@ export async function updateSpaceAdminSettings(
     allowPublicGalleries?: boolean;
     allowPublicCalendar?: boolean;
     allowPublicRoutes?: boolean;
+    allowPublicVoice?: boolean;
     allowPublicBlog?: boolean;
     newsletterEnabled?: boolean;
     socialEnabled?: boolean;
@@ -77,6 +79,7 @@ export async function updateSpaceAdminSettings(
     if (data.allowPublicGalleries !== undefined) updates.allow_public_galleries = data.allowPublicGalleries;
     if (data.allowPublicCalendar !== undefined) updates.allow_public_calendar = data.allowPublicCalendar;
     if (data.allowPublicRoutes !== undefined) updates.allow_public_routes = data.allowPublicRoutes;
+    if (data.allowPublicVoice !== undefined) updates.allow_public_voice = data.allowPublicVoice;
     if (data.allowAnonymousBrowsing !== undefined) updates.allow_anonymous_browsing = data.allowAnonymousBrowsing;
     if (data.calendarEnabled !== undefined) updates.calendar_enabled = data.calendarEnabled;
     if (data.blogEnabled !== undefined) updates.blog_enabled = data.blogEnabled;
@@ -113,6 +116,7 @@ export async function updateSpaceAdminSettings(
       allow_public_galleries: data.allowPublicGalleries ?? false,
       allow_public_calendar: data.allowPublicCalendar ?? false,
       allow_public_routes: data.allowPublicRoutes ?? false,
+      allow_public_voice: data.allowPublicVoice ?? false,
       allow_anonymous_browsing: data.allowAnonymousBrowsing ?? false,
       calendar_enabled: data.calendarEnabled ?? false,
       blog_enabled: data.blogEnabled ?? false,
@@ -219,6 +223,7 @@ function formatSettings(row: any) {
     allowPublicGalleries: !!row.allow_public_galleries,
     allowPublicCalendar: !!row.allow_public_calendar,
     allowPublicRoutes: !!row.allow_public_routes,
+    allowPublicVoice: !!row.allow_public_voice,
     allowAnonymousBrowsing: row.allow_anonymous_browsing,
     calendarEnabled: !!row.calendar_enabled,
     blogEnabled: !!row.blog_enabled,

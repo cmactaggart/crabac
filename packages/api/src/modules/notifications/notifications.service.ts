@@ -35,7 +35,9 @@ export async function listNotifications(
   }
 
   const rows = await query;
-  return rows.map(formatNotification);
+  const notifications = rows.map(formatNotification);
+  await resolveActionableStatuses(notifications, userId);
+  return notifications;
 }
 
 export async function getUnreadCount(userId: string): Promise<number> {
@@ -61,6 +63,76 @@ export async function markAllAsRead(userId: string) {
 async function getNotification(id: string) {
   const row = await db('notifications').where('id', id).first();
   return formatNotification(row);
+}
+
+async function resolveActionableStatuses(notifications: any[], userId: string) {
+  // Collect IDs for batch queries
+  const followFromUserIds: string[] = [];
+  const dmConversationIds: string[] = [];
+  const portalInviteIds: string[] = [];
+
+  for (const n of notifications) {
+    if (n.type === 'follow_request' && n.data.fromUserId) {
+      followFromUserIds.push(n.data.fromUserId);
+    } else if (n.type === 'dm_request' && n.data.conversationId) {
+      dmConversationIds.push(n.data.conversationId);
+    } else if (n.type === 'portal_invite' && n.data.inviteId) {
+      portalInviteIds.push(n.data.inviteId);
+    }
+  }
+
+  // Batch query follow statuses
+  const followStatuses = new Map<string, string>();
+  if (followFromUserIds.length > 0) {
+    const rows = await db('follows')
+      .whereIn('follower_id', followFromUserIds)
+      .where('following_id', userId)
+      .select('follower_id', 'status');
+    for (const r of rows) followStatuses.set(String(r.follower_id), r.status);
+  }
+
+  // Batch query DM member statuses
+  const dmStatuses = new Map<string, string>();
+  if (dmConversationIds.length > 0) {
+    const rows = await db('conversation_members')
+      .whereIn('conversation_id', dmConversationIds)
+      .where('user_id', userId)
+      .select('conversation_id', 'status');
+    for (const r of rows) dmStatuses.set(String(r.conversation_id), r.status);
+  }
+
+  // Batch query portal invite statuses
+  const portalStatuses = new Map<string, string>();
+  if (portalInviteIds.length > 0) {
+    const rows = await db('portal_invites')
+      .whereIn('id', portalInviteIds)
+      .select('id', 'status');
+    for (const r of rows) portalStatuses.set(String(r.id), r.status);
+  }
+
+  // Assign resolvedStatus to each notification
+  for (const n of notifications) {
+    if (n.type === 'follow_request') {
+      const status = followStatuses.get(n.data.fromUserId);
+      if (!status) n.resolvedStatus = 'rejected';
+      else if (status === 'pending') n.resolvedStatus = 'pending';
+      else n.resolvedStatus = 'accepted';
+    } else if (n.type === 'dm_request') {
+      const status = dmStatuses.get(n.data.conversationId);
+      if (!status) n.resolvedStatus = 'rejected';
+      else if (status === 'pending') n.resolvedStatus = 'pending';
+      else if (status === 'accepted') n.resolvedStatus = 'accepted';
+      else n.resolvedStatus = 'rejected';
+    } else if (n.type === 'portal_invite') {
+      const status = portalStatuses.get(n.data.inviteId);
+      if (!status) n.resolvedStatus = 'rejected';
+      else if (status === 'pending') n.resolvedStatus = 'pending';
+      else if (status === 'accepted') n.resolvedStatus = 'accepted';
+      else n.resolvedStatus = 'rejected';
+    } else {
+      n.resolvedStatus = null;
+    }
+  }
 }
 
 function formatNotification(row: any) {

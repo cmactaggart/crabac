@@ -1,3 +1,4 @@
+import bcrypt from 'bcrypt';
 import { db } from '../../database/connection.js';
 import { snowflake } from '../_shared.js';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../../lib/errors.js';
@@ -136,9 +137,15 @@ export async function createEvent(
     endTime?: string | null;
     meetingRoomEnabled?: boolean;
     meetingRoomEarlyEntry?: number | null;
+    meetingPublicAccess?: boolean;
+    meetingPublicChat?: boolean;
+    meetingPublicParticipation?: boolean;
+    meetingRoomPassword?: string | null;
+    meetingIdentityMode?: 'anonymous' | 'email_verify' | 'require_login';
   },
 ) {
   const id = snowflake.generate();
+  const passwordHash = data.meetingRoomPassword ? await bcrypt.hash(data.meetingRoomPassword, 10) : null;
   await db('calendar_events').insert({
     id,
     space_id: spaceId,
@@ -156,6 +163,11 @@ export async function createEvent(
     image_url: data.imageUrl || null,
     meeting_room_enabled: data.meetingRoomEnabled ?? false,
     meeting_room_early_entry: data.meetingRoomEarlyEntry ?? null,
+    meeting_public_access: data.meetingPublicAccess ?? false,
+    meeting_public_chat: data.meetingPublicChat ?? false,
+    meeting_public_participation: data.meetingPublicParticipation ?? false,
+    meeting_room_password: passwordHash,
+    meeting_identity_mode: data.meetingIdentityMode ?? 'anonymous',
   });
 
   const event = await getEvent(id);
@@ -180,6 +192,11 @@ export async function updateEvent(
     imageUrl?: string | null;
     meetingRoomEnabled?: boolean;
     meetingRoomEarlyEntry?: number | null;
+    meetingPublicAccess?: boolean;
+    meetingPublicChat?: boolean;
+    meetingPublicParticipation?: boolean;
+    meetingRoomPassword?: string | null;
+    meetingIdentityMode?: 'anonymous' | 'email_verify' | 'require_login';
   },
 ) {
   const updates: Record<string, any> = {};
@@ -196,6 +213,13 @@ export async function updateEvent(
   if (data.imageUrl !== undefined) updates.image_url = data.imageUrl;
   if (data.meetingRoomEnabled !== undefined) updates.meeting_room_enabled = data.meetingRoomEnabled;
   if (data.meetingRoomEarlyEntry !== undefined) updates.meeting_room_early_entry = data.meetingRoomEarlyEntry;
+  if (data.meetingPublicAccess !== undefined) updates.meeting_public_access = data.meetingPublicAccess;
+  if (data.meetingPublicChat !== undefined) updates.meeting_public_chat = data.meetingPublicChat;
+  if (data.meetingPublicParticipation !== undefined) updates.meeting_public_participation = data.meetingPublicParticipation;
+  if (data.meetingIdentityMode !== undefined) updates.meeting_identity_mode = data.meetingIdentityMode;
+  if (data.meetingRoomPassword !== undefined) {
+    updates.meeting_room_password = data.meetingRoomPassword ? await bcrypt.hash(data.meetingRoomPassword, 10) : null;
+  }
 
   if (Object.keys(updates).length > 0) {
     updates.updated_at = db.fn.now(3);
@@ -478,6 +502,11 @@ function formatEvent(
     isCancelled: !!row.is_cancelled,
     meetingRoomEnabled: !!row.meeting_room_enabled,
     meetingRoomEarlyEntry: row.meeting_room_early_entry ?? null,
+    meetingPublicAccess: !!row.meeting_public_access,
+    meetingPublicChat: !!row.meeting_public_chat,
+    meetingPublicParticipation: !!row.meeting_public_participation,
+    meetingIdentityMode: row.meeting_identity_mode || 'anonymous',
+    meetingHasPassword: !!row.meeting_room_password,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -609,10 +638,16 @@ export async function createSeries(
     endTime?: string | null;
     meetingRoomEnabled?: boolean;
     meetingRoomEarlyEntry?: number | null;
+    meetingPublicAccess?: boolean;
+    meetingPublicChat?: boolean;
+    meetingPublicParticipation?: boolean;
+    meetingRoomPassword?: string | null;
+    meetingIdentityMode?: 'anonymous' | 'email_verify' | 'require_login';
     recurrenceRule: RecurrenceRule;
   },
 ) {
   const seriesId = snowflake.generate();
+  const passwordHash = data.meetingRoomPassword ? await bcrypt.hash(data.meetingRoomPassword, 10) : null;
   await db('event_series').insert({
     id: seriesId,
     space_id: spaceId,
@@ -627,6 +662,11 @@ export async function createSeries(
     is_public: data.isPublic ?? false,
     meeting_room_enabled: data.meetingRoomEnabled ?? false,
     meeting_room_early_entry: data.meetingRoomEarlyEntry ?? null,
+    meeting_public_access: data.meetingPublicAccess ?? false,
+    meeting_public_chat: data.meetingPublicChat ?? false,
+    meeting_public_participation: data.meetingPublicParticipation ?? false,
+    meeting_room_password: passwordHash,
+    meeting_identity_mode: data.meetingIdentityMode ?? 'anonymous',
     recurrence_rule: JSON.stringify(data.recurrenceRule),
     event_time: data.eventTime || null,
     end_time: data.endTime || null,
@@ -653,6 +693,11 @@ export async function createSeries(
       image_url: data.imageUrl || null,
       meeting_room_enabled: data.meetingRoomEnabled ?? false,
       meeting_room_early_entry: data.meetingRoomEarlyEntry ?? null,
+      meeting_public_access: data.meetingPublicAccess ?? false,
+      meeting_public_chat: data.meetingPublicChat ?? false,
+      meeting_public_participation: data.meetingPublicParticipation ?? false,
+      meeting_room_password: passwordHash,
+      meeting_identity_mode: data.meetingIdentityMode ?? 'anonymous',
       series_id: seriesId,
     });
   }
@@ -688,6 +733,11 @@ export async function updateSeries(
     endTime?: string | null;
     meetingRoomEnabled?: boolean;
     meetingRoomEarlyEntry?: number | null;
+    meetingPublicAccess?: boolean;
+    meetingPublicChat?: boolean;
+    meetingPublicParticipation?: boolean;
+    meetingRoomPassword?: string | null;
+    meetingIdentityMode?: 'anonymous' | 'email_verify' | 'require_login';
     recurrenceRule?: RecurrenceRule;
     updateMode?: 'all' | 'future';
   },
@@ -709,6 +759,13 @@ export async function updateSeries(
   if (data.imageUrl !== undefined) updates.image_url = data.imageUrl;
   if (data.meetingRoomEnabled !== undefined) updates.meeting_room_enabled = data.meetingRoomEnabled;
   if (data.meetingRoomEarlyEntry !== undefined) updates.meeting_room_early_entry = data.meetingRoomEarlyEntry;
+  if (data.meetingPublicAccess !== undefined) updates.meeting_public_access = data.meetingPublicAccess;
+  if (data.meetingPublicChat !== undefined) updates.meeting_public_chat = data.meetingPublicChat;
+  if (data.meetingPublicParticipation !== undefined) updates.meeting_public_participation = data.meetingPublicParticipation;
+  if (data.meetingIdentityMode !== undefined) updates.meeting_identity_mode = data.meetingIdentityMode;
+  if (data.meetingRoomPassword !== undefined) {
+    updates.meeting_room_password = data.meetingRoomPassword ? await bcrypt.hash(data.meetingRoomPassword, 10) : null;
+  }
   if (data.recurrenceRule !== undefined) updates.recurrence_rule = JSON.stringify(data.recurrenceRule);
   updates.updated_at = db.fn.now(3);
 
@@ -755,6 +812,11 @@ export async function updateSeries(
       image_url: updatedSeries.image_url,
       meeting_room_enabled: !!updatedSeries.meeting_room_enabled,
       meeting_room_early_entry: updatedSeries.meeting_room_early_entry,
+      meeting_public_access: !!updatedSeries.meeting_public_access,
+      meeting_public_chat: !!updatedSeries.meeting_public_chat,
+      meeting_public_participation: !!updatedSeries.meeting_public_participation,
+      meeting_room_password: updatedSeries.meeting_room_password || null,
+      meeting_identity_mode: updatedSeries.meeting_identity_mode || 'anonymous',
       series_id: seriesId,
     });
   }
@@ -883,6 +945,11 @@ function formatSeries(row: any) {
     isPublic: !!row.is_public,
     meetingRoomEnabled: !!row.meeting_room_enabled,
     meetingRoomEarlyEntry: row.meeting_room_early_entry ?? null,
+    meetingPublicAccess: !!row.meeting_public_access,
+    meetingPublicChat: !!row.meeting_public_chat,
+    meetingPublicParticipation: !!row.meeting_public_participation,
+    meetingIdentityMode: row.meeting_identity_mode || 'anonymous',
+    meetingHasPassword: !!row.meeting_room_password,
     recurrenceRule: rule,
     eventTime: row.event_time || null,
     endTime: row.end_time || null,

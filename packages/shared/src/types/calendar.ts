@@ -27,6 +27,11 @@ export interface CalendarEvent {
   isCancelled?: boolean;
   meetingRoomEnabled?: boolean;
   meetingRoomEarlyEntry?: number | null; // minutes before event, -1 = anytime
+  meetingPublicAccess?: boolean;
+  meetingPublicChat?: boolean;
+  meetingPublicParticipation?: boolean;
+  meetingIdentityMode?: 'anonymous' | 'email_verify' | 'require_login';
+  meetingHasPassword?: boolean;
   meetingRoom?: {
     status: 'pending' | 'open' | 'active' | 'closed';
     callId: string | null;
@@ -69,6 +74,11 @@ export interface EventSeries {
   isPublic: boolean;
   meetingRoomEnabled?: boolean;
   meetingRoomEarlyEntry?: number | null;
+  meetingPublicAccess?: boolean;
+  meetingPublicChat?: boolean;
+  meetingPublicParticipation?: boolean;
+  meetingIdentityMode?: 'anonymous' | 'email_verify' | 'require_login';
+  meetingHasPassword?: boolean;
   recurrenceRule: RecurrenceRule;
   eventTime: string | null;
   endTime: string | null;
@@ -96,4 +106,31 @@ export interface EventRsvp {
     displayName: string;
     avatarUrl: string | null;
   };
+}
+
+export type MeetingIdentityMode = 'anonymous' | 'email_verify' | 'require_login';
+
+export interface MeetingRoomGuest {
+  id: string;
+  eventId: string | null;
+  channelId: string | null;
+  displayName: string;
+  email: string | null;
+  emailVerified: boolean;
+  livekitIdentity: string;
+  status: 'active' | 'left' | 'kicked';
+  createdAt: string;
+}
+
+export interface MeetingInvite {
+  id: string;
+  eventId: string | null;
+  channelId: string | null;
+  token: string;
+  email: string | null;
+  createdBy: string;
+  maxUses: number | null;
+  useCount: number;
+  expiresAt: string | null;
+  createdAt: string;
 }

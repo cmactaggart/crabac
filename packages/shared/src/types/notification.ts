@@ -143,4 +143,5 @@ export interface Notification {
   data: NotificationData;
   read: boolean;
   createdAt: string;
+  resolvedStatus?: 'pending' | 'accepted' | 'rejected' | null;
 }

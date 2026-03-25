@@ -20,6 +20,12 @@ export interface Channel {
   sourceSpaceId?: string;
   // Set on channels in the source space that have been portaled out
   isPortalSource?: boolean;
+  // Public voice access fields (for voice channels)
+  publicVoiceAccess?: boolean;
+  publicVoiceChat?: boolean;
+  publicVoiceParticipation?: boolean;
+  voiceIdentityMode?: 'anonymous' | 'email_verify' | 'require_login';
+  voiceHasPassword?: boolean;
 }
 
 export interface ChannelPermissionOverride {

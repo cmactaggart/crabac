@@ -12,6 +12,7 @@ import { handleMulterUpload, VIDEO_EXTENSIONS } from '../../middleware/upload.js
 import { validate } from '../../middleware/validate.js';
 import { validation } from '@crabac/shared';
 import { BadRequestError } from '../../lib/errors.js';
+import { config } from '../../config.js';
 
 export const boardsRoutes = Router();
 
@@ -647,6 +648,23 @@ function generateIcs(
 
     if (event.category?.name) {
       lines.push(foldLine(`CATEGORIES:${escapeIcs(event.category.name)}`));
+    }
+
+    // Public meeting room link
+    if (event.meetingRoomEnabled && event.meetingPublicAccess) {
+      const meetingUrl = `${config.appUrl}/calendar/${space.slug}/meeting/${event.id}`;
+      lines.push(foldLine(`X-MEETING-URL:${meetingUrl}`));
+      // Append meeting link to description
+      const meetingNote = event.description
+        ? `${escapeIcs(event.description)}\\n\\nJoin meeting: ${meetingUrl}`
+        : `Join meeting: ${meetingUrl}`;
+      // Remove previously added DESCRIPTION if exists, and re-add with meeting link
+      const descIdx = lines.findIndex((l) => l.startsWith('DESCRIPTION:'));
+      if (descIdx >= 0) {
+        lines[descIdx] = foldLine(`DESCRIPTION:${meetingNote}`);
+      } else {
+        lines.push(foldLine(`DESCRIPTION:${meetingNote}`));
+      }
     }
 
     lines.push('END:VEVENT');

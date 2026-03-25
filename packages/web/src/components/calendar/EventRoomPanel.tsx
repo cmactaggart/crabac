@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Headphones, Mic, MicOff, PhoneOff, Clock, Users, RotateCcw } from 'lucide-react';
+import { Headphones, Mic, MicOff, PhoneOff, Clock, Users, RotateCcw, Copy, Globe, UserX } from 'lucide-react';
 import { useCalendarStore } from '../../stores/calendar.js';
 import { useCallStore } from '../../stores/call.js';
+import { useSpacesStore } from '../../stores/spaces.js';
 import { getSocket } from '../../lib/socket.js';
 import { api } from '../../lib/api.js';
-import type { CalendarEvent } from '@crabac/shared';
+import type { CalendarEvent, MeetingRoomGuest } from '@crabac/shared';
 
 interface Props {
   spaceId: string;
@@ -53,8 +54,13 @@ export function EventRoomPanel({ spaceId, compact }: Props) {
   const joinEventCall = useCallStore((s) => s.joinEventCall);
   const leaveCall = useCallStore((s) => s.leaveCall);
 
+  const spaces = useSpacesStore((s) => s.spaces);
+  const space = spaces.find((s) => s.id === spaceId);
+
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [rejoinRoom, setRejoinRoom] = useState<{ eventId: string; eventName: string } | null>(null);
+  const [guests, setGuests] = useState<Record<string, MeetingRoomGuest[]>>({});
+  const [copiedLink, setCopiedLink] = useState<string | null>(null);
 
   // Check if user was in an active event room (for rejoin after refresh)
   useEffect(() => {
@@ -102,11 +108,17 @@ export function EventRoomPanel({ spaceId, compact }: Props) {
     socket.on('calendar:room_participant_changed', handleRoomChange);
     socket.on('calendar:room_closed', handleRoomChange);
     socket.on('calendar:room_opened', handleRoomChange);
+    socket.on('calendar:public_guest_joined', handleRoomChange);
+    socket.on('calendar:public_guest_left', handleRoomChange);
+    socket.on('calendar:public_guest_kicked', handleRoomChange);
 
     return () => {
       socket.off('calendar:room_participant_changed', handleRoomChange);
       socket.off('calendar:room_closed', handleRoomChange);
       socket.off('calendar:room_opened', handleRoomChange);
+      socket.off('calendar:public_guest_joined', handleRoomChange);
+      socket.off('calendar:public_guest_left', handleRoomChange);
+      socket.off('calendar:public_guest_kicked', handleRoomChange);
     };
   }, [spaceId, fetchActiveRooms]);
 
@@ -142,6 +154,35 @@ export function EventRoomPanel({ spaceId, compact }: Props) {
   }
 
   if (happeningNow.length === 0 && happeningSoon.length === 0 && !rejoinRoom) return null;
+
+  // Fetch guests for the active event
+  useEffect(() => {
+    if (!activeEventId) return;
+    api<MeetingRoomGuest[]>(`/spaces/${spaceId}/calendar/events/${activeEventId}/meeting/guests`)
+      .then((g) => setGuests((prev) => ({ ...prev, [activeEventId]: g })))
+      .catch(() => {});
+  }, [activeEventId, spaceId]);
+
+  const copyPublicLink = (eventId: string) => {
+    if (!space) return;
+    const url = `${window.location.origin}/calendar/${space.slug}/meeting/${eventId}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedLink(eventId);
+      setTimeout(() => setCopiedLink(null), 2000);
+    });
+  };
+
+  const kickGuest = async (eventId: string, guestId: string) => {
+    try {
+      await api(`/spaces/${spaceId}/calendar/events/${eventId}/meeting/kick/${guestId}`, { method: 'POST' });
+      setGuests((prev) => ({
+        ...prev,
+        [eventId]: (prev[eventId] || []).filter((g) => g.id !== guestId),
+      }));
+    } catch {
+      // ignore
+    }
+  };
 
   const handleJoin = async (event: CalendarEvent) => {
     try {
@@ -203,6 +244,15 @@ export function EventRoomPanel({ spaceId, compact }: Props) {
               <div style={styles.connectedLabel}>
                 <Headphones size={12} style={{ color: 'var(--success)' }} />
               </div>
+              {event.meetingPublicAccess && (
+                <button
+                  onClick={() => copyPublicLink(event.id)}
+                  style={{ ...styles.smallBtn, color: copiedLink === event.id ? 'var(--success)' : 'var(--text-muted)' }}
+                  title={copiedLink === event.id ? 'Copied!' : 'Copy public link'}
+                >
+                  {copiedLink === event.id ? <Globe size={14} /> : <Copy size={14} />}
+                </button>
+              )}
               <button
                 onClick={() => toggleMute()}
                 style={{
@@ -233,6 +283,27 @@ export function EventRoomPanel({ spaceId, compact }: Props) {
             </button>
           )}
         </div>
+        {/* Guest list when connected */}
+        {isConnected && !compact && (guests[event.id] || []).length > 0 && (
+          <div style={{ width: '100%', borderTop: '1px solid var(--border)', paddingTop: 4, marginTop: 4 }}>
+            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>
+              <Globe size={9} style={{ verticalAlign: 'middle', marginRight: 3 }} />
+              Public Guests ({guests[event.id].length})
+            </div>
+            {guests[event.id].map((g) => (
+              <div key={g.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1px 0', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                <span>{g.displayName}</span>
+                <button
+                  onClick={() => kickGuest(event.id, g.id)}
+                  style={{ ...styles.smallBtn, color: 'var(--text-muted)' }}
+                  title="Kick guest"
+                >
+                  <UserX size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   };
@@ -312,6 +383,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
     padding: '6px 8px',
     borderRadius: 'var(--radius)',
     background: 'var(--bg-secondary)',

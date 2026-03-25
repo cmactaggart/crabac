@@ -52,6 +52,26 @@ export const webhookLimiter = rateLimit({
   message: { error: { code: 'RATE_LIMITED', message: 'Too many webhook requests' } },
 });
 
+// Public meeting join — stricter to prevent password brute-force
+export const publicMeetingJoinLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => req.headers['cf-connecting-ip'] as string || req.ip || '0.0.0.0',
+  message: { error: { code: 'RATE_LIMITED', message: 'Too many join attempts' } },
+});
+
+// Email verification requests — prevent email spam
+export const meetingEmailVerifyLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => req.headers['cf-connecting-ip'] as string || req.ip || '0.0.0.0',
+  message: { error: { code: 'RATE_LIMITED', message: 'Too many verification requests' } },
+});
+
 export const mobileUpdateCheckLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 30,

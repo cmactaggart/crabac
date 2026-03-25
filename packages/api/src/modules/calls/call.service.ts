@@ -37,6 +37,30 @@ export async function createParticipantToken(roomName: string, userId: string, u
   };
 }
 
+export async function createGuestParticipantToken(
+  roomName: string,
+  identity: string,
+  displayName: string,
+  grants: { canPublish: boolean; canPublishData: boolean },
+): Promise<CallToken> {
+  const token = new AccessToken(config.livekit.apiKey, config.livekit.apiSecret, {
+    identity,
+    name: displayName,
+  });
+  token.addGrant({
+    room: roomName,
+    roomJoin: true,
+    canPublish: grants.canPublish,
+    canSubscribe: true,
+    canPublishData: grants.canPublishData,
+  });
+
+  return {
+    token: await token.toJwt(),
+    wsUrl: config.livekit.wsUrl,
+  };
+}
+
 // ─── DM / Group DM Calls ───
 
 export async function initiateCall(userId: string, conversationId: string): Promise<Call & { token: CallToken }> {

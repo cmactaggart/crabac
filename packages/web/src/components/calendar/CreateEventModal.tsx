@@ -43,6 +43,11 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
   const [meetingRoomEarlyEntry, setMeetingRoomEarlyEntry] = useState<number>(
     editEvent?.meetingRoomEarlyEntry != null ? editEvent.meetingRoomEarlyEntry : 15,
   );
+  const [meetingPublicAccess, setMeetingPublicAccess] = useState(editEvent?.meetingPublicAccess || false);
+  const [meetingPublicChat, setMeetingPublicChat] = useState(editEvent?.meetingPublicChat || false);
+  const [meetingPublicParticipation, setMeetingPublicParticipation] = useState(editEvent?.meetingPublicParticipation || false);
+  const [meetingIdentityMode, setMeetingIdentityMode] = useState<'anonymous' | 'email_verify' | 'require_login'>(editEvent?.meetingIdentityMode || 'anonymous');
+  const [meetingRoomPassword, setMeetingRoomPassword] = useState('');
   const [imageUrl, setImageUrl] = useState(editEvent?.imageUrl || '');
   const [imageUploading, setImageUploading] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -123,6 +128,11 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
           imageUrl: imageUrl || null,
           meetingRoomEnabled,
           meetingRoomEarlyEntry: meetingRoomEnabled ? meetingRoomEarlyEntry : null,
+          meetingPublicAccess: meetingRoomEnabled ? meetingPublicAccess : false,
+          meetingPublicChat: meetingRoomEnabled && meetingPublicAccess ? meetingPublicChat : false,
+          meetingPublicParticipation: meetingRoomEnabled && meetingPublicAccess ? meetingPublicParticipation : false,
+          meetingIdentityMode: meetingRoomEnabled && meetingPublicAccess ? meetingIdentityMode : 'anonymous',
+          meetingRoomPassword: meetingRoomEnabled && meetingPublicAccess && meetingRoomPassword ? meetingRoomPassword : null,
           recurrenceRule: {
             freq: recurrenceFreq,
             interval: recurrenceInterval,
@@ -147,6 +157,11 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
           imageUrl: imageUrl || null,
           meetingRoomEnabled,
           meetingRoomEarlyEntry: meetingRoomEnabled ? meetingRoomEarlyEntry : null,
+          meetingPublicAccess: meetingRoomEnabled ? meetingPublicAccess : false,
+          meetingPublicChat: meetingRoomEnabled && meetingPublicAccess ? meetingPublicChat : false,
+          meetingPublicParticipation: meetingRoomEnabled && meetingPublicAccess ? meetingPublicParticipation : false,
+          meetingIdentityMode: meetingRoomEnabled && meetingPublicAccess ? meetingIdentityMode : 'anonymous',
+          meetingRoomPassword: meetingRoomEnabled && meetingPublicAccess && meetingRoomPassword ? meetingRoomPassword : null,
         };
 
         if (editEvent) {
@@ -449,6 +464,67 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
                   <option value={60}>1 hour early</option>
                   <option value={-1}>Anytime</option>
                 </select>
+
+                {/* Public access controls */}
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 4 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={meetingPublicAccess}
+                      onChange={(e) => setMeetingPublicAccess(e.target.checked)}
+                      style={{ margin: 0 }}
+                    />
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>Allow public access</span>
+                  </label>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: 22 }}>
+                    Anyone with the link can watch/listen
+                  </span>
+
+                  {meetingPublicAccess && (
+                    <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6, marginLeft: 22 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={meetingPublicChat}
+                          onChange={(e) => setMeetingPublicChat(e.target.checked)}
+                          style={{ margin: 0 }}
+                        />
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)' }}>Allow public chat</span>
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={meetingPublicParticipation}
+                          onChange={(e) => setMeetingPublicParticipation(e.target.checked)}
+                          style={{ margin: 0 }}
+                        />
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)' }}>Allow public mic/camera</span>
+                      </label>
+
+                      <label style={{ ...styles.label, marginTop: 4, marginBottom: 0 }}>Identity requirement</label>
+                      <select
+                        value={meetingIdentityMode}
+                        onChange={(e) => setMeetingIdentityMode(e.target.value as any)}
+                        style={styles.input}
+                      >
+                        <option value="anonymous">Anonymous (display name only)</option>
+                        <option value="email_verify">Email verification</option>
+                        <option value="require_login">Require login</option>
+                      </select>
+
+                      <label style={{ ...styles.label, marginTop: 4, marginBottom: 0 }}>Password (optional)</label>
+                      <input
+                        type="password"
+                        value={meetingRoomPassword}
+                        onChange={(e) => setMeetingRoomPassword(e.target.value)}
+                        placeholder={editEvent?.meetingHasPassword ? '••••••• (leave blank to keep)' : 'No password'}
+                        style={styles.input}
+                        autoComplete="off"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

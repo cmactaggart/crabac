@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, X, Headphones } from 'lucide-react';
 import { boardApi } from '../../lib/boardApi.js';
 import { usePublicTheme } from '../../contexts/PublicThemeContext.js';
 import type { CalendarCategory, CalendarEvent } from '@crabac/shared';
@@ -489,6 +489,7 @@ export function PublicCalendarView() {
         <EventDetail
           event={selectedEvent}
           onClose={() => setSelectedEvent(null)}
+          spaceSlug={spaceSlug}
         />
       )}
     </div>
@@ -548,13 +549,15 @@ function DayPanel({ date, events, onClose, onEventClick }: {
 
 // ─── Read-only Event Detail ───
 
-function EventDetail({ event, onClose }: {
+function EventDetail({ event, onClose, spaceSlug }: {
   event: CalendarEvent;
   onClose: () => void;
+  spaceSlug?: string;
 }) {
   const theme = usePublicTheme();
   const c = theme.colors;
   const s = useStyles();
+  const navigate = useNavigate();
 
   const d = new Date(event.eventDate + 'T00:00:00');
   const dateLabel = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -606,6 +609,28 @@ function EventDetail({ event, onClose }: {
                 {event.description}
               </p>
             </div>
+          )}
+          {event.meetingPublicAccess && spaceSlug && (
+            <button
+              onClick={() => navigate(`/calendar/${spaceSlug}/meeting/${event.id}`)}
+              style={{
+                marginTop: 12,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '8px 16px',
+                background: 'var(--accent, #5865f2)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '0.85rem',
+              }}
+            >
+              <Headphones size={16} />
+              Join Meeting
+            </button>
           )}
         </div>
       </div>

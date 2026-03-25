@@ -56,7 +56,7 @@ export function BoardSettingsTab({ spaceId }: Props) {
     }
   };
 
-  const handleToggle = async (key: 'allowPublicBoards' | 'allowPublicGalleries' | 'allowPublicCalendar' | 'allowPublicRoutes' | 'allowPublicBlog' | 'allowPublicNewsletter' | 'allowPublicNewsletterSubscription' | 'allowAnonymousBrowsing' | 'webhooksEnabled') => {
+  const handleToggle = async (key: 'allowPublicBoards' | 'allowPublicGalleries' | 'allowPublicCalendar' | 'allowPublicRoutes' | 'allowPublicVoice' | 'allowPublicBlog' | 'allowPublicNewsletter' | 'allowPublicNewsletterSubscription' | 'allowAnonymousBrowsing' | 'webhooksEnabled') => {
     if (!settings) return;
     setSaving(true);
     setError('');
@@ -215,6 +215,28 @@ export function BoardSettingsTab({ spaceId }: Props) {
           <div style={{
             ...styles.toggleKnob,
             transform: settings?.allowPublicCalendar ? 'translateX(18px)' : 'translateX(0)',
+          }} />
+        </button>
+      </div>
+
+      <div style={styles.settingRow}>
+        <div style={styles.settingInfo}>
+          <span style={styles.settingLabel}>Enable Public Voice &amp; Video</span>
+          <span style={styles.settingDesc}>
+            Allow voice channels and calendar event meeting rooms to be accessed by the public through the web.
+          </span>
+        </div>
+        <button
+          onClick={() => handleToggle('allowPublicVoice')}
+          disabled={saving}
+          style={{
+            ...styles.toggle,
+            background: settings?.allowPublicVoice ? 'var(--accent)' : 'var(--bg-tertiary)',
+          }}
+        >
+          <div style={{
+            ...styles.toggleKnob,
+            transform: settings?.allowPublicVoice ? 'translateX(18px)' : 'translateX(0)',
           }} />
         </button>
       </div>

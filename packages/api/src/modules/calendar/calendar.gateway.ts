@@ -20,4 +20,38 @@ export function registerCalendarGateway() {
       eventId,
     });
   });
+
+  // Public guest joined meeting room
+  eventBus.on('calendar.public_guest_joined', ({ eventId, spaceId, guestId, displayName }) => {
+    if (!io) return;
+
+    io.to(`space:${spaceId}`).emit('calendar:public_guest_joined', {
+      eventId,
+      guestId,
+      displayName,
+    });
+  });
+
+  // Public guest left meeting room
+  eventBus.on('calendar.public_guest_left', ({ eventId, spaceId, guestId, displayName }) => {
+    if (!io) return;
+
+    io.to(`space:${spaceId}`).emit('calendar:public_guest_left', {
+      eventId,
+      guestId,
+      displayName,
+    });
+  });
+
+  // Public guest kicked from meeting room
+  eventBus.on('calendar.public_guest_kicked', ({ eventId, spaceId, guestId, displayName, kickedBy }) => {
+    if (!io) return;
+
+    io.to(`space:${spaceId}`).emit('calendar:public_guest_kicked', {
+      eventId,
+      guestId,
+      displayName,
+      kickedBy,
+    });
+  });
 }

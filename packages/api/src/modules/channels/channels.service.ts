@@ -1,3 +1,4 @@
+import bcrypt from 'bcrypt';
 import { db } from '../../database/connection.js';
 import { snowflake } from '../_shared.js';
 import { NotFoundError, ForbiddenError, ConflictError } from '../../lib/errors.js';
@@ -6,7 +7,10 @@ import { computePermissions, computeChannelPermissions } from '../rbac/rbac.serv
 
 export async function createChannel(
   spaceId: string,
-  data: { name: string; displayName?: string; topic?: string; type?: string; isPrivate?: boolean; isPublic?: boolean; categoryId?: string },
+  data: {
+    name: string; displayName?: string; topic?: string; type?: string; isPrivate?: boolean; isPublic?: boolean; categoryId?: string;
+    publicVoiceAccess?: boolean; publicVoiceChat?: boolean; publicVoiceParticipation?: boolean; voicePassword?: string | null; voiceIdentityMode?: 'anonymous' | 'email_verify' | 'require_login';
+  },
   userId?: string,
   memberIds?: string[],
   roleOverrides?: string[],
@@ -23,6 +27,8 @@ export async function createChannel(
     .first();
   const position = (last?.maxPos ?? -1) + 1;
 
+  const passwordHash = data.voicePassword ? await bcrypt.hash(data.voicePassword, 10) : null;
+
   await db('channels').insert({
     id,
     space_id: spaceId,
@@ -34,6 +40,11 @@ export async function createChannel(
     is_private: data.isPrivate ?? false,
     position,
     category_id: data.categoryId ?? null,
+    public_voice_access: data.publicVoiceAccess ?? false,
+    public_voice_chat: data.publicVoiceChat ?? false,
+    public_voice_participation: data.publicVoiceParticipation ?? false,
+    voice_password: passwordHash,
+    voice_identity_mode: data.voiceIdentityMode ?? 'anonymous',
   });
 
   // If private, add creator + extra members to channel_members
@@ -188,7 +199,10 @@ export async function getChannel(channelId: string) {
 export async function updateChannel(
   spaceId: string,
   channelId: string,
-  data: { name?: string; displayName?: string | null; topic?: string | null; type?: string; isPublic?: boolean; isPrivate?: boolean; position?: number },
+  data: {
+    name?: string; displayName?: string | null; topic?: string | null; type?: string; isPublic?: boolean; isPrivate?: boolean; position?: number;
+    publicVoiceAccess?: boolean; publicVoiceChat?: boolean; publicVoiceParticipation?: boolean; voicePassword?: string | null; voiceIdentityMode?: 'anonymous' | 'email_verify' | 'require_login';
+  },
 ) {
   const channel = await db('channels').where({ id: channelId, space_id: spaceId }).first();
   if (!channel) throw new NotFoundError('Channel');
@@ -206,6 +220,13 @@ export async function updateChannel(
   if (data.isPublic !== undefined) updates.is_public = data.isPublic;
   if (data.isPrivate !== undefined) updates.is_private = data.isPrivate;
   if (data.position !== undefined) updates.position = data.position;
+  if (data.publicVoiceAccess !== undefined) updates.public_voice_access = data.publicVoiceAccess;
+  if (data.publicVoiceChat !== undefined) updates.public_voice_chat = data.publicVoiceChat;
+  if (data.publicVoiceParticipation !== undefined) updates.public_voice_participation = data.publicVoiceParticipation;
+  if (data.voiceIdentityMode !== undefined) updates.voice_identity_mode = data.voiceIdentityMode;
+  if (data.voicePassword !== undefined) {
+    updates.voice_password = data.voicePassword ? await bcrypt.hash(data.voicePassword, 10) : null;
+  }
 
   if (Object.keys(updates).length > 0) {
     await db('channels').where({ id: channelId, space_id: spaceId }).update(updates);
@@ -365,6 +386,11 @@ function formatChannel(row: any) {
     isAdmin: row.is_admin ?? false,
     position: row.position,
     categoryId: row.category_id,
+    publicVoiceAccess: !!row.public_voice_access,
+    publicVoiceChat: !!row.public_voice_chat,
+    publicVoiceParticipation: !!row.public_voice_participation,
+    voiceIdentityMode: row.voice_identity_mode || 'anonymous',
+    voiceHasPassword: !!row.voice_password,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

@@ -4,6 +4,7 @@ import { validate } from '../../middleware/validate.js';
 import { validation, Permissions } from '@crabac/shared';
 import { requirePermission, requireMember } from '../rbac/rbac.middleware.js';
 import * as calendarService from './calendar.service.js';
+import * as publicMeetingService from './public-meeting.service.js';
 import multer from 'multer';
 import path from 'path';
 import crypto from 'crypto';
@@ -385,6 +386,80 @@ calendarRoutes.get(
     try {
       const rsvps = await calendarService.listRsvps(req.params.eventId);
       res.json(rsvps);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ─── Meeting Invites (authenticated) ───
+
+calendarRoutes.post(
+  '/:spaceId/calendar/events/:eventId/meeting/invite',
+  requirePermission(Permissions.MANAGE_CALENDAR),
+  validate(validation.createMeetingInviteSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const invite = await publicMeetingService.createMeetingInvite(
+        req.params.eventId,
+        req.user!.userId,
+        req.body,
+      );
+      res.status(201).json(invite);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+calendarRoutes.get(
+  '/:spaceId/calendar/events/:eventId/meeting/invites',
+  requirePermission(Permissions.MANAGE_CALENDAR),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const invites = await publicMeetingService.listMeetingInvites(req.params.eventId);
+      res.json(invites);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+calendarRoutes.delete(
+  '/:spaceId/calendar/events/:eventId/meeting/invites/:inviteId',
+  requirePermission(Permissions.MANAGE_CALENDAR),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await publicMeetingService.deleteMeetingInvite(req.params.inviteId, req.params.eventId);
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ─── Meeting Guest Management (authenticated) ───
+
+calendarRoutes.get(
+  '/:spaceId/calendar/events/:eventId/meeting/guests',
+  requireMember,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const guests = await publicMeetingService.listPublicGuests(req.params.eventId);
+      res.json(guests);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+calendarRoutes.post(
+  '/:spaceId/calendar/events/:eventId/meeting/kick/:guestId',
+  requirePermission(Permissions.MANAGE_CALENDAR),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await publicMeetingService.kickPublicGuest(req.params.guestId, req.user!.userId);
+      res.status(204).end();
     } catch (err) {
       next(err);
     }

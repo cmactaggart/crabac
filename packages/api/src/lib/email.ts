@@ -12,12 +12,13 @@ const transporter = hasSmtp
     })
   : null;
 
-export async function sendEmail(to: string, subject: string, html: string) {
+export async function sendEmail(to: string, subject: string, html: string, attachments?: { filename: string; content: string | Buffer; contentType?: string }[]) {
   if (!transporter) {
     console.log(`[DEV EMAIL] To: ${to} | Subject: ${subject}\n${html}\n`);
+    if (attachments?.length) console.log(`[DEV EMAIL] Attachments: ${attachments.map((a) => a.filename).join(', ')}`);
     return;
   }
-  await transporter.sendMail({ from: config.smtp.from, to, subject, html });
+  await transporter.sendMail({ from: config.smtp.from, to, subject, html, attachments });
 }
 
 export async function sendVerificationEmail(to: string, username: string, token: string) {

@@ -41,6 +41,8 @@ import { BoardLogin } from './pages/boards/BoardLogin.js';
 import { PublicGalleryHome } from './pages/galleries/PublicGalleryHome.js';
 import { PublicGalleryView } from './pages/galleries/PublicGalleryView.js';
 import { PublicCalendarView } from './pages/calendar/PublicCalendarView.js';
+import { PublicMeetingRoom } from './pages/calendar/PublicMeetingRoom.js';
+import { PublicVoiceChannel } from './pages/voice/PublicVoiceChannel.js';
 import { PublicRoutesHome } from './pages/routes/PublicRoutesHome.js';
 import { PublicRoutesView } from './pages/routes/PublicRoutesView.js';
 import { PublicBlogHome } from './pages/blog/PublicBlogHome.js';
@@ -145,6 +147,12 @@ export function App() {
         <Route path="/calendar/:spaceSlug" element={<PublicLayout pageType="calendar" />}>
           <Route index element={<PublicCalendarView />} />
         </Route>
+        {/* Public meeting room (no auth guard, standalone page) */}
+        <Route path="/calendar/:spaceSlug/meeting/:eventId" element={<PublicMeetingRoom />} />
+        <Route path="/calendar/:spaceSlug/meeting/:eventId/verify" element={<PublicMeetingRoom />} />
+        {/* Public voice channel (no auth guard, standalone page) */}
+        <Route path="/:spaceSlug/voice/:channelName" element={<PublicVoiceChannel />} />
+        <Route path="/:spaceSlug/voice/:channelName/verify" element={<PublicVoiceChannel />} />
         {/* Public blog routes (no auth guard) */}
         <Route path="/blog/:spaceSlug" element={<PublicLayout pageType="blog" />}>
           <Route index element={<PublicBlogHome />} />

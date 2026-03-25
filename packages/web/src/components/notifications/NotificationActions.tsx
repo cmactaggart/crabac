@@ -15,6 +15,7 @@ export function NotificationActions({ notification }: Props) {
   const [result, setResult] = useState<ActionResult>(null);
   const [loading, setLoading] = useState(false);
   const data = notification.data as any;
+  const resolvedStatus = notification.resolvedStatus;
 
   const acceptFollowRequest = useFollowsStore((s) => s.acceptFollowRequest);
   const declineFollowRequest = useFollowsStore((s) => s.declineFollowRequest);
@@ -23,6 +24,15 @@ export function NotificationActions({ notification }: Props) {
   const acceptPortalInvite = usePortalsStore((s) => s.acceptInvite);
   const rejectPortalInvite = usePortalsStore((s) => s.rejectInvite);
   const markAsRead = useNotificationsStore((s) => s.markAsRead);
+
+  // If already resolved server-side, show the resolved state
+  if (resolvedStatus && resolvedStatus !== 'pending') {
+    return (
+      <div style={styles.result}>
+        {resolvedStatus === 'accepted' ? 'Accepted' : 'Rejected'}
+      </div>
+    );
+  }
 
   const handleAction = async (action: 'accept' | 'reject') => {
     setLoading(true);

@@ -61,6 +61,7 @@ export interface SpaceAdminSettings {
   calendarEnabled: boolean;
   blogEnabled: boolean;
   allowPublicBlog: boolean;
+  allowPublicVoice: boolean;
   newsletterEnabled: boolean;
   allowPublicNewsletter: boolean;
   allowPublicNewsletterSubscription: boolean;
