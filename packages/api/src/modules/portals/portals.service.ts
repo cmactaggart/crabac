@@ -5,6 +5,7 @@ import { Permissions, hasPermission } from '@crabac/shared';
 import { computePermissions } from '../rbac/rbac.service.js';
 import * as spacesService from '../spaces/spaces.service.js';
 import * as messagesService from '../messages/messages.service.js';
+import * as notificationsService from '../notifications/notifications.service.js';
 
 /**
  * Create a portal directly (requires CREATE_PORTAL in target space).
@@ -117,6 +118,19 @@ export async function submitPortalInvite(
         requestedByUsername: requester?.username || 'unknown',
       },
     });
+
+    // Notify target space owner
+    const targetSpace = await db('spaces').where('id', targetSpaceId).select('owner_id').first();
+    if (targetSpace && String(targetSpace.owner_id) !== userId) {
+      await notificationsService.createNotification(String(targetSpace.owner_id), 'portal_invite', {
+        inviteId: id,
+        targetSpaceId,
+        sourceSpaceName: sourceSpace?.name || 'Unknown',
+        channelName: channel.name,
+        requestedByUsername: requester?.username || 'unknown',
+        requestedByUserId: userId,
+      });
+    }
   }
 
   return getPortalInvite(id);

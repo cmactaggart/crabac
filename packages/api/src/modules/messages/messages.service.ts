@@ -163,6 +163,7 @@ export async function addReaction(channelId: string, messageId: string, userId: 
       const space = channel ? await db('spaces').where('id', channel.space_id).select('name').first() : null;
       const reactor = await db('users').where('id', userId).select('username').first();
       if (channel && space && reactor) {
+        const messagePreview = msg.content ? msg.content.substring(0, 100) : '';
         await notificationsService.createNotification(authorId, 'reaction', {
           messageId,
           channelId,
@@ -171,6 +172,7 @@ export async function addReaction(channelId: string, messageId: string, userId: 
           reactedByUsername: reactor.username,
           channelName: channel.name,
           spaceName: space.name,
+          messagePreview,
         });
       }
     } catch {

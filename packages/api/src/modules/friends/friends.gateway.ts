@@ -1,7 +1,6 @@
 import { eventBus } from '../../lib/event-bus.js';
 import { io } from '../../websocket/socket-server.js';
 import { db } from '../../database/connection.js';
-import { createNotification } from '../notifications/notifications.service.js';
 
 function getPublicUser(row: any) {
   return {
@@ -27,14 +26,6 @@ export function registerFriendsGateway() {
       io.to(`user:${recipientId}`).emit('friend:request_received', {
         friendshipId,
         user: getPublicUser(sender),
-      });
-
-      // Create notification
-      await createNotification(recipientId, 'friend_request', {
-        friendshipId,
-        fromUsername: sender.username,
-        fromDisplayName: sender.display_name,
-        fromUserId: String(sender.id),
       });
     } catch {
       // ignore

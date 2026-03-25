@@ -10,6 +10,7 @@ import { useIsMobile } from '../hooks/useIsMobile.js';
 import { SpaceSidebar } from '../components/layout/SpaceSidebar.js';
 import { ProfileSidebar } from '../components/layout/ProfileSidebar.js';
 import { Avatar } from '../components/common/Avatar.js';
+import { NotificationActions, isActionableNotification } from '../components/notifications/NotificationActions.js';
 import type { Notification, MentionNotificationData, ReplyNotificationData, EventCancelledNotificationData, PostCommentNotificationData, PostTagNotificationData } from '@crabac/shared';
 
 export function NotificationsPage() {
@@ -75,14 +76,17 @@ export function NotificationsPage() {
 
         {notifications.map((n) => {
           const avatar = getNotificationAvatar(n);
+          const actionable = isActionableNotification(n.type);
+          const ItemTag = actionable ? 'div' : 'button';
           return (
-            <button
+            <ItemTag
               key={n.id}
               style={{
                 ...styles.item,
                 background: n.read ? 'transparent' : 'rgba(88, 101, 242, 0.08)',
+                cursor: actionable ? 'default' : 'pointer',
               }}
-              onClick={() => handleClick(n)}
+              onClick={actionable ? undefined : () => handleClick(n)}
             >
               <div style={styles.itemAvatar}>
                 {avatar.src || avatar.name ? (
@@ -102,10 +106,11 @@ export function NotificationsPage() {
                     {getPreview(n)}
                   </div>
                 )}
+                {actionable && <NotificationActions notification={n} />}
                 <div style={styles.itemTime}>{formatTime(n.createdAt)}</div>
               </div>
               {!n.read && <div style={styles.unreadDot} />}
-            </button>
+            </ItemTag>
           );
         })}
 
@@ -168,7 +173,6 @@ function formatTitle(n: Notification): string {
     }
     case 'portal_invite':
       return `Portal invite from ${data.sourceSpaceName}`;
-    case 'friend_request':
     case 'follow_request':
       return `${data.fromDisplayName} wants to follow you`;
     case 'dm_request':
@@ -204,7 +208,6 @@ function getNotificationAvatar(n: Notification): { src: string | null; name: str
       const d = data as ReplyNotificationData;
       return { src: d.repliedByAvatarUrl || null, name: d.repliedByUsername };
     }
-    case 'friend_request':
     case 'follow_request':
     case 'dm_request':
       return { src: null, name: data.fromDisplayName || data.fromUsername || '?' };
@@ -229,7 +232,6 @@ function getNotificationIcon(type: string) {
     case 'reply': return <Reply size={18} style={{ color: 'var(--accent)' }} />;
     case 'portal_invite': return <Zap size={18} style={{ color: 'var(--accent)' }} />;
     case 'post_tag': return <Tag size={18} style={{ color: 'var(--accent)' }} />;
-    case 'friend_request':
     case 'follow_request': return <Users size={18} style={{ color: 'var(--accent)' }} />;
     case 'dm_request': return <Mail size={18} style={{ color: 'var(--accent)' }} />;
     case 'post_comment': return <MessageCircle size={18} style={{ color: 'var(--accent)' }} />;

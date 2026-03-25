@@ -23,19 +23,28 @@ function formatNotificationForPush(notification: any): { title: string; body: st
     case 'reply':
       return { title: spaceChannel, body: d.messagePreview || 'replied to your message' };
     case 'reaction':
-      return { title: spaceChannel, body: `${d.emoji || ''} reacted to your message`.trim() };
-    case 'friend_request':
-      return { title: 'Friend Request', body: `${actor} sent you a friend request` };
+      return { title: spaceChannel, body: `${d.emoji || ''} to: ${d.messagePreview || 'your message'}`.trim() };
+    case 'follow_request':
+      return { title: actor, body: 'sent you a follow request' };
     case 'post_tag':
-      return { title: actor, body: 'tagged you in a post' };
+      return { title: actor, body: `tagged you in a post: ${d.postPreview || ''}`.trim() };
     case 'post_comment':
-      return { title: actor, body: d.commentPreview || 'commented on your post' };
+      return { title: `${actor} commented on your post`, body: d.commentPreview || '' };
     case 'new_event': {
-      let eventBody = `${d.spaceName || 'A space'} has posted a new event: ${d.eventName || 'an event'}`;
-      if (d.eventDate) eventBody += ` ${d.eventDate}`;
-      if (d.eventTime) eventBody += ` ${d.eventTime}`;
-      return { title: d.spaceName || 'New Event', body: eventBody };
+      let eventTime = '';
+      if (d.eventDate && d.eventTime) eventTime = ` — ${d.eventDate} at ${d.eventTime}`;
+      else if (d.eventDate) eventTime = ` — ${d.eventDate}`;
+      else if (d.eventTime) eventTime = ` — ${d.eventTime}`;
+      return { title: d.spaceName || 'New Event', body: `New event: ${d.eventName || 'an event'}${eventTime}` };
     }
+    case 'event_cancelled': {
+      const cancelParts = [];
+      if (d.eventDate) cancelParts.push(d.eventDate);
+      if (d.eventTime) cancelParts.push(d.eventTime);
+      return { title: `Canceled: ${d.eventName || 'Event'}`, body: cancelParts.length ? `Was ${cancelParts.join(' - ')} and has been canceled.` : 'Has been canceled.' };
+    }
+    case 'portal_invite':
+      return { title: 'Portal Request', body: `${d.requestedByUsername || actor} sent a portal request from ${d.sourceSpaceName || 'a space'}` };
     case 'new_blog_post':
       return { title: d.spaceName || 'New Blog Post', body: `New blog post from ${d.spaceName}: ${d.postTitle}` };
     case 'event_rsvp':

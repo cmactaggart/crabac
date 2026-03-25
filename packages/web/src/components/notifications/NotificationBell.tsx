@@ -9,7 +9,7 @@ import type {
   MentionNotificationData,
   ReplyNotificationData,
   DMRequestNotificationData,
-  FriendRequestNotificationData,
+  FollowRequestNotificationData,
   PostCommentNotificationData,
   PostTagNotificationData,
 } from '@crabac/shared';
@@ -48,9 +48,8 @@ export function NotificationBell() {
           fireNotification('New message request', d.fromDisplayName);
           break;
         }
-        case 'friend_request':
         case 'follow_request': {
-          const d = notification.data as FriendRequestNotificationData;
+          const d = notification.data as FollowRequestNotificationData;
           fireNotification('Follow Request', `${d.fromDisplayName} wants to follow you`);
           break;
         }
