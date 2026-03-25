@@ -35,7 +35,7 @@ interface ChannelsState {
   createCategory: (spaceId: string, name: string) => Promise<void>;
   fetchUnreads: (spaceId: string) => Promise<void>;
   markRead: (spaceId: string, channelId: string, messageId: string) => Promise<void>;
-  updateChannel: (spaceId: string, channelId: string, data: { name?: string; displayName?: string | null; topic?: string; type?: string; isPublic?: boolean; isPrivate?: boolean }) => Promise<void>;
+  updateChannel: (spaceId: string, channelId: string, data: { name?: string; displayName?: string | null; topic?: string; type?: string; isPublic?: boolean; isPrivate?: boolean; publicVoiceAccess?: boolean; publicVoiceChat?: boolean; publicVoiceParticipation?: boolean; voicePassword?: string | null; voiceIdentityMode?: string }) => Promise<void>;
   deleteChannel: (spaceId: string, channelId: string) => Promise<void>;
   updateCategory: (spaceId: string, categoryId: string, data: { name?: string }) => Promise<void>;
   deleteCategory: (spaceId: string, categoryId: string) => Promise<void>;

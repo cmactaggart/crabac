@@ -81,6 +81,7 @@ export function BoardSettingsTab({ spaceId }: Props) {
   const galleryUrl = `${window.location.origin}/gallery/${space?.slug || spaceId}`;
   const routesUrl = `${window.location.origin}/routes/${space?.slug || spaceId}`;
   const calendarUrl = `${window.location.origin}/calendar/${space?.slug || spaceId}`;
+  const voiceUrl = `${window.location.origin}/voice/${space?.slug || spaceId}`;
   const blogUrl = `${window.location.origin}/blog/${space?.slug || spaceId}`;
   const newsletterUrl = `${window.location.origin}/newsletter/${space?.slug || spaceId}`;
 
@@ -408,6 +409,24 @@ export function BoardSettingsTab({ spaceId }: Props) {
           </a>
           <span style={styles.settingDesc}>
             Mark individual events as public when creating or editing them.
+          </span>
+        </div>
+      )}
+
+      {settings?.allowPublicVoice && (
+        <div style={styles.urlBox}>
+          <span style={styles.settingLabel}>Public Voice URL</span>
+          <a
+            href={voiceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={styles.urlLink}
+          >
+            <code style={styles.urlCode}>{voiceUrl}</code>
+            <ExternalLink size={14} style={{ flexShrink: 0 }} />
+          </a>
+          <span style={styles.settingDesc}>
+            Enable public access on voice channels in channel settings, then use "List Publicly" to show them on this page.
           </span>
         </div>
       )}

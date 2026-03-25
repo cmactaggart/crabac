@@ -5,7 +5,7 @@ import { PublicThemeProvider } from '../../contexts/PublicThemeContext.js';
 import { getPublicTheme, type PublicTheme } from '../../lib/publicThemes.js';
 import { boardApi } from '../../lib/boardApi.js';
 
-type PageType = 'boards' | 'gallery' | 'routes' | 'calendar' | 'blog' | 'newsletter';
+type PageType = 'boards' | 'gallery' | 'routes' | 'calendar' | 'blog' | 'newsletter' | 'voice';
 
 const PAGE_LABELS: Record<PageType, string> = {
   boards: 'Message Board',
@@ -14,6 +14,7 @@ const PAGE_LABELS: Record<PageType, string> = {
   calendar: 'Calendar',
   blog: 'Blog',
   newsletter: 'Newsletter',
+  voice: 'Voice Channels',
 };
 
 const PAGE_PREFIXES: Record<PageType, string> = {
@@ -23,6 +24,7 @@ const PAGE_PREFIXES: Record<PageType, string> = {
   calendar: '/calendar',
   blog: '/blog',
   newsletter: '/newsletter',
+  voice: '/voice',
 };
 
 const FEATURE_LABELS: Record<string, string> = {
@@ -32,6 +34,7 @@ const FEATURE_LABELS: Record<string, string> = {
   calendar: 'Calendar',
   blog: 'Blog',
   newsletter: 'Newsletter',
+  voice: 'Voice',
 };
 
 interface NavLink {

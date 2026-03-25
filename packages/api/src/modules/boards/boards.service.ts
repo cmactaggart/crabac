@@ -13,6 +13,7 @@ export async function getPublicSiteConfig(slug: string) {
   if (settings?.allow_public_galleries) enabledFeatures.push('gallery');
   if (settings?.allow_public_routes) enabledFeatures.push('routes');
   if (settings?.allow_public_calendar) enabledFeatures.push('calendar');
+  if (settings?.allow_public_voice) enabledFeatures.push('voice');
   if (settings?.allow_public_blog) enabledFeatures.push('blog');
   if (settings?.allow_public_newsletter) enabledFeatures.push('newsletter');
 
@@ -61,7 +62,7 @@ export async function getPublicSpace(slug: string) {
   if (!space) throw new NotFoundError('Space');
 
   const settings = await db('space_settings').where('space_id', space.id).first();
-  const hasAnyPublic = settings?.allow_public_boards || settings?.allow_public_galleries || settings?.allow_public_routes || settings?.allow_public_blog;
+  const hasAnyPublic = settings?.allow_public_boards || settings?.allow_public_galleries || settings?.allow_public_routes || settings?.allow_public_blog || settings?.allow_public_voice;
   if (!hasAnyPublic) throw new NotFoundError('Space');
 
   return {
@@ -80,6 +81,7 @@ export async function listPublicChannels(spaceId: string) {
   if (settings?.allow_public_boards) allowedTypes.push('forum');
   if (settings?.allow_public_galleries) allowedTypes.push('media_gallery');
   if (settings?.allow_public_routes) allowedTypes.push('route_library');
+  if (settings?.allow_public_voice) allowedTypes.push('voice');
 
   if (allowedTypes.length === 0) return [];
 

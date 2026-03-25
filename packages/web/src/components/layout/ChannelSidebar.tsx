@@ -372,6 +372,21 @@ export function ChannelSidebar({ space, channels, categories, activeChannelId, f
           onClick: () => updateChannel(space.id, ch.id, { isPublic: !ch.isPublic }),
         });
       }
+      // Voice channel public access controls
+      if (ch.type === 'voice' && adminSettings.allowPublicVoice) {
+        items.push({
+          label: ch.publicVoiceAccess ? 'Disable Public Access' : 'Enable Public Access',
+          icon: ch.publicVoiceAccess ? <Lock size={16} /> : <Globe size={16} />,
+          onClick: () => updateChannel(space.id, ch.id, { publicVoiceAccess: !ch.publicVoiceAccess }),
+        });
+        if (ch.publicVoiceAccess) {
+          items.push({
+            label: ch.isPublic ? 'Unlist from Public Page' : 'List Publicly',
+            icon: <Globe size={16} />,
+            onClick: () => updateChannel(space.id, ch.id, { isPublic: !ch.isPublic }),
+          });
+        }
+      }
     }
 
     // "Move to..." options (only for users with MANAGE_CHANNELS, and not for portals/admin)

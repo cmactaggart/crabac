@@ -305,7 +305,7 @@ export const updateSpaceAdminSettingsSchema = z.object({
     url: z.string().url().max(500),
   })).max(20).optional(),
   publicNavDisabledFeatures: z.array(
-    z.enum(['boards', 'gallery', 'routes', 'calendar', 'blog', 'newsletter']),
+    z.enum(['boards', 'gallery', 'routes', 'calendar', 'blog', 'newsletter', 'voice']),
   ).optional(),
 });
 

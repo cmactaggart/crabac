@@ -38,7 +38,7 @@ async function loadPublicBoard(req: Request) {
 
   // Check space settings — at least one public feature must be enabled
   const settings = await db('space_settings').where('space_id', space.id).first();
-  const hasAnyPublic = settings?.allow_public_boards || settings?.allow_public_galleries || settings?.allow_public_routes || settings?.allow_public_blog;
+  const hasAnyPublic = settings?.allow_public_boards || settings?.allow_public_galleries || settings?.allow_public_routes || settings?.allow_public_blog || settings?.allow_public_voice;
   if (!hasAnyPublic) throw new NotFoundError('Space');
 
   // Store space data on request for downstream use

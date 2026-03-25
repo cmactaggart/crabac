@@ -165,7 +165,7 @@ export function ChannelsTab({ spaceId, channels, categories }: Props) {
         <span style={{ flex: 1, cursor: 'pointer' }} onClick={() => startEditChannel(ch)}>{ch.name}</span>
         {ch.isAdmin && <span style={styles.typeLabel}>admin</span>}
         <span style={styles.typeLabel}>{ch.type}</span>
-        {(ch.type === 'forum' || ch.type === 'media_gallery') && (
+        {(ch.type === 'forum' || ch.type === 'media_gallery' || ch.type === 'voice') && (
           <button
             onClick={() => updateChannel(spaceId, ch.id, { isPublic: !ch.isPublic })}
             style={{
