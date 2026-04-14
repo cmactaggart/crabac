@@ -269,6 +269,35 @@ personalCollectionsRoutes.patch(
   },
 );
 
+personalCollectionsRoutes.put(
+  '/me/collections/routes/:itemId/file',
+  handleUpload('file', 1),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const uploadedFiles = (req.files as Express.Multer.File[]) || [];
+      if (uploadedFiles.length === 0) return next(new BadRequestError('A GPX file is required'));
+
+      const file = uploadedFiles[0];
+      const ext = path.extname(file.originalname).toLowerCase();
+      if (ext !== '.gpx') return next(new BadRequestError('Only GPX files are supported'));
+
+      const gpxMeta = await parseGpxFile(file.path);
+      if (!gpxMeta) return next(new BadRequestError('Failed to parse GPX file'));
+
+      const body = validation.createPersonalRouteSchema.parse(req.body);
+      const item = await service.replacePersonalRouteFile(
+        req.params.itemId,
+        req.user!.userId,
+        body,
+        gpxMeta,
+        { filename: file.filename, originalName: file.originalname, size: file.size, url: `/uploads/${file.filename}` },
+      );
+
+      res.json(item);
+    } catch (err) { next(err); }
+  },
+);
+
 personalCollectionsRoutes.delete(
   '/me/collections/routes/:itemId',
   async (req: Request, res: Response, next: NextFunction) => {

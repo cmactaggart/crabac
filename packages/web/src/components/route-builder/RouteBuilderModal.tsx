@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, Undo2, Redo2, Trash2, Ruler, TrendingUp, TrendingDown, MapPin, Save, Bike, Footprints, Loader2 } from 'lucide-react';
+import { X, Undo2, Redo2, Trash2, Ruler, TrendingUp, TrendingDown, MapPin, Save, Bike, Footprints, Loader2, FolderOpen, Upload } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { useRouteBuilder, type RoutingProfile, type Waypoint } from './use-route-builder.js';
+import { useRouteBuilder, sampleWaypointsFromCoordinates, type RoutingProfile, type Waypoint } from './use-route-builder.js';
 import { generateGpxXml } from './gpx-generator.js';
 import { usePreferencesStore } from '../../stores/preferences.js';
 import { formatDistance, formatElevation } from '../../lib/units.js';
-import type { PersonalVisibility } from '@crabac/shared';
+import type { PersonalVisibility, PersonalRouteItem } from '@crabac/shared';
 
 function useIsMobile(breakpoint = 768) {
   const [isMobile, setIsMobile] = useState(() =>
@@ -25,6 +25,8 @@ interface Props {
   onClose: () => void;
   onSave: (file: File, name: string, data: { description?: string; visibility: string; activityType?: string }) => Promise<void>;
   defaultVisibility?: PersonalVisibility;
+  editRoute?: PersonalRouteItem;
+  availableRoutes?: PersonalRouteItem[];
 }
 
 const PROFILE_OPTIONS: { value: RoutingProfile; icon: typeof Bike; label: string }[] = [
@@ -33,7 +35,7 @@ const PROFILE_OPTIONS: { value: RoutingProfile; icon: typeof Bike; label: string
 ];
 
 
-export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'private' }: Props) {
+export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'private', editRoute, availableRoutes = [] }: Props) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
@@ -44,7 +46,7 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
   const {
     waypoints, addWaypoint, moveWaypoint, removeWaypoint, unsnapWaypoint,
     insertWaypoint, startDragWaypoint, previewMoveWaypoint, commitDragWaypoint,
-    undo, redo, canUndo, canRedo, clear,
+    undo, redo, canUndo, canRedo, clear, initializeWaypoints,
     profile, setProfile,
     totalDistanceKm, elevationGainM, elevationLossM,
     elevationsLoading, routing, geojson, snappedWaypoints,
@@ -65,17 +67,77 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
 
   // Save form state
   const [showSavePanel, setShowSavePanel] = useState(false);
-  const [routeName, setRouteName] = useState('');
-  const [description, setDescription] = useState('');
-  const [visibility, setVisibility] = useState<PersonalVisibility>(defaultVisibility);
-  const [activityType, setActivityType] = useState('');
+  const [routeName, setRouteName] = useState(editRoute?.name ?? '');
+  const [description, setDescription] = useState(editRoute?.description ?? '');
+  const [visibility, setVisibility] = useState<PersonalVisibility>(editRoute?.visibility ?? defaultVisibility);
+  const [activityType, setActivityType] = useState(editRoute?.activityType ?? '');
   const [saving, setSaving] = useState(false);
+
+  // Load panel state
+  const [showLoadPanel, setShowLoadPanel] = useState(false);
+  const gpxFileRef = useRef<HTMLInputElement>(null);
+
+  const loadRouteIntoBuilder = (route: PersonalRouteItem) => {
+    const coords = route.geojson?.features?.[0]?.geometry?.coordinates;
+    if (!coords) return;
+    const lngLats = coords.map((c: number[]) => [c[0], c[1]] as [number, number]);
+    const sampled = sampleWaypointsFromCoordinates(lngLats);
+    if (sampled.length > 0) {
+      initializeWaypoints(sampled);
+      setRouteName(route.name);
+      setDescription(route.description ?? '');
+      setVisibility(route.visibility ?? defaultVisibility);
+      setActivityType(route.activityType ?? '');
+      if (route.bounds) {
+        const b = route.bounds;
+        mapRef.current?.fitBounds([b.minLng, b.minLat, b.maxLng, b.maxLat], { padding: 50 });
+      }
+    }
+    setShowLoadPanel(false);
+  };
+
+  const handleGpxImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = reader.result as string;
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(text, 'application/xml');
+      const trkpts = doc.querySelectorAll('trkpt');
+      if (trkpts.length === 0) return;
+      const coords: [number, number][] = [];
+      trkpts.forEach((pt) => {
+        const lat = parseFloat(pt.getAttribute('lat') || '0');
+        const lon = parseFloat(pt.getAttribute('lon') || '0');
+        if (lat && lon) coords.push([lon, lat]);
+      });
+      if (coords.length < 2) return;
+      const sampled = sampleWaypointsFromCoordinates(coords);
+      initializeWaypoints(sampled);
+      setRouteName(file.name.replace(/\.gpx$/i, ''));
+
+      // Fit map to imported route
+      let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
+      for (const c of coords) {
+        if (c[0] < minLng) minLng = c[0];
+        if (c[0] > maxLng) maxLng = c[0];
+        if (c[1] < minLat) minLat = c[1];
+        if (c[1] > maxLat) maxLat = c[1];
+      }
+      mapRef.current?.fitBounds([minLng, minLat, maxLng, maxLat], { padding: 50 });
+      setShowLoadPanel(false);
+    };
+    reader.readAsText(file);
+    if (gpxFileRef.current) gpxFileRef.current.value = '';
+  };
 
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (showSavePanel) setShowSavePanel(false);
+        else if (showLoadPanel) setShowLoadPanel(false);
         else onClose();
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
@@ -85,6 +147,18 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose, undo, redo, showSavePanel]);
+
+  // Initialize waypoints from existing route when editing
+  useEffect(() => {
+    if (!editRoute?.geojson?.features?.[0]?.geometry?.coordinates) return;
+    const coords = editRoute.geojson.features[0].geometry.coordinates.map(
+      (c: number[]) => [c[0], c[1]] as [number, number],
+    );
+    const sampled = sampleWaypointsFromCoordinates(coords);
+    if (sampled.length > 0) {
+      initializeWaypoints(sampled);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Initialize map
   useEffect(() => {
@@ -154,6 +228,12 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
           'icon-ignore-placement': true,
         },
       });
+
+      // Fit to existing route bounds when editing
+      if (editRoute?.bounds) {
+        const b = editRoute.bounds;
+        map.fitBounds([b.minLng, b.minLat, b.maxLng, b.maxLat], { padding: 50 });
+      }
     });
 
     // Click on existing route line to show path context menu
@@ -414,12 +494,15 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
                 <Trash2 size={15} />
               </button>
               <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 4px' }} />
+              <button onClick={() => setShowLoadPanel(true)} style={styles.toolBtn} title="Load route">
+                <FolderOpen size={15} />
+              </button>
               <button
                 onClick={() => setShowSavePanel(true)}
                 disabled={waypoints.length < 2}
                 style={{ ...styles.saveBtn, opacity: waypoints.length < 2 ? 0.5 : 1 }}
               >
-                <Save size={14} /> Save Route
+                <Save size={14} /> {editRoute ? 'Update Route' : 'Save Route'}
               </button>
             </>
           )}
@@ -546,6 +629,9 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
             <button onClick={clear} disabled={waypoints.length === 0} style={mobileStyles.toolBtn} title="Clear all">
               <Trash2 size={20} />
             </button>
+            <button onClick={() => setShowLoadPanel(true)} style={mobileStyles.toolBtn} title="Load route">
+              <FolderOpen size={20} />
+            </button>
             <button
               onClick={() => setShowSavePanel(true)}
               disabled={waypoints.length < 2}
@@ -569,7 +655,7 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 style={{ margin: '0 0 12px', fontSize: '1rem' }}>Save Route</h3>
+              <h3 style={{ margin: '0 0 12px', fontSize: '1rem' }}>{editRoute ? 'Update Route' : 'Save Route'}</h3>
 
               <label style={styles.label}>Name</label>
               <input
@@ -635,7 +721,7 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
                     opacity: saving || !routeName.trim() ? 0.6 : 1,
                   }}
                 >
-                  {saving ? 'Saving...' : 'Save Route'}
+                  {saving ? 'Saving...' : editRoute ? 'Update Route' : 'Save Route'}
                 </button>
                 <button
                   onClick={() => setShowSavePanel(false)}
@@ -653,6 +739,80 @@ export function RouteBuilderModal({ onClose, onSave, defaultVisibility = 'privat
                 {elevationGainM > 0 && ` · ${formatElevation(elevationGainM, units)} gain`}
                 {` · ${waypoints.length} waypoints`}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Load panel */}
+        {showLoadPanel && (
+          <div style={styles.savePanelOverlay} onClick={() => setShowLoadPanel(false)}>
+            <div
+              style={{
+                ...styles.savePanel,
+                ...(isMobile ? mobileStyles.savePanel : {}),
+                maxHeight: '80vh',
+                display: 'flex',
+                flexDirection: 'column' as const,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 style={{ margin: '0 0 12px', fontSize: '1rem' }}>Load Route</h3>
+
+              <button
+                onClick={() => gpxFileRef.current?.click()}
+                style={{
+                  ...styles.saveBtn,
+                  width: '100%',
+                  marginBottom: 12,
+                  justifyContent: 'center',
+                }}
+              >
+                <Upload size={14} /> Import GPX File
+              </button>
+              <input ref={gpxFileRef} type="file" accept=".gpx" onChange={handleGpxImport} style={{ display: 'none' }} />
+
+              {availableRoutes.length > 0 && (
+                <>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 8 }}>My Routes</div>
+                  <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {availableRoutes.filter((r) => r.geojson).map((route) => (
+                      <button
+                        key={route.id}
+                        onClick={() => loadRouteIntoBuilder(route)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          padding: '8px 10px',
+                          background: 'var(--bg-secondary)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 'var(--radius, 6px)',
+                          cursor: 'pointer',
+                          textAlign: 'left' as const,
+                          color: 'var(--text-primary)',
+                          width: '100%',
+                        }}
+                      >
+                        <MapPin size={14} style={{ flexShrink: 0, color: 'var(--accent)' }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{route.name}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            {route.distanceKm != null && formatDistance(route.distanceKm, units)}
+                            {route.elevationGainM != null && ` · ${formatElevation(route.elevationGainM, units)} gain`}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <button
+                onClick={() => setShowLoadPanel(false)}
+                style={{ ...styles.cancelBtn, marginTop: 12 }}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         )}

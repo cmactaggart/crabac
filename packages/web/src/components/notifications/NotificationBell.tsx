@@ -8,10 +8,16 @@ import type {
   Notification,
   MentionNotificationData,
   ReplyNotificationData,
+  ReactionNotificationData,
   DMRequestNotificationData,
   FollowRequestNotificationData,
   PostCommentNotificationData,
   PostTagNotificationData,
+  PortalInviteNotificationData,
+  EventCancelledNotificationData,
+  NewEventNotificationData,
+  EventRsvpNotificationData,
+  NewBlogPostNotificationData,
 } from '@crabac/shared';
 
 export function NotificationBell() {
@@ -61,6 +67,36 @@ export function NotificationBell() {
         case 'post_tag': {
           const d = notification.data as PostTagNotificationData;
           fireNotification(`${d.taggedByDisplayName} tagged you in a post`, d.postPreview || '');
+          break;
+        }
+        case 'reaction': {
+          const d = notification.data as ReactionNotificationData;
+          fireNotification(`${d.reactedByUsername} reacted ${d.emoji}`, d.messagePreview || `in ${d.spaceName} | #${d.channelName}`);
+          break;
+        }
+        case 'portal_invite': {
+          const d = notification.data as PortalInviteNotificationData;
+          fireNotification('Portal Invite', `From ${d.sourceSpaceName}`);
+          break;
+        }
+        case 'event_cancelled': {
+          const d = notification.data as EventCancelledNotificationData;
+          fireNotification('Event Cancelled', `${d.eventName} (${d.eventDate})`);
+          break;
+        }
+        case 'new_event': {
+          const d = notification.data as NewEventNotificationData;
+          fireNotification(`New event in ${d.spaceName}`, d.eventName);
+          break;
+        }
+        case 'event_rsvp': {
+          const d = notification.data as EventRsvpNotificationData;
+          fireNotification(`${d.rsvpDisplayName || d.rsvpUsername} RSVP'd ${d.rsvpStatus}`, d.eventName);
+          break;
+        }
+        case 'new_blog_post': {
+          const d = notification.data as NewBlogPostNotificationData;
+          fireNotification(`New blog post from ${d.spaceName}`, d.postTitle);
           break;
         }
       }

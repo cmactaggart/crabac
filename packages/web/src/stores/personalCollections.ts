@@ -36,6 +36,7 @@ interface PersonalCollectionsState {
 
   uploadGalleryItem: (files: File[], caption?: string, visibility?: string) => Promise<void>;
   uploadRoute: (file: File, name: string, data?: { description?: string; visibility?: string; activityType?: string }) => Promise<void>;
+  replaceRouteFile: (itemId: string, file: File, name: string, data?: { description?: string; visibility?: string; activityType?: string }) => Promise<void>;
   uploadActivity: (file: File, name: string, data: { activityType: string; description?: string; visibility?: string; startedAt?: string }) => Promise<void>;
   createEvent: (data: Record<string, any>) => Promise<void>;
   createEventCategory: (data: { name: string; color?: string }) => Promise<PersonalEventCategory>;
@@ -242,6 +243,22 @@ export const usePersonalCollectionsStore = create<PersonalCollectionsState>((set
     });
     set((s) => ({ routeItems: [item, ...s.routeItems] }));
     get().fetchSummary();
+  },
+
+  replaceRouteFile: async (itemId, file, name, data) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('name', name);
+    if (data?.description) formData.append('description', data.description);
+    if (data?.visibility) formData.append('visibility', data.visibility);
+    if (data?.activityType) formData.append('activityType', data.activityType);
+    const item = await api<PersonalRouteItem>(`/users/me/collections/routes/${itemId}/file`, {
+      method: 'PUT',
+      body: formData,
+    });
+    set((s) => ({
+      routeItems: s.routeItems.map((i) => (i.id === itemId ? item : i)),
+    }));
   },
 
   uploadActivity: async (file, name, data) => {

@@ -134,6 +134,15 @@ export function useRouteBuilder() {
     setSnappedPath(null);
   }, []);
 
+  const initializeWaypoints = useCallback((wps: Waypoint[]) => {
+    setState({
+      waypoints: wps,
+      undoStack: [],
+      redoStack: [],
+    });
+    setSnappedPath(null);
+  }, []);
+
   // Waypoint fingerprint for effect dependencies
   const waypointKey = waypoints.map((w) => `${w.lngLat[0]},${w.lngLat[1]},${w.snapped}`).join('|');
 
@@ -273,6 +282,7 @@ export function useRouteBuilder() {
     canUndo: undoStack.length > 0,
     canRedo: redoStack.length > 0,
     clear,
+    initializeWaypoints,
     profile,
     setProfile,
     totalDistanceKm: snappedPath?.distanceKm ?? 0,
@@ -364,4 +374,21 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
     Math.sin(dLat / 2) ** 2 +
     Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export function sampleWaypointsFromCoordinates(
+  coordinates: [number, number][],
+  maxPoints = 20,
+): Waypoint[] {
+  if (coordinates.length === 0) return [];
+  if (coordinates.length <= maxPoints) {
+    return coordinates.map((c) => ({ lngLat: c, snapped: true }));
+  }
+  const step = (coordinates.length - 1) / (maxPoints - 1);
+  const waypoints: Waypoint[] = [];
+  for (let i = 0; i < maxPoints; i++) {
+    const idx = Math.round(i * step);
+    waypoints.push({ lngLat: coordinates[idx], snapped: true });
+  }
+  return waypoints;
 }

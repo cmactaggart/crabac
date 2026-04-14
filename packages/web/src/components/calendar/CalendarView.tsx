@@ -19,6 +19,8 @@ interface Props {
   spaceId: string;
   showBackButton?: boolean;
   onBack?: () => void;
+  openEventId?: string | null;
+  onEventOpened?: () => void;
 }
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -51,7 +53,7 @@ function formatDateKey(d: Date): string {
 
 const MOBILE_BREAKPOINT = 768;
 
-export function CalendarView({ spaceId, showBackButton, onBack }: Props) {
+export function CalendarView({ spaceId, showBackButton, onBack, openEventId, onEventOpened }: Props) {
   const {
     categories, events, selectedDate, selectedEvent,
     upcomingEvents, upcomingLoading,
@@ -89,6 +91,25 @@ export function CalendarView({ spaceId, showBackButton, onBack }: Props) {
   useEffect(() => {
     return () => { clear(); };
   }, [spaceId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Open a specific event when requested (e.g. from a notification deep link)
+  useEffect(() => {
+    if (!openEventId || !spaceId) return;
+    let cancelled = false;
+    (async () => {
+      const existing = events.find((e) => e.id === openEventId) || upcomingEvents.find((e) => e.id === openEventId);
+      if (existing) {
+        if (!cancelled) setSelectedEvent(existing);
+      } else {
+        try {
+          const ev = await api<CalendarEvent>(`/spaces/${spaceId}/calendar/events/${openEventId}`);
+          if (!cancelled) setSelectedEvent(ev);
+        } catch { /* event may be deleted or inaccessible */ }
+      }
+      if (!cancelled) onEventOpened?.();
+    })();
+    return () => { cancelled = true; };
+  }, [openEventId, spaceId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const today = useMemo(() => formatDateKey(new Date()), []);
   const dates = useMemo(() => getMonthGrid(currentYear, currentMonth), [currentYear, currentMonth]);

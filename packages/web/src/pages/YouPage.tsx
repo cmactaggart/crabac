@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Image, Map, CalendarDays, Upload, Plus, Trash2, Share2, Edit3, MapPinned, X, FileText, Users, ImagePlus, MapPin, SmilePlus, Newspaper, LogOut, Activity, Bike, Footprints, Mountain, Timer, TrendingUp, Save, PenTool } from 'lucide-react';
+import { Image, Map, CalendarDays, Upload, Plus, Trash2, Share2, Edit2, Edit3, MapPinned, X, FileText, Users, ImagePlus, MapPin, SmilePlus, Newspaper, LogOut, Activity, Bike, Footprints, Mountain, Timer, TrendingUp, Save, PenTool } from 'lucide-react';
 import { useAuthStore } from '../stores/auth.js';
 import { useSpacesStore } from '../stores/spaces.js';
 import { usePersonalCollectionsStore } from '../stores/personalCollections.js';
@@ -64,7 +64,7 @@ export function YouPage() {
   const {
     galleryItems, routeItems, events, eventCategories, activityItems, activityStats, posts, postsLoading, postsHasMore, summary, loading,
     fetchSummary, fetchGallery, fetchRoutes, fetchEvents, fetchEventCategories, fetchPosts, fetchActivities, fetchActivityStats,
-    uploadGalleryItem, uploadRoute, uploadActivity, createEvent, createEventCategory, deleteEventCategory, createPost,
+    uploadGalleryItem, uploadRoute, replaceRouteFile, uploadActivity, createEvent, createEventCategory, deleteEventCategory, createPost,
     deleteGalleryItem, deleteRoute, deleteActivity, deleteEvent, deletePost,
     updateGalleryItem, updateRoute, updateActivity, updateEvent, updatePost,
     saveActivityAsRoute,
@@ -246,6 +246,7 @@ export function YouPage() {
                     routeItems={routeItems}
                     loading={loading}
                     onUploadRoute={uploadRoute}
+                    onReplaceRouteFile={replaceRouteFile}
                     onDeleteRoute={deleteRoute}
                     onUpdateRoute={updateRoute}
                     onShareRoute={(id) => setShareItem({ type: 'route', id })}
@@ -443,6 +444,7 @@ export function YouPage() {
                     loading={loading}
                     defaultVisibility={defaultVisibility}
                     onUploadRoute={uploadRoute}
+                    onReplaceRouteFile={replaceRouteFile}
                     onDeleteRoute={deleteRoute}
                     onUpdateRoute={updateRoute}
                     onShareRoute={(id) => setShareItem({ type: 'route', id })}
@@ -615,7 +617,7 @@ const STATS_PERIOD_LABELS: Record<string, string> = {
 function ActivitiesTabContainer({
   activityItems, activityStats, routeItems, loading,
   defaultVisibility = 'private',
-  onUploadRoute, onDeleteRoute, onUpdateRoute, onShareRoute,
+  onUploadRoute, onReplaceRouteFile, onDeleteRoute, onUpdateRoute, onShareRoute,
   onUpdateActivity, onDeleteActivity, onSaveAsRoute, onFetchActivityStats, initialSubTab,
 }: {
   activityItems: PersonalActivityItem[];
@@ -624,6 +626,7 @@ function ActivitiesTabContainer({
   loading: boolean;
   defaultVisibility?: PersonalVisibility;
   onUploadRoute: (file: File, name: string, data?: any) => Promise<void>;
+  onReplaceRouteFile: (itemId: string, file: File, name: string, data?: any) => Promise<void>;
   onDeleteRoute: (id: string) => Promise<void>;
   onUpdateRoute: (id: string, data: Record<string, any>) => Promise<void>;
   onShareRoute: (id: string) => void;
@@ -687,6 +690,7 @@ function ActivitiesTabContainer({
           loading={loading}
           defaultVisibility={defaultVisibility}
           onUpload={onUploadRoute}
+          onReplaceFile={onReplaceRouteFile}
           onDelete={onDeleteRoute}
           onUpdate={onUpdateRoute}
           onShare={onShareRoute}
@@ -910,10 +914,11 @@ function ActivityFeedView({ items, loading, onUpdate, onDelete, onSaveAsRoute }:
 
 // ─── Routes Tab ───
 
-function RoutesTab({ items, loading, defaultVisibility = 'private', onUpload, onDelete, onUpdate, onShare }: {
+function RoutesTab({ items, loading, defaultVisibility = 'private', onUpload, onReplaceFile, onDelete, onUpdate, onShare }: {
   items: PersonalRouteItem[]; loading: boolean;
   defaultVisibility?: PersonalVisibility;
   onUpload: (file: File, name: string, data?: any) => Promise<void>;
+  onReplaceFile: (itemId: string, file: File, name: string, data?: any) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onUpdate: (id: string, data: Record<string, any>) => Promise<void>;
   onShare: (id: string) => void;
@@ -926,6 +931,7 @@ function RoutesTab({ items, loading, defaultVisibility = 'private', onUpload, on
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [visibility, setVisibility] = useState<PersonalVisibility>(defaultVisibility);
   const [showRouteBuilder, setShowRouteBuilder] = useState(false);
+  const [editingRoute, setEditingRoute] = useState<PersonalRouteItem | null>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -996,49 +1002,69 @@ function RoutesTab({ items, loading, defaultVisibility = 'private', onUpload, on
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {items.map((item) => (
-          <div key={item.id} style={styles.routeCard}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontWeight: 600 }}>{item.name}</span>
+          <div key={item.id} style={{ ...styles.routeCard, flexDirection: 'column', alignItems: 'stretch' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span onClick={() => item.geojson && setEditingRoute(item)} style={{ fontWeight: 600, cursor: item.geojson ? 'pointer' : 'default' }}>{item.name}</span>
                 <VisibilityBadge visibility={item.visibility} />
                 {item.activityType && (
                   <span style={styles.activityBadge}>{item.activityType}</span>
                 )}
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  {item.distanceKm != null && <span>{formatDistance(item.distanceKm, units)}</span>}
+                  {item.elevationGainM != null && <span> · {formatElevation(item.elevationGainM, units)} gain</span>}
+                  {item.durationSec != null && <span> · {Math.round(item.durationSec / 60)} min</span>}
+                </span>
               </div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4 }}>
-                {item.distanceKm != null && <span>{formatDistance(item.distanceKm, units)}</span>}
-                {item.elevationGainM != null && <span> · {formatElevation(item.elevationGainM, units)} gain</span>}
-                {item.durationSec != null && <span> · {Math.round(item.durationSec / 60)} min</span>}
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                {item.geojson && (
+                  <button onClick={() => setEditingRoute(item)} style={styles.iconBtn} title="Edit route">
+                    <Edit2 size={14} />
+                  </button>
+                )}
+                <button onClick={() => onShare(item.id)} style={styles.iconBtn} title="Share to Space">
+                  <Share2 size={14} />
+                </button>
+                <button onClick={() => {
+                  if (confirm('Delete this route?')) onDelete(item.id);
+                }} style={{ ...styles.iconBtn, color: 'var(--danger)' }} title="Delete">
+                  <Trash2 size={14} />
+                </button>
               </div>
-              {item.description && (
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 4 }}>
-                  {item.description}
-                </div>
-              )}
             </div>
-            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-              <button onClick={() => onShare(item.id)} style={styles.iconBtn} title="Share to Space">
-                <Share2 size={14} />
-              </button>
-              <button onClick={() => {
-                if (confirm('Delete this route?')) onDelete(item.id);
-              }} style={{ ...styles.iconBtn, color: 'var(--danger)' }} title="Delete">
-                <Trash2 size={14} />
-              </button>
-            </div>
+            {item.description && (
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                {item.description}
+              </div>
+            )}
+            {item.geojson && (
+              <MiniMap
+                geojson={item.geojson}
+                bounds={item.bounds}
+                height={120}
+                style={{ borderRadius: 6 }}
+              />
+            )}
           </div>
         ))}
       </div>
 
-      {showRouteBuilder && (
+      {(showRouteBuilder || editingRoute) && (
         <Suspense fallback={null}>
           <LazyRouteBuilderModal
-            onClose={() => setShowRouteBuilder(false)}
+            onClose={() => { setShowRouteBuilder(false); setEditingRoute(null); }}
             onSave={async (file, name, data) => {
-              await onUpload(file, name, data);
+              if (editingRoute) {
+                await onReplaceFile(editingRoute.id, file, name, data);
+              } else {
+                await onUpload(file, name, data);
+              }
               setShowRouteBuilder(false);
+              setEditingRoute(null);
             }}
             defaultVisibility={defaultVisibility}
+            editRoute={editingRoute ?? undefined}
+            availableRoutes={items}
           />
         </Suspense>
       )}

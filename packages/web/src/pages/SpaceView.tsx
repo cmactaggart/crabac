@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { PanelLeft } from 'lucide-react';
 import { useSpacesStore } from '../stores/spaces.js';
 import { useChannelsStore } from '../stores/channels.js';
@@ -23,8 +23,12 @@ import { NewsletterView } from '../components/newsletter/NewsletterView.js';
 export function SpaceView() {
   const { spaceId, channelId } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isMobile = useIsMobile();
   const { channelSidebarOpen, membersSidebarOpen, calendarOpen, blogOpen, newsletterOpen, mobileView, setMobileView, setCalendarOpen, setBlogOpen, setNewsletterOpen, toggleChannelSidebar } = useLayoutStore();
+  const urlTab = searchParams.get('tab');
+  const urlEventId = searchParams.get('event');
+  const [openEventId, setOpenEventId] = useState<string | null>(null);
   const { spaces, fetchSpaces, setActiveSpace, members, fetchMembers, updateMemberStatus } = useSpacesStore();
   const { channels, categories, enterSpace, fetchMuted, setActiveChannel } = useChannelsStore();
 
@@ -55,17 +59,28 @@ export function SpaceView() {
     }
   }, [spaceId, setActiveSpace, enterSpace, fetchMuted]);
 
+  // Handle ?tab=calendar&event=... deep links (e.g. from notifications)
+  useEffect(() => {
+    if (urlTab !== 'calendar' || !spaceId) return;
+    // setCalendarOpen already clears blog/newsletter atomically — don't call the others or they'll clobber calendarOpen back to false
+    setCalendarOpen(true);
+    if (isMobile) setMobileView('chat');
+    if (urlEventId) setOpenEventId(urlEventId);
+    // Strip query params so refresh/back doesn't re-trigger
+    setSearchParams({}, { replace: true });
+  }, [urlTab, urlEventId, spaceId, isMobile, setCalendarOpen, setMobileView, setSearchParams]);
+
   useEffect(() => {
     if (channelId) {
       setActiveChannel(channelId);
       setCalendarOpen(false);
       setBlogOpen(false);
       if (isMobile) setMobileView('chat');
-    } else if (!isMobile && !useLayoutStore.getState().calendarOpen && !useLayoutStore.getState().blogOpen && !useLayoutStore.getState().newsletterOpen && channels.length > 0 && spaceId && channels[0].spaceId === spaceId) {
+    } else if (!isMobile && !useLayoutStore.getState().calendarOpen && !useLayoutStore.getState().blogOpen && !useLayoutStore.getState().newsletterOpen && channels.length > 0 && spaceId && channels[0].spaceId === spaceId && urlTab !== 'calendar') {
       const firstRegular = channels.find((c) => !c.isAdmin) || channels[0];
       navigate(`/space/${spaceId}/channel/${firstRegular.id}`, { replace: true });
     }
-  }, [channelId, channels, spaceId, navigate, setActiveChannel, setCalendarOpen, isMobile, setMobileView]);
+  }, [channelId, channels, spaceId, navigate, setActiveChannel, setCalendarOpen, isMobile, setMobileView, urlTab]);
 
   // Listen for member presence and membership changes
   useEffect(() => {
@@ -191,6 +206,8 @@ export function SpaceView() {
           <CalendarView
             spaceId={spaceId}
             showBackButton
+            openEventId={openEventId}
+            onEventOpened={() => setOpenEventId(null)}
             onBack={() => {
               setCalendarOpen(false);
               setMobileView('sidebar');
@@ -333,7 +350,7 @@ export function SpaceView() {
           </div>
         )}
         {calendarOpen && spaceId ? (
-          <CalendarView spaceId={spaceId} />
+          <CalendarView spaceId={spaceId} openEventId={openEventId} onEventOpened={() => setOpenEventId(null)} />
         ) : blogOpen && spaceId ? (
           <BlogView spaceId={spaceId} />
         ) : newsletterOpen && spaceId ? (

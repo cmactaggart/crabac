@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePreferencesStore } from '../stores/preferences.js';
+import { usePersonalCollectionsStore } from '../stores/personalCollections.js';
 import { api } from '../lib/api.js';
 import { RouteBuilderModal } from '../components/route-builder/RouteBuilderModal.js';
 import type { PersonalVisibility } from '@crabac/shared';
@@ -7,6 +9,11 @@ import type { PersonalVisibility } from '@crabac/shared';
 export function RouteBuilderPage() {
   const navigate = useNavigate();
   const defaultVisibility = usePreferencesStore((s) => s.preferences.defaultVisibility) || 'private';
+  const { routeItems, fetchRoutes } = usePersonalCollectionsStore();
+
+  useEffect(() => {
+    if (routeItems.length === 0) fetchRoutes();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleClose = () => {
     navigate('/you?tab=activities&subtab=routes');
@@ -27,6 +34,7 @@ export function RouteBuilderPage() {
       onClose={handleClose}
       onSave={handleSave}
       defaultVisibility={defaultVisibility as PersonalVisibility}
+      availableRoutes={routeItems}
     />
   );
 }

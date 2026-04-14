@@ -253,6 +253,49 @@ export async function updatePersonalRouteItem(
   return getPersonalRouteItem(itemId);
 }
 
+export async function replacePersonalRouteFile(
+  itemId: string,
+  userId: string,
+  data: { name: string; description?: string | null; visibility?: string; activityType?: string | null },
+  gpxMeta: GpxMetadata,
+  fileData: { filename: string; originalName: string; size: number; url: string },
+) {
+  const item = await db('personal_route_items').where('id', itemId).first();
+  if (!item) throw new NotFoundError('Personal route item');
+  if (String(item.user_id) !== userId) throw new ForbiddenError('You can only edit your own routes');
+
+  let flatness: number | null = null;
+  if (gpxMeta.elevationGainM != null && gpxMeta.distanceKm > 0) {
+    const gainFt = gpxMeta.elevationGainM * 3.28084;
+    const distMi = gpxMeta.distanceKm * 0.621371;
+    flatness = Math.round((gainFt / distMi) * 100) / 100;
+  }
+
+  await db('personal_route_items').where('id', itemId).update({
+    name: data.name,
+    description: data.description || null,
+    visibility: data.visibility || 'private',
+    activity_type: data.activityType || null,
+    filename: fileData.filename,
+    original_name: fileData.originalName,
+    file_size: fileData.size,
+    url: fileData.url,
+    distance_km: gpxMeta.distanceKm,
+    elevation_gain_m: gpxMeta.elevationGainM,
+    elevation_loss_m: gpxMeta.elevationLossM,
+    flatness,
+    duration_sec: gpxMeta.durationSec || null,
+    start_lat: gpxMeta.startLat,
+    start_lng: gpxMeta.startLng,
+    bounds: gpxMeta.bounds ? JSON.stringify(gpxMeta.bounds) : null,
+    geojson: gpxMeta.geojson ? JSON.stringify(gpxMeta.geojson) : null,
+    track_name: gpxMeta.trackName,
+    updated_at: db.fn.now(3),
+  });
+
+  return getPersonalRouteItem(itemId);
+}
+
 export async function deletePersonalRouteItem(itemId: string, userId: string) {
   const item = await db('personal_route_items').where('id', itemId).first();
   if (!item) throw new NotFoundError('Personal route item');

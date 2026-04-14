@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCheck, AtSign, Reply, Zap, Tag, Users, Mail, CalendarX, CalendarPlus, Calendar, MessageCircle, BookOpen } from 'lucide-react';
+import { CheckCheck, AtSign, Reply, Zap, Tag, Users, Mail, CalendarX, CalendarPlus, Calendar, MessageCircle, BookOpen, Smile } from 'lucide-react';
 import { useNotificationsStore } from '../../stores/notifications.js';
 import { Avatar } from '../common/Avatar.js';
 import { NotificationActions, isActionableNotification } from './NotificationActions.js';
-import type { Notification, MentionNotificationData, ReplyNotificationData, PostCommentNotificationData, PostTagNotificationData } from '@crabac/shared';
+import type { Notification, MentionNotificationData, ReplyNotificationData, ReactionNotificationData, PostCommentNotificationData, PostTagNotificationData } from '@crabac/shared';
 
 interface Props {
   onClose: () => void;
@@ -157,6 +157,10 @@ function formatTitle(n: Notification): string {
       return `${data.fromDisplayName} wants to follow you`;
     case 'dm_request':
       return `${data.fromDisplayName} sent you a message`;
+    case 'reaction': {
+      const d = data as ReactionNotificationData;
+      return `${d.reactedByUsername} reacted ${d.emoji} in ${d.spaceName} | #${d.channelName}`;
+    }
     case 'event_cancelled':
       return `${data.eventName} was cancelled`;
     case 'new_event': {
@@ -202,6 +206,8 @@ function getNotificationAvatar(n: Notification): { src: string | null; name: str
       const d = data as PostCommentNotificationData;
       return { src: d.commenterAvatarUrl || null, name: d.commenterDisplayName || '?' };
     }
+    case 'reaction':
+      return { src: null, name: data.reactedByUsername || '?' };
     case 'new_event':
       return { src: data.spaceIconUrl || null, name: data.spaceName || '?' };
     case 'event_rsvp':
@@ -222,6 +228,7 @@ function getNotificationIcon(type: string) {
     case 'follow_request': return <Users size={16} style={{ color: 'var(--accent)' }} />;
     case 'dm_request': return <Mail size={16} style={{ color: 'var(--accent)' }} />;
     case 'post_comment': return <MessageCircle size={16} style={{ color: 'var(--accent)' }} />;
+    case 'reaction': return <Smile size={16} style={{ color: 'var(--accent)' }} />;
     case 'event_cancelled': return <CalendarX size={16} style={{ color: 'var(--danger)' }} />;
     case 'new_event': return <CalendarPlus size={16} style={{ color: 'var(--accent)' }} />;
     case 'event_rsvp': return <Calendar size={16} style={{ color: 'var(--accent)' }} />;
