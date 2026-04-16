@@ -1078,6 +1078,7 @@ async function notifyOrganizerNeeded(eventId: string, spaceId: string) {
       eventTime: event.event_time || null,
       spaceId: String(spaceId),
       spaceName: space?.name || '',
+      spaceIconUrl: space?.icon_url || null,
       activityType: event.activity_type || null,
     });
   }

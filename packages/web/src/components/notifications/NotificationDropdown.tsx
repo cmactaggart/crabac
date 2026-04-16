@@ -178,8 +178,14 @@ function formatTitle(n: Notification): string {
       return `${data.commenterDisplayName} commented on your post`;
     case 'event_rsvp':
       return `${data.rsvpDisplayName || data.rsvpUsername} RSVP'd ${data.rsvpStatus} to ${data.eventName}`;
-    case 'event_organizer_needed':
-      return `${data.eventName} in ${data.spaceName} needs an organizer`;
+    case 'event_organizer_needed': {
+      const parts = [data.spaceName || 'A space', 'Organizer Needed', data.eventName || 'an event'];
+      const dateParts = [];
+      if (data.eventDate) dateParts.push(data.eventDate);
+      if (data.eventTime) dateParts.push(data.eventTime);
+      const base = parts.join(' — ');
+      return dateParts.length ? `${base} / ${dateParts.join(' ')}` : base;
+    }
     case 'new_blog_post':
       return `New blog post from ${data.spaceName}: ${data.postTitle}`;
     default:
@@ -218,7 +224,7 @@ function getNotificationAvatar(n: Notification): { src: string | null; name: str
     case 'event_rsvp':
       return { src: null, name: data.rsvpDisplayName || data.rsvpUsername || '?' };
     case 'event_organizer_needed':
-      return { src: null, name: data.spaceName || '?' };
+      return { src: data.spaceIconUrl || null, name: data.spaceName || '?' };
     case 'new_blog_post':
       return { src: data.spaceIconUrl || null, name: data.spaceName || '?' };
     default:

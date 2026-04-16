@@ -119,6 +119,7 @@ export interface EventOrganizerNeededNotificationData {
   eventTime: string | null;
   spaceId: string;
   spaceName: string;
+  spaceIconUrl: string | null;
   activityType: 'ride' | 'run' | 'walk' | null;
 }
 

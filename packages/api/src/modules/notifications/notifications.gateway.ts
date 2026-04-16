@@ -49,6 +49,14 @@ function formatNotificationForPush(notification: any): { title: string; body: st
       return { title: d.spaceName || 'New Blog Post', body: `New blog post from ${d.spaceName}: ${d.postTitle}` };
     case 'event_rsvp':
       return { title: d.spaceName || 'Event RSVP', body: `${d.rsvpDisplayName || d.rsvpUsername} RSVP'd ${d.rsvpStatus} to ${d.eventName}` };
+    case 'event_organizer_needed': {
+      const title = `${d.spaceName || 'A space'} — Organizer Needed`;
+      const dateParts = [];
+      if (d.eventDate) dateParts.push(d.eventDate);
+      if (d.eventTime) dateParts.push(d.eventTime);
+      const when = dateParts.length ? ` / ${dateParts.join(' ')}` : '';
+      return { title, body: `${d.eventName || 'An event'}${when}` };
+    }
     default:
       return { title: 'crab.ac', body: `${actor} sent you a notification` };
   }
@@ -93,6 +101,9 @@ export function registerNotificationGateway() {
       const space = await db('spaces').where('id', d.spaceId).select('icon_url').first();
       if (space?.icon_url) pushData.avatarUrl = `${config.apiUrl}${space.icon_url}`;
     } else if (notification.type === 'new_blog_post' && d.spaceId) {
+      const space = await db('spaces').where('id', d.spaceId).select('icon_url').first();
+      if (space?.icon_url) pushData.avatarUrl = `${config.apiUrl}${space.icon_url}`;
+    } else if (notification.type === 'event_organizer_needed' && d.spaceId) {
       const space = await db('spaces').where('id', d.spaceId).select('icon_url').first();
       if (space?.icon_url) pushData.avatarUrl = `${config.apiUrl}${space.icon_url}`;
     } else if (actorUserId) {
