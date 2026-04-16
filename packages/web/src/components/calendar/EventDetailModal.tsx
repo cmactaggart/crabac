@@ -1,11 +1,13 @@
 import React, { useState, useEffect, Suspense } from 'react';
-import { X, Pencil, Trash2, MapPin, Check, HelpCircle, XCircle, Repeat, Share2 } from 'lucide-react';
+import { X, Pencil, Trash2, MapPin, Check, HelpCircle, XCircle, Repeat, Share2, UserCheck, UserX } from 'lucide-react';
 import type { CalendarEvent, EventRsvp } from '@crabac/shared';
+import { Permissions } from '@crabac/shared';
 import { useCalendarStore } from '../../stores/calendar.js';
 import { useAuthStore } from '../../stores/auth.js';
 import { usePreferencesStore } from '../../stores/preferences.js';
 import { formatDistance, formatElevation } from '../../lib/units.js';
 import { ShareToSpacePicker } from '../common/ShareToSpacePicker.js';
+import { useHasSpacePermission } from '../settings/SpaceSettingsModal.js';
 import { api } from '../../lib/api.js';
 import { MiniMap } from '../common/MiniMap.js';
 
@@ -49,10 +51,18 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
   const rsvp = useCalendarStore((s) => s.rsvp);
   const removeRsvp = useCalendarStore((s) => s.removeRsvp);
   const fetchRsvps = useCalendarStore((s) => s.fetchRsvps);
+  const claimEvent = useCalendarStore((s) => s.claimEvent);
+  const releaseEvent = useCalendarStore((s) => s.releaseEvent);
   const user = useAuthStore((s) => s.user);
+  const canClaim = useHasSpacePermission(spaceId, Permissions.CLAIM_EVENTS);
 
   const cancelOccurrence = useCalendarStore((s) => s.cancelOccurrence);
   const deleteSeries = useCalendarStore((s) => s.deleteSeries);
+
+  const isOrganizer = !!user && String(event.organizerId || '') === String(user.id);
+  const canEdit = canManage || (isOrganizer && canClaim);
+  const canShowClaim = !!event.organizerNeeded && canClaim;
+  const canShowRelease = isOrganizer && !!event.activityType;
 
   const [showSharePicker, setShowSharePicker] = useState(false);
   const [showRouteDetail, setShowRouteDetail] = useState(false);
@@ -134,6 +144,18 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
     } catch { /* ignore */ }
   };
 
+  const handleClaim = async () => {
+    try {
+      await claimEvent(spaceId, event.id);
+    } catch { /* ignore */ }
+  };
+
+  const handleRelease = async () => {
+    try {
+      await releaseEvent(spaceId, event.id);
+    } catch { /* ignore */ }
+  };
+
   const handleShowRsvps = async () => {
     if (showRsvpList) { setShowRsvpList(false); return; }
     setRsvpLoading(true);
@@ -172,6 +194,11 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
                   {activityLabel(event.activityType)}
                 </span>
               )}
+              {event.organizerNeeded && (
+                <span style={{ ...styles.categoryBadge, background: '#fab005', color: '#000' }}>
+                  <UserCheck size={10} style={{ marginRight: 3 }} /> Organizer needed
+                </span>
+              )}
             </div>
           </div>
           <button onClick={onClose} style={styles.closeBtn}><X size={18} /></button>
@@ -196,10 +223,39 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
               </span>
             </div>
           )}
-          {event.creator && (
+          <div style={styles.detailRow}>
+            <span style={styles.detailLabel}>Organizer</span>
+            {event.organizerNeeded ? (
+              <span style={{ color: '#fab005', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <UserCheck size={13} /> Needed — not yet assigned
+              </span>
+            ) : event.organizer ? (
+              <span>{event.organizer.displayName}</span>
+            ) : event.creator ? (
+              <span>{event.creator.displayName}</span>
+            ) : (
+              <span style={{ color: 'var(--text-muted)' }}>—</span>
+            )}
+          </div>
+          {event.creator && event.organizer && event.creator.id !== event.organizer.id && (
             <div style={styles.detailRow}>
               <span style={styles.detailLabel}>Created by</span>
               <span>{event.creator.displayName}</span>
+            </div>
+          )}
+
+          {(canShowClaim || canShowRelease) && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              {canShowClaim && (
+                <button onClick={handleClaim} style={styles.claimBtn}>
+                  <UserCheck size={14} /> Claim this event
+                </button>
+              )}
+              {canShowRelease && (
+                <button onClick={handleRelease} style={styles.releaseBtn}>
+                  <UserX size={14} /> Release organizer role
+                </button>
+              )}
             </div>
           )}
           {event.description && (
@@ -322,39 +378,41 @@ export function EventDetailModal({ event, spaceId, canManage, onClose, onEdit }:
           </Suspense>
         )}
 
-        {canManage && (
+        {canEdit && (
           <div style={styles.footer}>
-            {deleteMode === 'single' ? (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={event.seriesId ? handleCancelOccurrence : handleDelete} style={styles.dangerBtn}>
-                  {event.seriesId ? 'Cancel This Event' : 'Confirm Delete'}
+            {canManage ? (
+              deleteMode === 'single' ? (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={event.seriesId ? handleCancelOccurrence : handleDelete} style={styles.dangerBtn}>
+                    {event.seriesId ? 'Cancel This Event' : 'Confirm Delete'}
+                  </button>
+                  <button onClick={() => setDeleteMode(null)} style={styles.cancelBtn}>Back</button>
+                </div>
+              ) : deleteMode === 'series' ? (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={handleDeleteSeries} style={styles.dangerBtn}>Delete Entire Series</button>
+                  <button onClick={() => setDeleteMode(null)} style={styles.cancelBtn}>Back</button>
+                </div>
+              ) : event.seriesId ? (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setDeleteMode('single')} style={styles.trashBtn}>
+                    <Trash2 size={14} /> Cancel This
+                  </button>
+                  <button onClick={() => setDeleteMode('series')} style={styles.trashBtn}>
+                    <Trash2 size={14} /> Delete Series
+                  </button>
+                </div>
+              ) : confirmDelete ? (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={handleDelete} style={styles.dangerBtn}>Confirm Delete</button>
+                  <button onClick={() => setConfirmDelete(false)} style={styles.cancelBtn}>Cancel</button>
+                </div>
+              ) : (
+                <button onClick={() => setConfirmDelete(true)} style={styles.trashBtn}>
+                  <Trash2 size={14} /> Delete
                 </button>
-                <button onClick={() => setDeleteMode(null)} style={styles.cancelBtn}>Back</button>
-              </div>
-            ) : deleteMode === 'series' ? (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={handleDeleteSeries} style={styles.dangerBtn}>Delete Entire Series</button>
-                <button onClick={() => setDeleteMode(null)} style={styles.cancelBtn}>Back</button>
-              </div>
-            ) : event.seriesId ? (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => setDeleteMode('single')} style={styles.trashBtn}>
-                  <Trash2 size={14} /> Cancel This
-                </button>
-                <button onClick={() => setDeleteMode('series')} style={styles.trashBtn}>
-                  <Trash2 size={14} /> Delete Series
-                </button>
-              </div>
-            ) : confirmDelete ? (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={handleDelete} style={styles.dangerBtn}>Confirm Delete</button>
-                <button onClick={() => setConfirmDelete(false)} style={styles.cancelBtn}>Cancel</button>
-              </div>
-            ) : (
-              <button onClick={() => setConfirmDelete(true)} style={styles.trashBtn}>
-                <Trash2 size={14} /> Delete
-              </button>
-            )}
+              )
+            ) : <span />}
             <button onClick={onEdit} style={styles.editBtn}>
               <Pencil size={14} /> Edit
             </button>
@@ -516,5 +574,30 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     fontSize: '0.85rem',
     fontWeight: 600,
+  },
+  claimBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '6px 12px',
+    background: '#fab005',
+    border: 'none',
+    color: '#000',
+    borderRadius: 'var(--radius)',
+    cursor: 'pointer',
+    fontSize: '0.82rem',
+    fontWeight: 600,
+  },
+  releaseBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '6px 12px',
+    background: 'var(--bg-tertiary)',
+    border: '1px solid var(--border)',
+    color: 'var(--text-secondary)',
+    borderRadius: 'var(--radius)',
+    cursor: 'pointer',
+    fontSize: '0.82rem',
   },
 };

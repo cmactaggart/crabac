@@ -1,6 +1,6 @@
 # crab.ac API Documentation
 
-## API Version 0.19.0
+## API Version 0.20.0
 
 Base URL: `https://app.crab.ac/api`
 
@@ -53,6 +53,7 @@ Access control uses a bitfield RBAC system. Permissions are assigned to roles, a
 | `ATTACH_FILES` | Upload file attachments |
 | `ADD_REACTIONS` | Add emoji reactions |
 | `MANAGE_CALENDAR` | Create/edit/delete calendar events, categories, and series |
+| `CLAIM_EVENTS` | Claim calendar events flagged as "organizer needed" and edit their description/location/route |
 | `CREATE_THREADS` | Create forum threads |
 | `MANAGE_THREADS` | Pin/lock/delete threads |
 | `MANAGE_ROUTE_CATEGORIES` | Create/delete route library categories |
@@ -1172,6 +1173,8 @@ Create an event. Requires `MANAGE_CALENDAR`.
 | `location` | string \| null | no | Max 500 chars |
 | `activityType` | string \| null | no | `ride`, `run`, or `walk` |
 | `routeId` | string \| null | no | Link to a route library item |
+| `organizerId` | string \| null | no | User ID of the organizer. Defaults to the creator when omitted. |
+| `organizerNeeded` | boolean | no | Mark event as needing an organizer. Only allowed when `activityType` is set. When `true`, `organizerId` is forced to `null`. |
 | `meetingRoomEnabled` | boolean | no | Enable voice/video meeting room |
 | `meetingRoomEarlyEntry` | number \| null | no | Minutes before event start to allow joining (-1 = anytime) |
 | `meetingPublicAccess` | boolean | no | Allow public (unauthenticated) access to the meeting room |
@@ -1180,11 +1183,11 @@ Create an event. Requires `MANAGE_CALENDAR`.
 | `meetingRoomPassword` | string \| null | no | Password for public access (bcrypt-hashed server-side) |
 | `meetingIdentityMode` | string | no | `anonymous`, `email_verify`, or `require_login` |
 
-**Side effects:** Creating an event sends a `new_event` notification to all space members (excluding the creator) and triggers push notifications. If the space has `socialEnabled = true`, an auto-generated social post is created on behalf of the space with `metadata: { type: 'calendar_event', eventId, spaceId }`.
+**Side effects:** Creating an event sends a `new_event` notification to all space members (excluding the creator) and triggers push notifications. If the space has `socialEnabled = true`, an auto-generated social post is created on behalf of the space with `metadata: { type: 'calendar_event', eventId, spaceId }`. If `organizerNeeded` is `true`, every space member with the `CLAIM_EVENTS` permission receives an `event_organizer_needed` notification.
 
 #### PATCH /spaces/:spaceId/calendar/events/:id
 
-Update an event. Requires `MANAGE_CALENDAR`.
+Update an event. Requires either `MANAGE_CALENDAR` **or** the caller is the current `organizerId` and holds `CLAIM_EVENTS` — in the latter case, the update is restricted to `description`, `location`, and `routeId`; attempts to change other fields return 403. Managers may reassign `organizerId` to any space member (no permission required on the assignee) or flip `organizerNeeded`; toggling `organizerNeeded` to `true` on an occurrence notifies every `CLAIM_EVENTS` holder in the space. Updating a series-generated occurrence marks it as `isOverride: true` so it survives future series regenerations.
 
 **Body:** Same fields as create, all optional.
 
@@ -1218,6 +1221,30 @@ List all RSVPs for an event. Requires membership.
 
 **Response:** Array of RSVP objects with user info.
 
+### Event Organizers
+
+Events carry two organizer fields: `organizerId` (the user responsible for running the event, defaulting to the creator) and `organizerNeeded` (a flag indicating nobody currently owns the event and it is open to be claimed). Only events with an `activityType` (`ride`, `run`, or `walk`) may be flagged as `organizerNeeded`. Non-activity events still carry an `organizerId` for display purposes. Series templates (`event_series`) carry the same pair and propagate them into every generated occurrence; individual occurrences can diverge from the series default by being claimed, released, or edited (which sets `isOverride: true`).
+
+#### GET /spaces/:spaceId/calendar/events/needing-organizer
+
+List upcoming events in the space that are flagged `organizerNeeded`. Requires `CLAIM_EVENTS`. Cancelled events are excluded. Sorted by `eventDate` then `eventTime` ascending.
+
+**Response:** `CalendarEvent[]`
+
+#### POST /spaces/:spaceId/calendar/events/:id/claim
+
+Claim an event flagged as needing an organizer. Requires `CLAIM_EVENTS`. The caller becomes the event's `organizerId` and `organizerNeeded` is set to `false`. If the event belongs to a series, the occurrence is also marked `isOverride: true` so the claim survives future series regenerations.
+
+Returns `400` if the event is not flagged as `organizerNeeded`.
+
+**Response:** Updated CalendarEvent object.
+
+#### POST /spaces/:spaceId/calendar/events/:id/release
+
+Release the caller's organizer role on an event. Requires membership; the caller must be the current `organizerId` and the event must have an `activityType`. Clears `organizerId` and sets `organizerNeeded` back to `true`. Series occurrences become `isOverride: true`. Sends an `event_organizer_needed` notification to every space member with `CLAIM_EVENTS`.
+
+**Response:** Updated CalendarEvent object.
+
 ### Recurring Event Series
 
 #### POST /spaces/:spaceId/calendar/series
@@ -1235,6 +1262,8 @@ Create a recurring event series. Generates individual calendar event rows for ea
 | `location` | string \| null | no | Max 500 chars |
 | `activityType` | string \| null | no | `ride`, `run`, or `walk` |
 | `routeId` | string \| null | no | |
+| `organizerId` | string \| null | no | Default organizer for generated occurrences. Defaults to the creator. |
+| `organizerNeeded` | boolean | no | When `true`, every generated occurrence starts out flagged as needing an organizer. Only allowed when `activityType` is set. Series-level toggles do **not** fire `event_organizer_needed` notifications — only per-occurrence flips do. |
 | `recurrenceRule` | object | yes | See Recurrence Rule below |
 
 **Recurrence Rule:**
@@ -2360,6 +2389,17 @@ List upcoming calendar events across all spaces the user belongs to (where `cale
 
 Events include `rsvpCounts` and `myRsvp` fields. Sorted by `eventDate` ascending, then `eventTime` ascending.
 
+#### GET /users/me/events/needing-organizer
+
+List upcoming events flagged `organizerNeeded` across every space where the caller holds `CLAIM_EVENTS`. Used by the home dashboard "Organizers Needed" card.
+
+**Query:**
+| Param | Type | Default |
+|-------|------|---------|
+| `limit` | number (1–30) | 10 |
+
+**Response:** `CalendarEvent[]` — each item includes the standard CalendarEvent fields plus the same `spaceName` / `spaceSlug` / `spaceIconUrl` / `spaceBaseColor` / `spaceAccentColor` fields as `/users/me/events/upcoming`. Sorted by `eventDate` then `eventTime` ascending.
+
 ### Aggregated Recent Blog & Newsletter Posts
 
 #### GET /users/me/posts/recent
@@ -2562,7 +2602,7 @@ Remove a reaction from a comment.
 
 List notifications (paginated). Requires auth.
 
-Notification types: `mention`, `reply`, `reaction`, `dm`, `dm_request`, `follow_request`, `portal_invite`, `event_cancelled`, `event_rsvp`, `new_event`, `new_blog_post`, `post_tag`, `post_comment`.
+Notification types: `mention`, `reply`, `reaction`, `dm`, `dm_request`, `follow_request`, `portal_invite`, `event_cancelled`, `event_rsvp`, `event_organizer_needed`, `new_event`, `new_blog_post`, `post_tag`, `post_comment`.
 
 Actionable notifications (`follow_request`, `dm_request`, `portal_invite`) include a `resolvedStatus` field that reflects the current state of the underlying request: `"pending"`, `"accepted"`, `"rejected"`, or `null` (for non-actionable types). This allows the client to show resolved state instead of stale Accept/Reject buttons.
 
@@ -2571,6 +2611,8 @@ The `new_event` notification is sent to all space members when a calendar event 
 The `event_rsvp` notification is sent to the event creator when another user RSVPs to their event. It includes `eventId`, `eventName`, `eventDate`, `eventTime`, `spaceId`, `spaceName`, `rsvpUsername`, `rsvpDisplayName`, and `rsvpStatus`. Clicking the notification navigates to the event in the space calendar.
 
 The `event_cancelled` notification is sent to all users who RSVP'd "going" or "maybe" when an event is cancelled or deleted. It includes `eventId`, `eventName`, `eventDate`, `eventTime`, `spaceId`, and `spaceName`.
+
+The `event_organizer_needed` notification is sent to every space member holding `CLAIM_EVENTS` whenever a single event occurrence flips to `organizerNeeded: true` — either by a manager toggling the flag, the current organizer releasing the event, or the event being created with `organizerNeeded: true`. Series-level toggles do not emit this notification. It includes `eventId`, `eventName`, `eventDate`, `eventTime`, `spaceId`, `spaceName`, and `activityType`. Clicking the notification deep-links to the event in the space calendar.
 
 The `new_blog_post` notification is sent to all space members when a blog post is published (respects per-member blog mute preference). It includes `postId`, `postTitle`, `spaceName`, `spaceSlug`, `spaceId`, `spaceIconUrl`, and `authorUsername` in the notification data. The push notification uses the space icon as its image. Clicking the notification navigates to the blog post within the space.
 

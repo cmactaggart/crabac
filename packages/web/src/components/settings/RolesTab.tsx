@@ -34,6 +34,7 @@ const PERMISSION_LABELS: Record<PermissionKey, string> = {
   MANAGE_WORKFLOWS: 'Manage Workflows',
   MANAGE_NEWSLETTER: 'Manage Newsletter',
   MANAGE_SOCIAL: 'Manage Social',
+  CLAIM_EVENTS: 'Claim Events',
 };
 
 export function RolesTab({ spaceId }: Props) {

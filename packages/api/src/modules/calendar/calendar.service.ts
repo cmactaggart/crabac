@@ -8,7 +8,7 @@ import { createParticipantToken } from '../calls/call.service.js';
 import * as spacesService from '../spaces/spaces.service.js';
 import { RoomServiceClient } from 'livekit-server-sdk';
 import { config } from '../../config.js';
-import type { RecurrenceRule } from '@crabac/shared';
+import { Permissions, hasPermission, type RecurrenceRule } from '@crabac/shared';
 
 const roomService = new RoomServiceClient(
   config.livekit.host,
@@ -75,6 +75,7 @@ function eventBaseQuery() {
   return db('calendar_events')
     .leftJoin('calendar_categories', 'calendar_events.category_id', 'calendar_categories.id')
     .leftJoin('users', 'calendar_events.creator_id', 'users.id')
+    .leftJoin('users as organizer_user', 'calendar_events.organizer_id', 'organizer_user.id')
     .leftJoin('route_items', 'calendar_events.route_id', 'route_items.id')
     .select(
       'calendar_events.*',
@@ -85,6 +86,9 @@ function eventBaseQuery() {
       'users.username as creator_username',
       'users.display_name as creator_display_name',
       'users.avatar_url as creator_avatar_url',
+      'organizer_user.username as organizer_username',
+      'organizer_user.display_name as organizer_display_name',
+      'organizer_user.avatar_url as organizer_avatar_url',
       'route_items.name as route_name',
       'route_items.distance_km as route_distance_km',
       'route_items.elevation_gain_m as route_elevation_gain_m',
@@ -135,6 +139,8 @@ export async function createEvent(
     routeId?: string | null;
     imageUrl?: string | null;
     endTime?: string | null;
+    organizerId?: string | null;
+    organizerNeeded?: boolean;
     meetingRoomEnabled?: boolean;
     meetingRoomEarlyEntry?: number | null;
     meetingPublicAccess?: boolean;
@@ -146,10 +152,19 @@ export async function createEvent(
 ) {
   const id = snowflake.generate();
   const passwordHash = data.meetingRoomPassword ? await bcrypt.hash(data.meetingRoomPassword, 10) : null;
+
+  const organizerNeeded = !!data.organizerNeeded;
+  if (organizerNeeded && !data.activityType) {
+    throw new BadRequestError('Organizer needed is only valid on activity events');
+  }
+  const organizerId = organizerNeeded ? null : (data.organizerId !== undefined ? data.organizerId : creatorId);
+
   await db('calendar_events').insert({
     id,
     space_id: spaceId,
     creator_id: creatorId,
+    organizer_id: organizerId,
+    organizer_needed: organizerNeeded,
     category_id: data.categoryId || null,
     name: data.name,
     description: data.description || null,
@@ -173,8 +188,18 @@ export async function createEvent(
   const event = await getEvent(id);
   eventBus.emit('calendar.event.created', { event, spaceId });
 
+  if (organizerNeeded) {
+    await notifyOrganizerNeeded(String(id), spaceId);
+  }
+
   return event;
 }
+
+const CLAIMER_ALLOWED_FIELDS = new Set([
+  'description',
+  'location',
+  'routeId',
+]);
 
 export async function updateEvent(
   id: string,
@@ -190,6 +215,8 @@ export async function updateEvent(
     activityType?: string | null;
     routeId?: string | null;
     imageUrl?: string | null;
+    organizerId?: string | null;
+    organizerNeeded?: boolean;
     meetingRoomEnabled?: boolean;
     meetingRoomEarlyEntry?: number | null;
     meetingPublicAccess?: boolean;
@@ -198,7 +225,41 @@ export async function updateEvent(
     meetingRoomPassword?: string | null;
     meetingIdentityMode?: 'anonymous' | 'email_verify' | 'require_login';
   },
+  ctx?: { userId: string; userPerms: bigint },
 ) {
+  const existing = await db('calendar_events').where('id', id).first();
+  if (!existing) throw new NotFoundError('Calendar event');
+
+  // Determine edit mode: manager vs organizer-claimer
+  let mode: 'manager' | 'claimer' = 'manager';
+  if (ctx) {
+    const canManage = hasPermission(ctx.userPerms, Permissions.MANAGE_CALENDAR);
+    const isOrganizer = String(existing.organizer_id || '') === ctx.userId;
+    const canClaim = hasPermission(ctx.userPerms, Permissions.CLAIM_EVENTS);
+    if (canManage) {
+      mode = 'manager';
+    } else if (isOrganizer && canClaim) {
+      mode = 'claimer';
+    } else {
+      throw new ForbiddenError('You do not have the required permission');
+    }
+  }
+
+  if (mode === 'claimer') {
+    for (const key of Object.keys(data)) {
+      if (!CLAIMER_ALLOWED_FIELDS.has(key)) {
+        throw new ForbiddenError('Organizers may only update description, location, and route');
+      }
+    }
+  }
+
+  // Validate organizer transitions
+  const activityType = data.activityType !== undefined ? data.activityType : existing.activity_type;
+  const organizerNeededAttempt = data.organizerNeeded;
+  if (organizerNeededAttempt === true && !activityType) {
+    throw new BadRequestError('Organizer needed is only valid on activity events');
+  }
+
   const updates: Record<string, any> = {};
   if (data.name !== undefined) updates.name = data.name;
   if (data.description !== undefined) updates.description = data.description;
@@ -221,11 +282,41 @@ export async function updateEvent(
     updates.meeting_room_password = data.meetingRoomPassword ? await bcrypt.hash(data.meetingRoomPassword, 10) : null;
   }
 
+  // Organizer handling (manager-only via this path)
+  let flipToNeeded = false;
+  if (data.organizerId !== undefined) {
+    updates.organizer_id = data.organizerId;
+    if (data.organizerId) {
+      updates.organizer_needed = false;
+    }
+  }
+  if (data.organizerNeeded !== undefined) {
+    updates.organizer_needed = data.organizerNeeded;
+    if (data.organizerNeeded) {
+      updates.organizer_id = null;
+      if (!existing.organizer_needed) flipToNeeded = true;
+    }
+  }
+
+  // If turning activity off, also clear organizerNeeded
+  if (data.activityType === null && existing.organizer_needed) {
+    updates.organizer_needed = false;
+  }
+
+  // Preserve overrides against future series regeneration
+  if (existing.series_id && !existing.is_override && Object.keys(updates).length > 0) {
+    updates.is_override = true;
+  }
+
   if (Object.keys(updates).length > 0) {
     updates.updated_at = db.fn.now(3);
-    const affected = await db('calendar_events').where('id', id).update(updates);
-    if (!affected) throw new NotFoundError('Calendar event');
+    await db('calendar_events').where('id', id).update(updates);
   }
+
+  if (flipToNeeded) {
+    await notifyOrganizerNeeded(String(id), String(existing.space_id));
+  }
+
   return getEvent(id);
 }
 
@@ -487,6 +578,8 @@ function formatEvent(
     spaceId: row.space_id,
     categoryId: row.category_id,
     creatorId: row.creator_id,
+    organizerId: row.organizer_id ? String(row.organizer_id) : null,
+    organizerNeeded: !!row.organizer_needed,
     name: row.name,
     description: row.description,
     eventDate,
@@ -537,6 +630,17 @@ function formatEvent(
       displayName: row.creator_display_name,
       avatarUrl: row.creator_avatar_url,
     };
+  }
+
+  if (row.organizer_id && row.organizer_username) {
+    event.organizer = {
+      id: String(row.organizer_id),
+      username: row.organizer_username,
+      displayName: row.organizer_display_name,
+      avatarUrl: row.organizer_avatar_url,
+    };
+  } else {
+    event.organizer = null;
   }
 
   // Include linked route data if present
@@ -636,6 +740,8 @@ export async function createSeries(
     routeId?: string | null;
     imageUrl?: string | null;
     endTime?: string | null;
+    organizerId?: string | null;
+    organizerNeeded?: boolean;
     meetingRoomEnabled?: boolean;
     meetingRoomEarlyEntry?: number | null;
     meetingPublicAccess?: boolean;
@@ -648,10 +754,19 @@ export async function createSeries(
 ) {
   const seriesId = snowflake.generate();
   const passwordHash = data.meetingRoomPassword ? await bcrypt.hash(data.meetingRoomPassword, 10) : null;
+
+  const organizerNeeded = !!data.organizerNeeded;
+  if (organizerNeeded && !data.activityType) {
+    throw new BadRequestError('Organizer needed is only valid on activity events');
+  }
+  const organizerId = organizerNeeded ? null : (data.organizerId !== undefined ? data.organizerId : creatorId);
+
   await db('event_series').insert({
     id: seriesId,
     space_id: spaceId,
     creator_id: creatorId,
+    organizer_id: organizerId,
+    organizer_needed: organizerNeeded,
     category_id: data.categoryId || null,
     name: data.name,
     description: data.description || null,
@@ -680,6 +795,8 @@ export async function createSeries(
       id: eventId,
       space_id: spaceId,
       creator_id: creatorId,
+      organizer_id: organizerId,
+      organizer_needed: organizerNeeded,
       category_id: data.categoryId || null,
       name: data.name,
       description: data.description || null,
@@ -731,6 +848,8 @@ export async function updateSeries(
     routeId?: string | null;
     imageUrl?: string | null;
     endTime?: string | null;
+    organizerId?: string | null;
+    organizerNeeded?: boolean;
     meetingRoomEnabled?: boolean;
     meetingRoomEarlyEntry?: number | null;
     meetingPublicAccess?: boolean;
@@ -744,6 +863,12 @@ export async function updateSeries(
 ) {
   const series = await db('event_series').where('id', seriesId).first();
   if (!series) throw new NotFoundError('Event series');
+
+  // Validate organizer transitions against the resolved activity type
+  const resolvedActivityType = data.activityType !== undefined ? data.activityType : series.activity_type;
+  if (data.organizerNeeded === true && !resolvedActivityType) {
+    throw new BadRequestError('Organizer needed is only valid on activity events');
+  }
 
   // Update series record
   const updates: Record<string, any> = {};
@@ -765,6 +890,17 @@ export async function updateSeries(
   if (data.meetingIdentityMode !== undefined) updates.meeting_identity_mode = data.meetingIdentityMode;
   if (data.meetingRoomPassword !== undefined) {
     updates.meeting_room_password = data.meetingRoomPassword ? await bcrypt.hash(data.meetingRoomPassword, 10) : null;
+  }
+  if (data.organizerId !== undefined) {
+    updates.organizer_id = data.organizerId;
+    if (data.organizerId) updates.organizer_needed = false;
+  }
+  if (data.organizerNeeded !== undefined) {
+    updates.organizer_needed = data.organizerNeeded;
+    if (data.organizerNeeded) updates.organizer_id = null;
+  }
+  if (data.activityType === null) {
+    updates.organizer_needed = false;
   }
   if (data.recurrenceRule !== undefined) updates.recurrence_rule = JSON.stringify(data.recurrenceRule);
   updates.updated_at = db.fn.now(3);
@@ -799,6 +935,8 @@ export async function updateSeries(
       id: eventId,
       space_id: series.space_id,
       creator_id: series.creator_id,
+      organizer_id: updatedSeries.organizer_id,
+      organizer_needed: !!updatedSeries.organizer_needed,
       category_id: updatedSeries.category_id,
       name: updatedSeries.name,
       description: updatedSeries.description,
@@ -888,6 +1026,179 @@ export async function cancelOccurrence(eventId: string) {
   return getEvent(eventId);
 }
 
+// ─── Organizer Claiming ───
+
+async function findMembersWithPermission(spaceId: string, perm: bigint): Promise<string[]> {
+  const userIds = new Set<string>();
+
+  const space = await db('spaces').where('id', spaceId).first();
+  if (!space) return [];
+  if (space.owner_id) userIds.add(String(space.owner_id));
+
+  const roles = await db('roles').where('space_id', spaceId);
+  const matchingRoleIds: string[] = [];
+  for (const role of roles) {
+    const rolePerm = BigInt(role.permissions);
+    if ((rolePerm & Permissions.ADMINISTRATOR) !== 0n) {
+      matchingRoleIds.push(String(role.id));
+    } else if ((rolePerm & perm) === perm) {
+      matchingRoleIds.push(String(role.id));
+    }
+  }
+
+  if (matchingRoleIds.length > 0) {
+    const members = await db('member_roles')
+      .whereIn('role_id', matchingRoleIds)
+      .where('space_id', spaceId)
+      .select('user_id');
+    for (const m of members) {
+      userIds.add(String(m.user_id));
+    }
+  }
+
+  return Array.from(userIds);
+}
+
+async function notifyOrganizerNeeded(eventId: string, spaceId: string) {
+  const event = await db('calendar_events').where('id', eventId).first();
+  if (!event) return;
+  const space = await db('spaces').where('id', spaceId).first();
+
+  let dateStr: any = event.event_date;
+  if (dateStr instanceof Date) dateStr = formatDateStr(dateStr);
+  else if (typeof dateStr === 'string' && dateStr.includes('T')) dateStr = dateStr.split('T')[0];
+
+  const recipientIds = await findMembersWithPermission(spaceId, Permissions.CLAIM_EVENTS);
+
+  for (const userId of recipientIds) {
+    await createNotification(userId, 'event_organizer_needed', {
+      eventId: String(eventId),
+      eventName: event.name,
+      eventDate: dateStr,
+      eventTime: event.event_time || null,
+      spaceId: String(spaceId),
+      spaceName: space?.name || '',
+      activityType: event.activity_type || null,
+    });
+  }
+}
+
+export async function claimEvent(eventId: string, userId: string) {
+  const event = await db('calendar_events').where('id', eventId).first();
+  if (!event) throw new NotFoundError('Calendar event');
+  if (!event.organizer_needed) throw new BadRequestError('This event does not need an organizer');
+
+  const updates: Record<string, any> = {
+    organizer_id: userId,
+    organizer_needed: false,
+    updated_at: db.fn.now(3),
+  };
+  if (event.series_id && !event.is_override) {
+    updates.is_override = true;
+  }
+  await db('calendar_events').where('id', eventId).update(updates);
+  return getEvent(eventId, userId);
+}
+
+export async function releaseEvent(eventId: string, userId: string) {
+  const event = await db('calendar_events').where('id', eventId).first();
+  if (!event) throw new NotFoundError('Calendar event');
+  if (String(event.organizer_id || '') !== userId) {
+    throw new ForbiddenError('Only the current organizer can release this event');
+  }
+  if (!event.activity_type) {
+    throw new BadRequestError('Only activity events can be released for a new organizer');
+  }
+
+  const updates: Record<string, any> = {
+    organizer_id: null,
+    organizer_needed: true,
+    updated_at: db.fn.now(3),
+  };
+  if (event.series_id && !event.is_override) {
+    updates.is_override = true;
+  }
+  await db('calendar_events').where('id', eventId).update(updates);
+
+  await notifyOrganizerNeeded(String(eventId), String(event.space_id));
+
+  return getEvent(eventId, userId);
+}
+
+export async function listEventsNeedingOrganizer(spaceId: string, userId: string) {
+  const today = formatDateStr(new Date());
+  const rows = await eventBaseQuery()
+    .where('calendar_events.space_id', spaceId)
+    .where('calendar_events.organizer_needed', true)
+    .where('calendar_events.is_cancelled', false)
+    .where('calendar_events.event_date', '>=', today)
+    .orderBy('calendar_events.event_date', 'asc')
+    .orderBy('calendar_events.event_time', 'asc');
+
+  const eventIds = rows.map((r: any) => r.id);
+  const rsvpCountsMap = eventIds.length > 0 ? await getRsvpCountsBatch(eventIds) : new Map();
+  const myRsvpMap = eventIds.length > 0 ? await getMyRsvpsBatch(eventIds, userId) : new Map();
+
+  return rows.map((row: any) =>
+    formatEvent(row, rsvpCountsMap.get(String(row.id)), myRsvpMap.get(String(row.id))),
+  );
+}
+
+export async function listMyOrganizerNeededAcrossSpaces(userId: string, limit: number) {
+  const today = formatDateStr(new Date());
+
+  // Find spaces where user is a member with CLAIM_EVENTS permission
+  const memberSpaces = await db('space_members')
+    .where('space_members.user_id', userId)
+    .select('space_members.space_id');
+  const spaceIds = memberSpaces.map((r: any) => String(r.space_id));
+
+  if (spaceIds.length === 0) return [];
+
+  const eligibleSpaceIds: string[] = [];
+  // Lazy import to avoid cycle
+  const { computePermissions } = await import('../rbac/rbac.service.js');
+  for (const sid of spaceIds) {
+    const perms = await computePermissions(sid, userId);
+    if (hasPermission(perms, Permissions.CLAIM_EVENTS)) eligibleSpaceIds.push(sid);
+  }
+
+  if (eligibleSpaceIds.length === 0) return [];
+
+  const rows = await eventBaseQuery()
+    .join('spaces', 'calendar_events.space_id', 'spaces.id')
+    .leftJoin('space_settings as ss', 'calendar_events.space_id', 'ss.space_id')
+    .whereIn('calendar_events.space_id', eligibleSpaceIds)
+    .where('calendar_events.organizer_needed', true)
+    .where('calendar_events.is_cancelled', false)
+    .where('calendar_events.event_date', '>=', today)
+    .orderBy('calendar_events.event_date', 'asc')
+    .orderBy('calendar_events.event_time', 'asc')
+    .limit(limit)
+    .select(
+      'spaces.name as space_name',
+      'spaces.slug as space_slug',
+      'spaces.icon_url as space_icon_url',
+      'ss.base_color as space_base_color',
+      'ss.accent_color as space_accent_color',
+    );
+
+  const eventIds = rows.map((r: any) => r.id);
+  if (eventIds.length === 0) return [];
+  const rsvpCountsMap = await getRsvpCountsBatch(eventIds);
+  const myRsvpMap = await getMyRsvpsBatch(eventIds, userId);
+
+  return rows.map((row: any) => {
+    const event = formatEvent(row, rsvpCountsMap.get(String(row.id)), myRsvpMap.get(String(row.id)));
+    event.spaceName = row.space_name || null;
+    event.spaceSlug = row.space_slug || null;
+    event.spaceIconUrl = row.space_icon_url || null;
+    event.spaceBaseColor = row.space_base_color || null;
+    event.spaceAccentColor = row.space_accent_color || null;
+    return event;
+  });
+}
+
 // ─── Cancellation Notifications ───
 
 async function notifyEventCancellation(
@@ -935,6 +1246,8 @@ function formatSeries(row: any) {
     id: String(row.id),
     spaceId: String(row.space_id),
     creatorId: String(row.creator_id),
+    organizerId: row.organizer_id ? String(row.organizer_id) : null,
+    organizerNeeded: !!row.organizer_needed,
     categoryId: row.category_id ? String(row.category_id) : null,
     name: row.name,
     description: row.description,

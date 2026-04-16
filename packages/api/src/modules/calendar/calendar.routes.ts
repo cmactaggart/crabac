@@ -184,11 +184,14 @@ calendarRoutes.get(
 
 calendarRoutes.patch(
   '/:spaceId/calendar/events/:id',
-  requirePermission(Permissions.MANAGE_CALENDAR),
+  requireMember,
   validate(validation.updateCalendarEventSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const event = await calendarService.updateEvent(req.params.id, req.body);
+      const event = await calendarService.updateEvent(req.params.id, req.body, {
+        userId: req.user!.userId,
+        userPerms: req.basePerms ?? 0n,
+      });
       res.json(event);
     } catch (err) {
       next(err);
@@ -203,6 +206,50 @@ calendarRoutes.delete(
     try {
       await calendarService.deleteEvent(req.params.id);
       res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ─── Organizer Claiming ───
+
+calendarRoutes.get(
+  '/:spaceId/calendar/events/needing-organizer',
+  requirePermission(Permissions.CLAIM_EVENTS),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const events = await calendarService.listEventsNeedingOrganizer(
+        req.params.spaceId,
+        req.user!.userId,
+      );
+      res.json(events);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+calendarRoutes.post(
+  '/:spaceId/calendar/events/:id/claim',
+  requirePermission(Permissions.CLAIM_EVENTS),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const event = await calendarService.claimEvent(req.params.id, req.user!.userId);
+      res.json(event);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+calendarRoutes.post(
+  '/:spaceId/calendar/events/:id/release',
+  requireMember,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const event = await calendarService.releaseEvent(req.params.id, req.user!.userId);
+      res.json(event);
     } catch (err) {
       next(err);
     }

@@ -1,4 +1,4 @@
-export type NotificationType = 'mention' | 'reply' | 'reaction' | 'portal_invite' | 'follow_request' | 'dm_request' | 'event_cancelled' | 'event_rsvp' | 'post_tag' | 'post_comment' | 'new_event' | 'new_blog_post';
+export type NotificationType = 'mention' | 'reply' | 'reaction' | 'portal_invite' | 'follow_request' | 'dm_request' | 'event_cancelled' | 'event_rsvp' | 'event_organizer_needed' | 'post_tag' | 'post_comment' | 'new_event' | 'new_blog_post';
 
 export interface MentionNotificationData {
   messageId: string;
@@ -112,6 +112,16 @@ export interface EventRsvpNotificationData {
   rsvpStatus: string;
 }
 
+export interface EventOrganizerNeededNotificationData {
+  eventId: string;
+  eventName: string;
+  eventDate: string;
+  eventTime: string | null;
+  spaceId: string;
+  spaceName: string;
+  activityType: 'ride' | 'run' | 'walk' | null;
+}
+
 export interface NewBlogPostNotificationData {
   postId: string;
   postTitle: string;
@@ -131,6 +141,7 @@ export type NotificationData =
   | DMRequestNotificationData
   | EventCancelledNotificationData
   | EventRsvpNotificationData
+  | EventOrganizerNeededNotificationData
   | PostTagNotificationData
   | PostCommentNotificationData
   | NewEventNotificationData

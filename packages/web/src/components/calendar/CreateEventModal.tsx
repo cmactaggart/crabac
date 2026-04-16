@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, MapPinned, ImagePlus, Trash2, Headphones } from 'lucide-react';
+import { X, MapPinned, ImagePlus, Trash2, Headphones, UserCheck } from 'lucide-react';
 import { useCalendarStore } from '../../stores/calendar.js';
 import { useChannelsStore } from '../../stores/channels.js';
+import { useSpacesStore } from '../../stores/spaces.js';
+import { useAuthStore } from '../../stores/auth.js';
 import { usePreferencesStore } from '../../stores/preferences.js';
 import { formatDistance } from '../../lib/units.js';
 import { api } from '../../lib/api.js';
@@ -23,8 +25,12 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
   const createEvent = useCalendarStore((s) => s.createEvent);
   const updateEvent = useCalendarStore((s) => s.updateEvent);
   const channels = useChannelsStore((s) => s.channels);
+  const members = useSpacesStore((s) => s.members);
+  const fetchMembers = useSpacesStore((s) => s.fetchMembers);
+  const authUser = useAuthStore((s) => s.user);
 
   useEffect(() => { fetchCategories(spaceId); }, [spaceId, fetchCategories]);
+  useEffect(() => { fetchMembers(spaceId); }, [spaceId, fetchMembers]);
 
   const [name, setName] = useState(editEvent?.name || '');
   const [description, setDescription] = useState(editEvent?.description || '');
@@ -48,6 +54,10 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
   const [meetingPublicParticipation, setMeetingPublicParticipation] = useState(editEvent?.meetingPublicParticipation || false);
   const [meetingIdentityMode, setMeetingIdentityMode] = useState<'anonymous' | 'email_verify' | 'require_login'>(editEvent?.meetingIdentityMode || 'anonymous');
   const [meetingRoomPassword, setMeetingRoomPassword] = useState('');
+  const [organizerId, setOrganizerId] = useState<string>(
+    editEvent?.organizerId || (editEvent ? '' : (authUser?.id || '')),
+  );
+  const [organizerNeeded, setOrganizerNeeded] = useState(editEvent?.organizerNeeded || false);
   const [imageUrl, setImageUrl] = useState(editEvent?.imageUrl || '');
   const [imageUploading, setImageUploading] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -113,6 +123,15 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
     setSaving(true);
     setError('');
     try {
+      const organizerFields = {
+        organizerNeeded: !!activityType && organizerNeeded,
+        organizerId: !activityType
+          ? null
+          : organizerNeeded
+            ? null
+            : (organizerId || null),
+      };
+
       if (isRecurring && !editEvent) {
         // Create recurring series
         await createSeries(spaceId, {
@@ -126,6 +145,7 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
           activityType: activityType || null,
           routeId: (showRouteSelect && routeId) ? routeId : null,
           imageUrl: imageUrl || null,
+          ...organizerFields,
           meetingRoomEnabled,
           meetingRoomEarlyEntry: meetingRoomEnabled ? meetingRoomEarlyEntry : null,
           meetingPublicAccess: meetingRoomEnabled ? meetingPublicAccess : false,
@@ -155,6 +175,7 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
           activityType: activityType || null,
           routeId: (showRouteSelect && routeId) ? routeId : null,
           imageUrl: imageUrl || null,
+          ...organizerFields,
           meetingRoomEnabled,
           meetingRoomEarlyEntry: meetingRoomEnabled ? meetingRoomEarlyEntry : null,
           meetingPublicAccess: meetingRoomEnabled ? meetingPublicAccess : false,
@@ -355,7 +376,10 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
           <label style={styles.label}>Activity Type (optional)</label>
           <select
             value={activityType}
-            onChange={(e) => setActivityType(e.target.value)}
+            onChange={(e) => {
+              setActivityType(e.target.value);
+              if (!e.target.value) setOrganizerNeeded(false);
+            }}
             style={styles.input}
           >
             <option value="">None</option>
@@ -363,6 +387,52 @@ export function CreateEventModal({ spaceId, prefillDate, editEvent, prefillRoute
             <option value="run">Run</option>
             <option value="walk">Walk</option>
           </select>
+
+          <label style={styles.label}>Organizer</label>
+          <select
+            value={organizerNeeded ? '__needed__' : organizerId}
+            onChange={(e) => {
+              if (e.target.value === '__needed__') {
+                setOrganizerNeeded(true);
+                setOrganizerId('');
+              } else {
+                setOrganizerNeeded(false);
+                setOrganizerId(e.target.value);
+              }
+            }}
+            style={styles.input}
+            disabled={organizerNeeded && !activityType}
+          >
+            {members.map((m) => (
+              <option key={m.userId} value={m.userId}>
+                {m.user?.displayName || m.user?.username || m.userId}
+                {authUser?.id === m.userId ? ' (you)' : ''}
+              </option>
+            ))}
+          </select>
+
+          {activityType && (
+            <label style={{ ...styles.label, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 4 }}>
+              <input
+                type="checkbox"
+                checked={organizerNeeded}
+                onChange={(e) => {
+                  setOrganizerNeeded(e.target.checked);
+                  if (e.target.checked) setOrganizerId('');
+                }}
+                style={{ margin: 0 }}
+              />
+              <UserCheck size={14} />
+              <span style={{ textTransform: 'none', fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                Organizer Needed
+              </span>
+            </label>
+          )}
+          {activityType && organizerNeeded && (
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: -4 }}>
+              Members with the Claim Events permission can pick up this event.
+            </span>
+          )}
 
           <label style={styles.label}>Category (optional)</label>
           <select

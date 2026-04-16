@@ -11,6 +11,8 @@ interface CalendarState {
   events: CalendarEvent[];
   upcomingEvents: CalendarEvent[];
   upcomingLoading: boolean;
+  organizerNeededEvents: CalendarEvent[];
+  organizerNeededLoading: boolean;
   selectedDate: string | null; // YYYY-MM-DD
   selectedEvent: CalendarEvent | null;
   currentMonth: number; // 0-11
@@ -25,20 +27,25 @@ interface CalendarState {
 
   fetchEvents: (spaceId: string) => Promise<void>;
   fetchUpcomingEvents: (spaceId: string) => Promise<void>;
+  fetchOrganizerNeeded: (spaceId: string) => Promise<void>;
   uploadEventImage: (spaceId: string, file: File) => Promise<string>;
   createEvent: (spaceId: string, data: {
     name: string; description?: string | null; eventDate: string; eventTime?: string | null;
     endTime?: string | null; categoryId?: string | null; isPublic?: boolean;
     location?: string | null; activityType?: string | null; routeId?: string | null;
     imageUrl?: string | null; meetingRoomEnabled?: boolean; meetingRoomEarlyEntry?: number | null;
+    organizerId?: string | null; organizerNeeded?: boolean;
   }) => Promise<CalendarEvent>;
   updateEvent: (spaceId: string, id: string, data: {
     name?: string; description?: string | null; eventDate?: string; eventTime?: string | null;
     endTime?: string | null; categoryId?: string | null; isPublic?: boolean;
     location?: string | null; activityType?: string | null; routeId?: string | null;
     imageUrl?: string | null; meetingRoomEnabled?: boolean; meetingRoomEarlyEntry?: number | null;
+    organizerId?: string | null; organizerNeeded?: boolean;
   }) => Promise<CalendarEvent>;
   deleteEvent: (spaceId: string, id: string) => Promise<void>;
+  claimEvent: (spaceId: string, id: string) => Promise<CalendarEvent>;
+  releaseEvent: (spaceId: string, id: string) => Promise<CalendarEvent>;
 
   rsvp: (spaceId: string, eventId: string, status: 'going' | 'maybe' | 'not_going') => Promise<void>;
   removeRsvp: (spaceId: string, eventId: string) => Promise<void>;
@@ -68,6 +75,8 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
   events: [],
   upcomingEvents: [],
   upcomingLoading: false,
+  organizerNeededEvents: [],
+  organizerNeededLoading: false,
   selectedDate: null,
   selectedEvent: null,
   currentMonth: now.getMonth(),
@@ -143,6 +152,18 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     }
   },
 
+  fetchOrganizerNeeded: async (spaceId) => {
+    set({ organizerNeededLoading: true });
+    try {
+      const organizerNeededEvents = await api<CalendarEvent[]>(
+        `/spaces/${spaceId}/calendar/events/needing-organizer`,
+      );
+      set({ organizerNeededEvents, organizerNeededLoading: false });
+    } catch {
+      set({ organizerNeededEvents: [], organizerNeededLoading: false });
+    }
+  },
+
   uploadEventImage: async (spaceId, file) => {
     const formData = new FormData();
     formData.append('image', file);
@@ -180,6 +201,33 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
       events: s.events.filter((e) => e.id !== id),
       selectedEvent: s.selectedEvent?.id === id ? null : s.selectedEvent,
     }));
+  },
+
+  claimEvent: async (spaceId, id) => {
+    const event = await api<CalendarEvent>(`/spaces/${spaceId}/calendar/events/${id}/claim`, {
+      method: 'POST',
+    });
+    set((s) => ({
+      events: s.events.map((e) => (e.id === id ? event : e)),
+      upcomingEvents: s.upcomingEvents.map((e) => (e.id === id ? event : e)),
+      organizerNeededEvents: s.organizerNeededEvents.filter((e) => e.id !== id),
+      selectedEvent: s.selectedEvent?.id === id ? event : s.selectedEvent,
+    }));
+    return event;
+  },
+
+  releaseEvent: async (spaceId, id) => {
+    const event = await api<CalendarEvent>(`/spaces/${spaceId}/calendar/events/${id}/release`, {
+      method: 'POST',
+    });
+    set((s) => ({
+      events: s.events.map((e) => (e.id === id ? event : e)),
+      upcomingEvents: s.upcomingEvents.map((e) => (e.id === id ? event : e)),
+      organizerNeededEvents: [...s.organizerNeededEvents.filter((e) => e.id !== id), event]
+        .sort((a, b) => (a.eventDate < b.eventDate ? -1 : a.eventDate > b.eventDate ? 1 : 0)),
+      selectedEvent: s.selectedEvent?.id === id ? event : s.selectedEvent,
+    }));
+    return event;
   },
 
   rsvp: async (spaceId, eventId, status) => {
@@ -301,6 +349,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     categories: [],
     events: [],
     upcomingEvents: [],
+    organizerNeededEvents: [],
     selectedDate: null,
     selectedEvent: null,
     activeRooms: { events: [] },

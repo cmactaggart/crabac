@@ -12,6 +12,7 @@ import { CrabIcon } from '../components/icons/CrabIcon.js';
 import { NewSpaceOnboardingModal } from '../components/common/NewSpaceOnboardingModal.js';
 import { SpaceSidebar } from '../components/layout/SpaceSidebar.js';
 import { EventsCarousel } from '../components/home/EventsCarousel.js';
+import { OrganizersNeededCard } from '../components/home/OrganizersNeededCard.js';
 import { RecentPostsCard } from '../components/home/RecentPostsCard.js';
 import { EventDetailModal } from '../components/calendar/EventDetailModal.js';
 import { api } from '../lib/api.js';
@@ -195,6 +196,9 @@ export function Home() {
         <EventsCarousel
           onEventClick={(event) => setSelectedEvent(event)}
           onShowMore={() => navigate('/events')}
+        />
+        <OrganizersNeededCard
+          onEventClick={(event) => setSelectedEvent(event)}
         />
         <div style={{ borderTop: '1px solid rgba(0,0,0,0.08)', margin: '4px 0' }} />
         <RecentPostsCard onShowMore={() => navigate('/recent-posts')} />

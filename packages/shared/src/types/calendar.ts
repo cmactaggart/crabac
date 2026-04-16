@@ -11,6 +11,8 @@ export interface CalendarEvent {
   spaceId: string;
   categoryId: string | null;
   creatorId: string;
+  organizerId: string | null;
+  organizerNeeded: boolean;
   name: string;
   description: string | null;
   eventDate: string; // YYYY-MM-DD
@@ -49,6 +51,12 @@ export interface CalendarEvent {
     displayName: string;
     avatarUrl: string | null;
   };
+  organizer?: {
+    id: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+  } | null;
 }
 
 export interface RecurrenceRule {
@@ -64,6 +72,8 @@ export interface EventSeries {
   id: string;
   spaceId: string;
   creatorId: string;
+  organizerId: string | null;
+  organizerNeeded: boolean;
   categoryId: string | null;
   name: string;
   description: string | null;

@@ -598,6 +598,17 @@ personalCollectionsRoutes.get(
   },
 );
 
+personalCollectionsRoutes.get(
+  '/me/events/needing-organizer',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 10, 30);
+      const events = await calendarService.listMyOrganizerNeededAcrossSpaces(req.user!.userId, limit);
+      res.json(events);
+    } catch (err) { next(err); }
+  },
+);
+
 // ─── Aggregated Recent Blog & Newsletter Posts ───
 
 personalCollectionsRoutes.get(

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCheck, AtSign, Reply, Zap, Tag, Users, Mail, CalendarX, CalendarPlus, Calendar, MessageCircle, BookOpen, Smile } from 'lucide-react';
+import { CheckCheck, AtSign, Reply, Zap, Tag, Users, Mail, CalendarX, CalendarPlus, Calendar, MessageCircle, BookOpen, Smile, UserCheck } from 'lucide-react';
 import { useNotificationsStore } from '../../stores/notifications.js';
 import { Avatar } from '../common/Avatar.js';
 import { NotificationActions, isActionableNotification } from './NotificationActions.js';
@@ -57,6 +57,9 @@ export function NotificationDropdown({ onClose }: Props) {
       }
       onClose();
     } else if (notification.type === 'event_rsvp' && data.spaceId) {
+      navigate(`/space/${data.spaceId}?tab=calendar&event=${data.eventId}`);
+      onClose();
+    } else if (notification.type === 'event_organizer_needed' && data.spaceId) {
       navigate(`/space/${data.spaceId}?tab=calendar&event=${data.eventId}`);
       onClose();
     } else if (notification.type === 'new_blog_post' && data.spaceId) {
@@ -175,6 +178,8 @@ function formatTitle(n: Notification): string {
       return `${data.commenterDisplayName} commented on your post`;
     case 'event_rsvp':
       return `${data.rsvpDisplayName || data.rsvpUsername} RSVP'd ${data.rsvpStatus} to ${data.eventName}`;
+    case 'event_organizer_needed':
+      return `${data.eventName} in ${data.spaceName} needs an organizer`;
     case 'new_blog_post':
       return `New blog post from ${data.spaceName}: ${data.postTitle}`;
     default:
@@ -212,6 +217,8 @@ function getNotificationAvatar(n: Notification): { src: string | null; name: str
       return { src: data.spaceIconUrl || null, name: data.spaceName || '?' };
     case 'event_rsvp':
       return { src: null, name: data.rsvpDisplayName || data.rsvpUsername || '?' };
+    case 'event_organizer_needed':
+      return { src: null, name: data.spaceName || '?' };
     case 'new_blog_post':
       return { src: data.spaceIconUrl || null, name: data.spaceName || '?' };
     default:
@@ -232,6 +239,7 @@ function getNotificationIcon(type: string) {
     case 'event_cancelled': return <CalendarX size={16} style={{ color: 'var(--danger)' }} />;
     case 'new_event': return <CalendarPlus size={16} style={{ color: 'var(--accent)' }} />;
     case 'event_rsvp': return <Calendar size={16} style={{ color: 'var(--accent)' }} />;
+    case 'event_organizer_needed': return <UserCheck size={16} style={{ color: '#fab005' }} />;
     case 'new_blog_post': return <BookOpen size={16} style={{ color: 'var(--accent)' }} />;
     default: return null;
   }
